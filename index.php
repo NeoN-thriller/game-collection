@@ -14,27 +14,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $username   = trim($_POST['username'] ?? '');
         $password   = $_POST['password'] ?? '';
         $rememberMe = !empty($_POST['remember_me']);
+        $keys = loginKeys($username);
         $st = db()->prepare("SELECT * FROM users WHERE username=?");
         $st->execute([$username]);
         $user = $st->fetch();
-        if ($user && password_verify($password, $user['password'])) {
+        $valid = false;
+        if ($locked = lockRemaining($keys)) {
+            $error = lockMessage($locked);
+        } elseif ($user) {
+            $valid = password_verify($password, $user['password']);
+        } else {
+            // Burn the same bcrypt time so unknown usernames can't be detected by timing
+            password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
+        }
+        if ($valid) {
+            clearFailures($keys);
             if ($user['status'] !== 'active') {
                 $error = 'Your account has been deactivated. Contact the admin.';
             } else {
-                $_SESSION['user_id'] = $user['id'];
+                startUserSession($user);
                 db()->prepare("UPDATE users SET last_login=NOW() WHERE id=?")->execute([$user['id']]);
-                // Set remember me token (30 days)
-                if ($rememberMe) {
-                    $token   = bin2hex(random_bytes(32));
-                    $expires = date('Y-m-d H:i:s', time()+60*60*24*30);
-                    db()->prepare("INSERT INTO remember_tokens (user_id, token, expires_at) VALUES (?,?,?)")
-                        ->execute([$user['id'], $token, $expires]);
-                    setRememberCookie($token, time()+60*60*24*30);
-                }
+                if ($rememberMe) issueRememberToken($user['id']);
                 header('Location: '.BASE_URL.'/dashboard.php'); exit;
             }
-        } else {
-            $error = 'Invalid username or password.';
+        } elseif (!$error) {
+            recordFailure($keys);
+            $locked = lockRemaining($keys);
+            $error  = $locked ? lockMessage($locked) : 'Invalid username or password.';
         }
     }
 
@@ -48,8 +54,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'Username must be 3–50 characters.';
         } elseif (!preg_match('/^[a-zA-Z0-9_]+$/', $username)) {
             $error = 'Username may only contain letters, numbers and underscores.';
-        } elseif (strlen($password) < 8) {
-            $error = 'Password must be at least 8 characters.';
+        } elseif (strlen($password) < MIN_PASSWORD_LENGTH) {
+            $error = 'Password must be at least '.MIN_PASSWORD_LENGTH.' characters.';
         } elseif ($password !== $confirm) {
             $error = 'Passwords do not match.';
         } else {
@@ -85,8 +91,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $ins2 = $pdo->prepare("INSERT INTO user_played_options (user_id, label, sort_order) VALUES (?,?,?)");
                         foreach ($played as $i => $label) $ins2->execute([$uid, $label, $i]);
                         $pdo->commit();
-                        session_regenerate_id(true);
-                        $_SESSION['user_id'] = $uid;
+                        startUserSession(['id'=>$uid, 'password'=>$hash]);
                         header('Location: '.BASE_URL.'/dashboard.php'); exit;
                     } catch (Exception $e) {
                         $pdo->rollBack();

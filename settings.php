@@ -58,11 +58,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $confirm = $_POST['confirm_password'] ?? '';
         // Re-fetch fresh user for password check
         $fu = db()->prepare("SELECT password FROM users WHERE id=?"); $fu->execute([$user['id']]); $fu = $fu->fetch();
-        if (!password_verify($current, $fu['password'])) { $err = 'Current password is incorrect.'; }
-        elseif (strlen($new) < 8)  { $err = 'New password must be at least 8 characters.'; }
+        $pwKeys = ['pw:'.$user['id']];
+        if ($locked = lockRemaining($pwKeys)) { $err = lockMessage($locked); }
+        elseif (!password_verify($current, $fu['password'])) { recordFailure($pwKeys); $err = 'Current password is incorrect.'; }
+        elseif (strlen($new) < MIN_PASSWORD_LENGTH) { $err = 'New password must be at least '.MIN_PASSWORD_LENGTH.' characters.'; }
         elseif ($new !== $confirm)  { $err = 'New passwords do not match.'; }
         else {
-            db()->prepare("UPDATE users SET password=? WHERE id=?")->execute([password_hash($new, PASSWORD_BCRYPT, ['cost'=>12]), $user['id']]);
+            clearFailures($pwKeys);
+            setPassword($user['id'], $new);
             $msg = 'Password changed successfully.';
         }
     }
@@ -100,6 +103,7 @@ $systems->execute([$user['id']]); $systems = $systems->fetchAll();
   .export-row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
   .export-desc { font-size:.73rem; color:var(--muted); margin-bottom:12px; }
 </style>
+<?= csrfScript() ?>
 </head>
 <body>
 

@@ -32,13 +32,17 @@ body {
   line-height:1.5;
 }
 
-/* scanlines */
+/* scanlines — sit above page content (z 100) but below images (z 101)
+   and below modals / drawer / lightbox (z 150+), so photos stay clean */
 body::after {
   content:'';
   position:fixed; inset:0;
   background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,.03) 3px,rgba(0,0,0,.03) 4px);
-  pointer-events:none; z-index:9999;
+  pointer-events:none; z-index:100;
 }
+img { position:relative; z-index:101; }
+/* Inside overlays the scanlines are already underneath; don't let images cover their headers/buttons */
+.modal-backdrop img, .drawer-backdrop img, .lightbox img { z-index:auto; }
 
 a { color:var(--accent2); text-decoration:none; }
 a:hover { color:var(--accent); }
@@ -166,7 +170,7 @@ textarea { resize:vertical; min-height:60px; line-height:1.5; }
 /* ── TABLE ── */
 .table-wrap { overflow-x:auto; padding:0 32px 40px; }
 table { width:100%; border-collapse:collapse; font-size:.73rem; }
-thead { position:sticky; top:0; z-index:10; background:var(--surface2); }
+thead { position:sticky; top:0; z-index:102; background:var(--surface2); }
 thead tr { border-bottom:2px solid var(--accent2); }
 th {
   padding:9px 10px; text-align:left; font-size:.58rem;
@@ -235,7 +239,7 @@ tbody tr.is-owned-wished  { background:rgba(74,158,107,.07); }
 tbody tr.is-owned-wished:hover { background:rgba(74,158,107,.12); }
 
 /* ── IMG THUMB ── */
-.img-thumb { width:34px; height:34px; object-fit:cover; border:1px solid var(--border2); cursor:pointer; display:block; transition:border-color .15s; }
+.img-thumb { width:auto; height:auto; max-width:68px; max-height:34px; border:1px solid var(--border2); cursor:pointer; display:block; transition:border-color .15s; }
 .img-thumb:hover { border-color:var(--accent2); }
 .img-placeholder { width:34px; height:34px; border:1px dashed var(--border2); display:flex; align-items:center; justify-content:center; font-size:.65rem; color:var(--border2); cursor:pointer; transition:border-color .15s,color .15s; }
 .img-placeholder:hover { border-color:var(--accent2); color:var(--accent); }
@@ -341,7 +345,7 @@ tbody tr.is-owned-wished:hover { background:rgba(74,158,107,.12); }
 .summary-bar {
   background:var(--surface2); border-top:1px solid var(--border);
   padding:8px 32px; display:flex; gap:24px; flex-wrap:wrap;
-  font-size:.66rem; color:var(--muted); position:sticky; bottom:0;
+  font-size:.66rem; color:var(--muted); position:sticky; bottom:0; z-index:102;
 }
 .summary-bar strong { color:var(--accent2); }
 

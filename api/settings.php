@@ -50,10 +50,15 @@ switch ($action) {
         $conf = $body['confirm_password'] ?? '';
         if (!$cur || !$new || !$conf) jsonOut(['ok'=>false,'error'=>'All fields required']);
         if ($new !== $conf) jsonOut(['ok'=>false,'error'=>'Passwords do not match']);
-        if (strlen($new) < 8) jsonOut(['ok'=>false,'error'=>'Password must be at least 8 characters']);
-        if (!password_verify($cur, $user['password'])) jsonOut(['ok'=>false,'error'=>'Current password is incorrect']);
-        $hash = password_hash($new, PASSWORD_BCRYPT, ['cost'=>12]);
-        db()->prepare("UPDATE users SET password=? WHERE id=?")->execute([$hash,$user['id']]);
+        if (strlen($new) < MIN_PASSWORD_LENGTH) jsonOut(['ok'=>false,'error'=>'Password must be at least '.MIN_PASSWORD_LENGTH.' characters']);
+        $pwKeys = ['pw:'.$user['id']];
+        if ($locked = lockRemaining($pwKeys)) jsonOut(['ok'=>false,'error'=>lockMessage($locked)]);
+        if (!password_verify($cur, $user['password'])) {
+            recordFailure($pwKeys);
+            jsonOut(['ok'=>false,'error'=>'Current password is incorrect']);
+        }
+        clearFailures($pwKeys);
+        setPassword($user['id'], $new);
         jsonOut(['ok'=>true]);
         break;
 

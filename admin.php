@@ -1,8 +1,9 @@
-﻿<?php
+<?php
 require_once __DIR__ . '/config.php';
 $admin = requireAdmin();
 
-$msg = '';
+$msg    = '';
+$msgErr = false;
 
 // ── ACTIONS ──────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -21,18 +22,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($uid !== $admin['id']) {
             db()->prepare("UPDATE users SET status=? WHERE id=?")->execute([$status, $uid]);
             $msg = 'User updated.';
-        } else { $msg = 'Cannot change your own status.'; }
+        } else { $msg = 'Cannot change your own status.'; $msgErr = true; }
     }
 
     if ($action === 'reset_password') {
         $uid  = (int)$_POST['user_id'];
         $pass = $_POST['new_password'] ?? '';
-        if (strlen($pass) < 8) { $msg = 'Password must be at least 8 characters.'; }
+        if (strlen($pass) < MIN_PASSWORD_LENGTH) { $msg = 'Password must be at least '.MIN_PASSWORD_LENGTH.' characters.'; $msgErr = true; }
         else {
-            $hash = password_hash($pass, PASSWORD_BCRYPT, ['cost'=>12]);
-            db()->prepare("UPDATE users SET password=? WHERE id=?")->execute([$hash, $uid]);
-            $msg = 'Password reset.';
+            setPassword($uid, $pass);
+            $st = db()->prepare("SELECT username FROM users WHERE id=?"); $st->execute([$uid]);
+            clearFailures(['u:'.strtolower((string)$st->fetchColumn()), 'pw:'.$uid]);
+            $msg = 'Password reset. The user has been signed out everywhere.';
         }
+    }
+
+    if ($action === 'unlock') {
+        $key = (string)($_POST['attempt_key'] ?? '');
+        db()->prepare("DELETE FROM login_attempts WHERE attempt_key=?")->execute([$key]);
+        $msg = 'Unlocked.';
+    }
+
+    if ($action === 'unlock_all') {
+        db()->exec("DELETE FROM login_attempts");
+        $msg = 'All lockouts and failure counters cleared.';
     }
 
     if ($action === 'add_game') {
@@ -106,6 +119,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         db()->prepare("DELETE FROM invite_codes WHERE id=? AND used_by IS NULL")->execute([$id]);
         $msg = 'Invite deleted.';
     }
+
+    // Forms submitted via the AJAX handler below get a JSON result instead of the page
+    if (!empty($_SERVER['HTTP_X_ADMIN_AJAX'])) jsonOut(['ok'=>!$msgErr, 'msg'=>$msg ?: 'Saved.']);
 }
 
 // ── LOAD DATA ────────────────────────────
@@ -125,6 +141,8 @@ $viewSys = (int)($_GET['sys'] ?? ($systems[0]['id'] ?? 0));
 $gamesSt = db()->prepare("SELECT * FROM games WHERE system_id=? ORDER BY sort_title");
 $gamesSt->execute([$viewSys]);
 $games = $gamesSt->fetchAll();
+$lockouts = db()->query("SELECT *, locked_until > NOW() AS is_locked FROM login_attempts
+                         ORDER BY is_locked DESC, last_fail_at DESC LIMIT 100")->fetchAll();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -134,6 +152,7 @@ $games = $gamesSt->fetchAll();
 <title>Admin — Game Collection</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/main.css">
+<?= csrfScript() ?>
 </head>
 <body>
 
@@ -250,7 +269,7 @@ WiiU,007 Legends,63286,https://...,17.51,24.86,40.83,63286.jpg,data:image/jpeg;b
           <input type="hidden" name="csrf"    value="<?= csrf() ?>">
           <input type="hidden" name="action"  value="reset_password">
           <input type="hidden" name="user_id" value="<?= $u['id'] ?>">
-          <input type="text" name="new_password" placeholder="New password" style="font-size:.68rem;padding:3px 8px;width:130px">
+          <input type="text" name="new_password" placeholder="New password" minlength="<?= MIN_PASSWORD_LENGTH ?>" style="font-size:.68rem;padding:3px 8px;width:130px">
           <button class="btn-icon" type="submit">Reset PW</button>
         </form>
         <?php else: ?><span style="color:var(--muted);font-size:.7rem">You</span><?php endif; ?>
@@ -259,6 +278,42 @@ WiiU,007 Legends,63286,https://...,17.51,24.86,40.83,63286.jpg,data:image/jpeg;b
     <?php endforeach; ?>
     </tbody>
   </table>
+</div>
+
+<!-- ── LOGIN LOCKOUTS ── -->
+<div class="admin-section">
+  <h2>Login Lockouts</h2>
+  <p style="font-size:.74rem;color:var(--muted);margin-bottom:14px">Failed sign-in counters per username (<code>u:</code>), IP address (<code>ip:</code>) and password-change attempts (<code>pw:</code> + user id). Unlocking also resets the counter.</p>
+  <?php if (!$lockouts): ?>
+    <p style="font-size:.75rem;color:var(--muted)">No failed attempts recorded.</p>
+  <?php else: ?>
+  <form method="POST" style="margin-bottom:12px">
+    <input type="hidden" name="csrf"   value="<?= csrf() ?>">
+    <input type="hidden" name="action" value="unlock_all">
+    <button class="btn-icon" type="submit">Clear All</button>
+  </form>
+  <table class="admin-table">
+    <thead><tr><th>Key</th><th>Failures</th><th>Last Failure</th><th>Locked Until</th><th></th></tr></thead>
+    <tbody>
+    <?php foreach ($lockouts as $l): ?>
+    <tr>
+      <td><?= htmlspecialchars($l['attempt_key']) ?></td>
+      <td><?= (int)$l['fail_count'] ?></td>
+      <td style="font-size:.7rem;color:var(--muted)"><?= htmlspecialchars($l['last_fail_at'] ?? '—') ?></td>
+      <td><?php if ($l['is_locked']): ?><span class="tag tag-banned"><?= htmlspecialchars($l['locked_until']) ?></span><?php else: ?><span style="color:var(--muted);font-size:.7rem">Not locked</span><?php endif; ?></td>
+      <td>
+        <form method="POST" style="display:inline">
+          <input type="hidden" name="csrf"        value="<?= csrf() ?>">
+          <input type="hidden" name="action"      value="unlock">
+          <input type="hidden" name="attempt_key" value="<?= htmlspecialchars($l['attempt_key']) ?>">
+          <button class="btn-icon" type="submit"><?= $l['is_locked'] ? 'Unlock' : 'Reset' ?></button>
+        </form>
+      </td>
+    </tr>
+    <?php endforeach; ?>
+    </tbody>
+  </table>
+  <?php endif; ?>
 </div>
 
 <!-- ── SYSTEMS ── -->
@@ -414,35 +469,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // Skip forms that already have special handlers
     if (form.id === 'pc-import-form') return;
     form.addEventListener('submit', async (e) => {
+      if (e.defaultPrevented) return; // e.g. cancelled confirm() in an onsubmit handler
       e.preventDefault();
       const fd = new FormData(form);
       try {
-        const res = await fetch(window.location.href, { method:'POST', body: fd });
-        const text = await res.text();
-        // Check if it redirected (success) or has an error
-        const action = fd.get('action') || 'save';
-        const actionLabels = {
-          gen_invite:        'Invite code generated',
-          del_invite:        'Invite code deleted',
-          user_status:       'User status updated',
-          user_reset_pw:     'Password reset',
-          add_system:        'System added',
-          set_system_icon:   'System icon updated',
-          add_game:          'Game added',
-          toggle_game:       'Game updated',
-          set_default_image: 'Cover image set',
-        };
-        adminToast(actionLabels[action] || 'Saved successfully.');
-        // Reload section data dynamically where possible
-        if (['set_system_icon','set_default_image','toggle_game','add_game'].includes(action)) {
-          setTimeout(()=>window.location.reload(), 800);
-        } else if (['gen_invite','del_invite'].includes(action)) {
-          setTimeout(()=>window.location.reload(), 800);
-        } else if (action === 'add_system') {
-          setTimeout(()=>window.location.reload(), 800);
-        } else if (['user_status','user_reset_pw'].includes(action)) {
-          setTimeout(()=>window.location.reload(), 800);
-        }
+        const res = await fetch(window.location.href, { method:'POST', body: fd, headers:{'X-Admin-Ajax':'1'} }).then(r=>r.json());
+        adminToast(res.msg || res.error || 'Saved.', !!res.ok);
+        if (res.ok && fd.get('action') !== 'reset_password') setTimeout(()=>window.location.reload(), 800);
+        if (res.ok && fd.get('action') === 'reset_password') form.reset();
       } catch(err) {
         adminToast('Error: ' + err.message, false);
       }

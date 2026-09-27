@@ -45,6 +45,7 @@ $tagOptsQ->execute([$user['id']]); $tagOpts = $tagOptsQ->fetchAll(PDO::FETCH_COL
 <title><?= htmlspecialchars($curSys['name'] ?? 'Collection') ?> — Game Collection</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/main.css">
+<?= csrfScript() ?>
 </head>
 <body>
 
