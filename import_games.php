@@ -32,6 +32,7 @@ $systems = db()->query("SELECT * FROM systems WHERE active=1 ORDER BY sort_order
   .result-box .err { color:var(--red); }
   #preview-wrap { display:none; }
 </style>
+<?= csrfScript() ?>
 </head>
 <body>
 

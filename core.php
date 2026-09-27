@@ -3,6 +3,26 @@
 if (!defined('DB_HOST')) { http_response_code(403); exit; }
 
 ob_start(); // Buffer output so headers can always be sent
+
+/** True when this request reached us over HTTPS (directly or via a reverse proxy). */
+function isHttps(): bool {
+    return (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+        || ($_SERVER['SERVER_PORT'] ?? '') == 443
+        || strtolower($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https';
+}
+
+// FORCE_HTTPS (set in config.php): redirect HTTP -> HTTPS and send HSTS.
+// Leave it off on servers without a certificate (e.g. local testing).
+if (defined('FORCE_HTTPS') && FORCE_HTTPS) {
+    if (!isHttps()) {
+        header('Location: https://'.($_SERVER['HTTP_HOST'] ?? '').($_SERVER['REQUEST_URI'] ?? '/'), true, 301);
+        exit;
+    }
+    header('Strict-Transport-Security: max-age=31536000');
+}
+
+// Cookies are only marked Secure when the request is HTTPS, so plain-HTTP test servers keep working
+ini_set('session.cookie_secure',    isHttps() ? 1 : 0);
 ini_set('session.cookie_httponly',  1);
 ini_set('session.use_strict_mode',  1);
 ini_set('session.gc_maxlifetime',   60*60*24*2); // 2 days
@@ -30,11 +50,11 @@ function db(): PDO {
 const MIN_PASSWORD_LENGTH = 12;
 
 function setRememberCookie(string $token, int $expires): void {
-    setcookie('remember_token', $token, ['expires'=>$expires, 'path'=>'/', 'httponly'=>true, 'samesite'=>'Lax']);
+    setcookie('remember_token', $token, ['expires'=>$expires, 'path'=>'/', 'secure'=>isHttps(), 'httponly'=>true, 'samesite'=>'Lax']);
 }
 
 function clearRememberCookie(): void {
-    setcookie('remember_token', '', ['expires'=>time() - 3600, 'path'=>'/', 'httponly'=>true, 'samesite'=>'Lax']);
+    setcookie('remember_token', '', ['expires'=>time() - 3600, 'path'=>'/', 'secure'=>isHttps(), 'httponly'=>true, 'samesite'=>'Lax']);
 }
 
 /** Creates a 30-day remember-me token. Only its SHA-256 hash is stored in the DB. */
@@ -212,6 +232,28 @@ function lockMessage(int $secs): string {
     $t = $secs >= 86400 ? ceil($secs/86400).' day(s)'
        : ($secs >= 3600 ? ceil($secs/3600).' hour(s)' : ceil($secs/60).' minute(s)');
     return "Too many failed attempts. Try again in $t.";
+}
+
+// ── Photo backups ───────────────────────
+define('BACKUP_DIR', __DIR__ . '/uploads/backups/');
+
+/** Absolute path of a stored backup zip (filename always comes from the DB, never from the request). */
+function backupFilePath(int $userId, string $filename): string {
+    return BACKUP_DIR . $userId . '/' . basename($filename);
+}
+
+/** Removes expired backup zips (all users) from disk and DB. */
+function purgeExpiredBackups(): void {
+    $rows = db()->query("SELECT user_id, filename FROM user_backups WHERE expires_at < NOW()")->fetchAll();
+    foreach ($rows as $r) @unlink(backupFilePath((int)$r['user_id'], $r['filename']));
+    db()->exec("DELETE FROM user_backups WHERE expires_at < NOW()");
+}
+
+/** Makes a string safe to use as a folder name inside a zip (Windows-safe, max 100 chars). */
+function zipSafeName(string $s): string {
+    $s = trim(preg_replace('~[\x00-\x1F\\\\/:*?"<>|]+~u', '_', $s) ?? '', " .");
+    $s = preg_replace('/^(.{0,100}).*$/us', '$1', $s);
+    return $s === '' ? '_' : $s;
 }
 
 function sanitizeFilename(string $name): string {

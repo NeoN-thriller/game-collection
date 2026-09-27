@@ -173,6 +173,7 @@ $totalOwnedVal= array_sum(array_column($statsRaw,   'owned_value'));
     .systems-grid { grid-template-columns:1fr; }
   }
 </style>
+<?= csrfScript() ?>
 </head>
 <body>
 

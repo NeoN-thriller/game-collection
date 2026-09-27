@@ -80,6 +80,26 @@ $playedOpts->execute([$user['id']]); $playedOpts = $playedOpts->fetchAll(PDO::FE
 
 $systems = db()->prepare("SELECT s.*, COALESCE(usp.visible,1) AS visible FROM systems s LEFT JOIN user_system_prefs usp ON usp.system_id=s.id AND usp.user_id=? WHERE s.active=1 ORDER BY s.sort_order");
 $systems->execute([$user['id']]); $systems = $systems->fetchAll();
+
+// Systems this user has photos for, with their current backup zip (if any)
+purgeExpiredBackups();
+$backupSysSt = db()->prepare("
+    SELECT s.id, s.name, s.short_name, pc.photo_count,
+           ub.token, ub.status, ub.file_size, ub.created_at, ub.expires_at,
+           (ub.status = 'ready' AND ub.expires_at > NOW()) AS has_backup
+    FROM systems s
+    JOIN (SELECT g.system_id, COUNT(*) AS photo_count
+          FROM copy_photos cp
+          JOIN collection_entries ce ON ce.id = cp.entry_id
+          JOIN games g ON g.id = ce.game_id
+          WHERE ce.user_id = ?
+          GROUP BY g.system_id) pc ON pc.system_id = s.id
+    LEFT JOIN user_backups ub ON ub.system_id = s.id AND ub.user_id = ?
+    WHERE s.active = 1
+    ORDER BY s.sort_order
+");
+$backupSysSt->execute([$user['id'], $user['id']]);
+$backupSystems = $backupSysSt->fetchAll();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -128,102 +148,11 @@ $systems->execute([$user['id']]); $systems = $systems->fetchAll();
     <div style="background:rgba(201,79,58,.1);border:1px solid rgba(201,79,58,.3);color:var(--red);padding:10px 16px;margin-bottom:20px;font-size:.8rem;"><?= htmlspecialchars($err) ?></div>
   <?php endif; ?>
 
-  <!-- SYSTEM VISIBILITY & ORDER -->
+  <!-- ACCOUNT INFO -->
   <div class="settings-section">
-    <h2>Visible Systems & Order</h2>
-    <form method="POST" style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-      <input type="hidden" name="csrf"   value="<?= csrf() ?>">
-      <input type="hidden" name="action" value="save_display_prefs">
-      <label class="toggle">
-        <input type="checkbox" name="show_icons" value="1" <?= ($user['show_system_icons']??1) ? 'checked' : '' ?> onchange="this.form.submit()">
-        <span class="toggle-slider"></span>
-      </label>
-      <span class="toggle-label" style="font-size:.78rem">Show system icons on dashboard</span>
-    </form>
-    <p class="export-desc">Toggle systems on/off, drag to reorder. <strong>Count totals</strong> controls whether a system is included in the global owned %, copies, and upgrade counts on the dashboard and collection page. Disable it for systems like "Hardware" that you don't want affecting your game completion stats. Spent and owned value always include all systems.</p>
-    <div id="sys-sort-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px">
-      <!-- populated by JS -->
-    </div>
-    <button class="btn btn-sm" onclick="saveSystemPrefs()">Save Systems & Order</button>
-  </div>
-
-  <!-- COLUMN PREFERENCES -->
-  <div class="settings-section">
-    <h2>Collection Columns</h2>
-    <p class="export-desc">Choose which columns to show and drag to reorder.</p>
-    <div id="col-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px"></div>
-    <button class="btn btn-sm" onclick="saveColPrefs('collection')">Save Collection Columns</button>
-  </div>
-
-  <div class="settings-section">
-    <h2>Wishlist Columns</h2>
-    <p class="export-desc">Choose which columns to show in the Wishlist page.</p>
-    <div id="col-wish-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px"></div>
-    <button class="btn btn-sm" onclick="saveColPrefs('wishlist')">Save Wishlist Columns</button>
-  </div>
-
-  <!-- AUCTION SITES -->
-  <div class="settings-section">
-    <h2>Auction / Search Sites</h2>
-    <p class="export-desc">Add sites to get quick search links from the game sidebar. Use <code>{system}</code>, <code>{title}</code> and <code>{region}</code> as placeholders.<br>
-    Example: <code>https://www.ebay.nl/sch/i.html?_nkw={system}+{title}+{region}</code></p>
-    <div id="auction-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px"></div>
-    <button class="btn-ghost" onclick="addAuctionSite()" style="font-size:.75rem">+ Add Site</button>
-    <button class="btn btn-sm" onclick="saveAuctionSites()" style="margin-left:8px">Save Sites</button>
-  </div>
-
-  <!-- TAG OPTIONS -->
-  <div class="settings-section">
-    <h2>Game Tags</h2>
-    <p class="export-desc">Assign tags to games (e.g. "Must Have", "Probably", "Maybe"). Filterable in Collection and Wishlist.</p>
-    <div id="tag-list" class="comp-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px"></div>
-    <div style="display:flex;gap:6px;margin-bottom:10px">
-      <input type="text" id="new-tag" placeholder="New tag label" style="flex:1;padding:8px 10px;font-size:.78rem">
-      <button class="btn-ghost" onclick="addTagItem()">Add Tag</button>
-    </div>
-    <button class="btn btn-sm" onclick="saveTagOptions()">Save Tags</button>
-  </div>
-
-  <!-- COMPLETENESS OPTIONS -->
-  <div class="settings-section">
-    <h2>Completeness Options</h2>
-    <p class="export-desc">Drag to reorder, ✕ to remove. These appear in the completeness dropdown.</p>
-    <div>
-      <div class="comp-list" id="comp-list">
-        <?php foreach ($compOpts as $label): ?>
-        <div class="comp-item" draggable="true">
-          <span class="drag-handle">⠿</span>
-          <input type="text" class="comp-label-input" value="<?= htmlspecialchars($label) ?>" maxlength="100">
-          <button type="button" class="btn-danger" onclick="removeItem(this)">✕</button>
-        </div>
-        <?php endforeach; ?>
-      </div>
-      <div style="display:flex;gap:8px;margin-top:10px">
-        <button type="button" class="btn-ghost" onclick="addItem('comp-list')">+ Add Option</button>
-        <button type="button" class="btn btn-sm" onclick="saveCompleteness()">Save</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- PLAYED STATUS OPTIONS -->
-  <div class="settings-section">
-    <h2>Played Status Options</h2>
-    <p class="export-desc">Drag to reorder, ✕ to remove. These appear in the played status dropdown.</p>
-    <div>
-      <div class="comp-list" id="played-list">
-        <?php foreach ($playedOpts as $label): ?>
-        <div class="comp-item" draggable="true">
-          <span class="drag-handle">⠿</span>
-          <input type="text" class="comp-label-input" value="<?= htmlspecialchars($label) ?>" maxlength="100">
-          <button type="button" class="btn-danger" onclick="removeItem(this)">✕</button>
-        </div>
-        <?php endforeach; ?>
-      </div>
-      <div style="display:flex;gap:8px;margin-top:10px">
-        <button type="button" class="btn-ghost" onclick="addItem('played-list')">+ Add Option</button>
-        <button type="button" class="btn btn-sm" onclick="savePlayed()">Save</button>
-      </div>
-    </div>
+    <h2>Account</h2>
+    <p style="font-size:.8rem;color:var(--text2)">Username: <strong style="color:var(--accent)"><?= htmlspecialchars($user['username']) ?></strong></p>
+    <p style="font-size:.75rem;color:var(--muted);margin-top:6px">To change your username, ask the admin.</p>
   </div>
 
   <!-- WISHLIST SHARING -->
@@ -276,10 +205,109 @@ $systems->execute([$user['id']]); $systems = $systems->fetchAll();
     <?php endif; ?>
   </div>
 
+  <!-- TAG OPTIONS -->
+  <div class="settings-section">
+    <h2>Game Tags</h2>
+    <p class="export-desc">Assign tags to games (e.g. "Must Have", "Probably", "Maybe"). Filterable in Collection and Wishlist.</p>
+    <div id="tag-list" class="comp-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px"></div>
+    <div style="display:flex;gap:6px;margin-bottom:10px">
+      <input type="text" id="new-tag" placeholder="New tag label" style="flex:1;padding:8px 10px;font-size:.78rem">
+      <button class="btn-ghost" onclick="addTagItem()">Add Tag</button>
+    </div>
+    <button class="btn btn-sm" onclick="saveTagOptions()">Save Tags</button>
+  </div>
+
+  <!-- AUCTION SITES -->
+  <div class="settings-section">
+    <h2>Auction / Search Sites</h2>
+    <p class="export-desc">Add sites to get quick search links from the game sidebar. Use <code>{system}</code>, <code>{title}</code> and <code>{region}</code> as placeholders.<br>
+    Example: <code>https://www.ebay.nl/sch/i.html?_nkw={system}+{title}+{region}</code></p>
+    <div id="auction-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px"></div>
+    <button class="btn-ghost" onclick="addAuctionSite()" style="font-size:.75rem">+ Add Site</button>
+    <button class="btn btn-sm" onclick="saveAuctionSites()" style="margin-left:8px">Save Sites</button>
+  </div>
+
+  <!-- WISHLIST COLUMNS -->
+  <div class="settings-section">
+    <h2>Wishlist Columns</h2>
+    <p class="export-desc">Choose which columns to show in the Wishlist page.</p>
+    <div id="col-wish-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px"></div>
+    <button class="btn btn-sm" onclick="saveColPrefs('wishlist')">Save Wishlist Columns</button>
+  </div>
+
+  <!-- COLLECTION COLUMNS -->
+  <div class="settings-section">
+    <h2>Collection Columns</h2>
+    <p class="export-desc">Choose which columns to show and drag to reorder.</p>
+    <div id="col-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px"></div>
+    <button class="btn btn-sm" onclick="saveColPrefs('collection')">Save Collection Columns</button>
+  </div>
+
+  <!-- COMPLETENESS OPTIONS -->
+  <div class="settings-section">
+    <h2>Completeness Options</h2>
+    <p class="export-desc">Drag to reorder, ✕ to remove. These appear in the completeness dropdown.</p>
+    <div>
+      <div class="comp-list" id="comp-list">
+        <?php foreach ($compOpts as $label): ?>
+        <div class="comp-item" draggable="true">
+          <span class="drag-handle">⠿</span>
+          <input type="text" class="comp-label-input" value="<?= htmlspecialchars($label) ?>" maxlength="100">
+          <button type="button" class="btn-danger" onclick="removeItem(this)">✕</button>
+        </div>
+        <?php endforeach; ?>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button type="button" class="btn-ghost" onclick="addItem('comp-list')">+ Add Option</button>
+        <button type="button" class="btn btn-sm" onclick="saveCompleteness()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PLAYED STATUS OPTIONS -->
+  <div class="settings-section">
+    <h2>Played Status Options</h2>
+    <p class="export-desc">Drag to reorder, ✕ to remove. These appear in the played status dropdown.</p>
+    <div>
+      <div class="comp-list" id="played-list">
+        <?php foreach ($playedOpts as $label): ?>
+        <div class="comp-item" draggable="true">
+          <span class="drag-handle">⠿</span>
+          <input type="text" class="comp-label-input" value="<?= htmlspecialchars($label) ?>" maxlength="100">
+          <button type="button" class="btn-danger" onclick="removeItem(this)">✕</button>
+        </div>
+        <?php endforeach; ?>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button type="button" class="btn-ghost" onclick="addItem('played-list')">+ Add Option</button>
+        <button type="button" class="btn btn-sm" onclick="savePlayed()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SYSTEM VISIBILITY & ORDER -->
+  <div class="settings-section">
+    <h2>Visible Systems & Order</h2>
+    <form method="POST" style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+      <input type="hidden" name="csrf"   value="<?= csrf() ?>">
+      <input type="hidden" name="action" value="save_display_prefs">
+      <label class="toggle">
+        <input type="checkbox" name="show_icons" value="1" <?= ($user['show_system_icons']??1) ? 'checked' : '' ?> onchange="this.form.submit()">
+        <span class="toggle-slider"></span>
+      </label>
+      <span class="toggle-label" style="font-size:.78rem">Show system icons on dashboard</span>
+    </form>
+    <p class="export-desc">Toggle systems on/off, drag to reorder. <strong>Count totals</strong> controls whether a system is included in the global owned %, copies, and upgrade counts on the dashboard and collection page. Disable it for systems like "Hardware" that you don't want affecting your game completion stats. Spent and owned value always include all systems.</p>
+    <div id="sys-sort-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px">
+      <!-- populated by JS -->
+    </div>
+    <button class="btn btn-sm" onclick="saveSystemPrefs()">Save Systems & Order</button>
+  </div>
+
   <!-- EXPORT / IMPORT -->
   <div class="settings-section">
     <h2>Backup & Restore</h2>
-    <p class="export-desc">Export your full collection including photos as a JSON backup file. Import restores everything.</p>
+    <p class="export-desc">Export your collection data (entries, prices, notes, options) as a JSON file. Photos are not included — use Image Backups below. Import restores the data; older exports that still contain photos restore those too.</p>
     <div class="export-row">
       <button class="btn btn-sm" onclick="exportData()">⬇ Export Collection</button>
       <label class="btn btn-sm" style="cursor:pointer">⬆ Import Collection
@@ -287,6 +315,48 @@ $systems->execute([$user['id']]); $systems = $systems->fetchAll();
       </label>
     </div>
     <p style="font-size:.68rem;color:var(--muted);margin-top:10px">⚠ Import will merge data. Existing entries may be overwritten.</p>
+  </div>
+
+  <!-- IMAGE BACKUPS -->
+  <div class="settings-section">
+    <h2>Image Backups</h2>
+    <p class="export-desc">
+      Generate a zip of your uploaded photos per system, organised as <code>System/Game/photo.jpg</code>. Download links are valid for 24 hours.
+      One zip per system — generating a new one replaces the previous.
+      Default cover art and system icons are not included.
+    </p>
+    <?php if (!$backupSystems): ?>
+    <p style="font-size:.78rem;color:var(--muted)">No photos uploaded yet.</p>
+    <?php else: ?>
+    <table class="admin-table" style="margin-top:10px">
+      <thead>
+        <tr><th>System</th><th>Photos</th><th>Zip Size</th><th>Generated</th><th>Expires</th><th>Actions</th></tr>
+      </thead>
+      <tbody>
+      <?php foreach ($backupSystems as $bs):
+        $hasBackup = (bool)$bs['has_backup'];
+      ?>
+      <tr>
+        <td><strong><?= htmlspecialchars($bs['short_name']) ?></strong><br><span style="font-size:.65rem;color:var(--muted)"><?= htmlspecialchars($bs['name']) ?></span></td>
+        <td><?= (int)$bs['photo_count'] ?></td>
+        <td><?= $hasBackup ? number_format($bs['file_size']/1024/1024, 1).' MB' : '—' ?></td>
+        <td><?= $hasBackup ? htmlspecialchars(substr($bs['created_at'], 0, 16)) : ($bs['status'] === 'failed' ? '<span style="color:var(--red)">Failed</span>' : '—') ?></td>
+        <td><?= $hasBackup ? htmlspecialchars(substr($bs['expires_at'], 0, 16)) : '—' ?></td>
+        <td style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn btn-sm" onclick="generateBackup(this)"
+                  data-system-id="<?= (int)$bs['id'] ?>" data-name="<?= htmlspecialchars($bs['short_name']) ?>">
+            <?= $hasBackup ? 'Regenerate' : 'Generate' ?>
+          </button>
+          <?php if ($hasBackup): ?>
+          <a href="<?= BASE_URL ?>/api/backup_download.php?token=<?= htmlspecialchars($bs['token']) ?>" class="btn-ghost" style="padding:7px 12px;font-size:.72rem;text-decoration:none">Download</a>
+          <button class="btn-ghost" style="color:var(--red)" onclick="deleteBackup(this)" data-token="<?= htmlspecialchars($bs['token']) ?>">Delete</button>
+          <?php endif; ?>
+        </td>
+      </tr>
+      <?php endforeach; ?>
+      </tbody>
+    </table>
+    <?php endif; ?>
   </div>
 
   <!-- CHANGE PASSWORD -->
@@ -300,12 +370,6 @@ $systems->execute([$user['id']]); $systems = $systems->fetchAll();
     </div>
   </div>
 
-  <!-- ACCOUNT INFO -->
-  <div class="settings-section">
-    <h2>Account</h2>
-    <p style="font-size:.8rem;color:var(--text2)">Username: <strong style="color:var(--accent)"><?= htmlspecialchars($user['username']) ?></strong></p>
-    <p style="font-size:.75rem;color:var(--muted);margin-top:6px">To change your username, ask the admin.</p>
-  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -719,14 +783,9 @@ async function saveSystemPrefs() {
 loadSystems();
 
 // ── EXPORT / IMPORT ──
-async function exportData() {
+function exportData() {
   toast('Preparing export...');
-  const res = await fetch(`${BASE}/api/export.php`).then(r=>r.json());
-  if (!res.ok) { toast('Export failed', true); return; }
-  const blob = new Blob([JSON.stringify(res.data, null, 2)], {type:'application/json'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob); a.download = 'game_collection_backup.json'; a.click();
-  toast('Export downloaded');
+  window.location.href = `${BASE}/api/export.php`; // server responds with a file download
 }
 
 async function importData(e) {
@@ -737,8 +796,41 @@ async function importData(e) {
   toast('Importing...');
   const res = await fetch(`${BASE}/api/import.php`, {
     method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({data})
-  }).then(r=>r.json());
+  }).then(r=>r.json()).catch(e=>({ok:false, error:'server error ('+e.message+')'}));
   toast(res.ok ? 'Import complete' : 'Import failed: '+(res.error||''), !res.ok);
+}
+
+// ── IMAGE BACKUPS ──
+async function generateBackup(btn) {
+  const label = btn.textContent.trim();
+  btn.disabled = true;
+  btn.textContent = 'Generating…';
+  toast('Generating zip for ' + btn.dataset.name + '… this can take a minute');
+  try {
+    const res = await fetch(`${BASE}/api/backup_generate.php`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({system_id: Number(btn.dataset.systemId)})
+    }).then(r => r.json());
+    if (!res.ok) throw new Error(res.error || 'Unknown error');
+    let msg = 'Zip ready — ' + res.photo_count + ' photos, ' + (res.file_size/1024/1024).toFixed(1) + ' MB';
+    if (res.missing) msg += ' (' + res.missing + ' missing on server)';
+    toast(msg);
+    setTimeout(() => window.location.reload(), 1500);
+  } catch (e) {
+    btn.textContent = label;
+    btn.disabled = false;
+    toast('Error: ' + e.message, true);
+  }
+}
+
+async function deleteBackup(btn) {
+  if (!confirm('Delete this backup zip?')) return;
+  const res = await fetch(`${BASE}/api/backup_delete.php`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({token: btn.dataset.token})
+  }).then(r => r.json()).catch(() => ({ok:false}));
+  if (res.ok) { toast('Backup deleted.'); setTimeout(() => window.location.reload(), 800); }
+  else toast('Error deleting backup: ' + (res.error || 'request failed'), true);
 }
 
 function toast(msg, err=false) {

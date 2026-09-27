@@ -140,6 +140,7 @@ foreach ($entries as $e) {
   .d-cover { width:100%; max-height:220px; object-fit:contain; border:1px solid var(--border2); background:var(--surface2); cursor:pointer; }
   .d-empty { font-size:.7rem; color:var(--muted); font-style:italic; }
 </style>
+<?= csrfScript() ?>
 </head>
 <body>
 

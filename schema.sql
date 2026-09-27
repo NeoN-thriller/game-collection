@@ -159,6 +159,26 @@ CREATE TABLE `users` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 
+DROP TABLE IF EXISTS `user_backups`;
+CREATE TABLE `user_backups` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` int(10) unsigned NOT NULL,
+  `system_id` int(10) unsigned NOT NULL,
+  `token` varchar(32) NOT NULL,
+  `filename` varchar(255) NOT NULL,
+  `file_size` int(10) unsigned DEFAULT NULL,
+  `status` enum('generating','ready','failed') NOT NULL DEFAULT 'generating',
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `expires_at` timestamp NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `token` (`token`),
+  UNIQUE KEY `uq_user_system` (`user_id`,`system_id`),
+  KEY `system_id` (`system_id`),
+  CONSTRAINT `user_backups_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `user_backups_ibfk_2` FOREIGN KEY (`system_id`) REFERENCES `systems` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
 DROP TABLE IF EXISTS `user_completeness_options`;
 CREATE TABLE `user_completeness_options` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,

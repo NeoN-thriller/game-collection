@@ -34,6 +34,7 @@ $user = requireAdmin();
   .result-box.show { display:block; }
   .ok   { color:var(--green); } .warn { color:var(--orange); } .err { color:var(--red); }
 </style>
+<?= csrfScript() ?>
 </head>
 <body>
 

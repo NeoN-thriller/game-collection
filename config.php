@@ -10,6 +10,10 @@ define('DB_USER',    'db_user');
 define('DB_PASS',    'db_pass');
 define('DB_CHARSET', 'utf8mb4');
 
+// true on the live site (has an SSL certificate): redirects http:// to https:// and sends HSTS.
+// false for local/test servers that only run on plain http://
+define('FORCE_HTTPS', false);
+
 // Session name (change this to something unique for your site)
 define('SESSION_NAME', 'gcollect_session');
 

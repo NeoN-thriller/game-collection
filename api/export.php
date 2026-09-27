@@ -2,17 +2,14 @@
 require_once __DIR__ . '/../config.php';
 $user = requireAuth();
 
-// Get all entries with photos
+// Data-only export: photos are backed up separately as per-system zips (Settings → Image Backups)
 $st = db()->prepare("
     SELECT ce.*, g.title AS game_title, g.sort_order AS game_sort_order,
-           s.short_name AS system_short, s.name AS system_name,
-           GROUP_CONCAT(cp.filename ORDER BY cp.sort_order SEPARATOR '||') AS photos_raw
+           s.short_name AS system_short, s.name AS system_name
     FROM collection_entries ce
     JOIN games g   ON g.id  = ce.game_id
     JOIN systems s ON s.id  = g.system_id
-    LEFT JOIN copy_photos cp ON cp.entry_id = ce.id
     WHERE ce.user_id = ?
-    GROUP BY ce.id
     ORDER BY s.sort_order, g.sort_title, ce.copy_number
 ");
 $st->execute([$user['id']]);
@@ -24,19 +21,6 @@ $opts->execute([$user['id']]);
 
 $entries = [];
 foreach ($rows as $row) {
-    $photos = $row['photos_raw'] ? explode('||', $row['photos_raw']) : [];
-    // Encode photos as base64 for portable export
-    $photosEncoded = [];
-    foreach ($photos as $fn) {
-        $path = UPLOAD_DIR . $fn;
-        if (file_exists($path)) {
-            $photosEncoded[] = [
-                'filename' => basename($fn),
-                'data'     => base64_encode(file_get_contents($path)),
-                'mime'     => mime_content_type($path),
-            ];
-        }
-    }
     $entries[] = [
         'system'          => $row['system_short'],
         'system_name'     => $row['system_name'],
@@ -52,16 +36,25 @@ foreach ($rows as $row) {
         'upgrade'         => (bool)$row['upgrade'],
         'upgrade_reason'  => $row['upgrade_reason'],
         'notes'           => $row['notes'],
-        'photos'          => $photosEncoded,
     ];
 }
 
-jsonOut([
-    'ok'      => true,
-    'data'    => [
-        'exported_at'          => date('c'),
-        'username'             => $user['username'],
-        'completeness_options' => $opts->fetchAll(),
-        'entries'              => $entries,
-    ]
-]);
+$data = [
+    'exported_at'          => date('c'),
+    'username'             => $user['username'],
+    'completeness_options' => $opts->fetchAll(),
+    'entries'              => $entries,
+];
+
+// Sent as a file download (no fetch/blob in the browser, so nothing can fail silently)
+$json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
+if ($json === false) { http_response_code(500); exit('Export failed: '.json_last_error_msg()); }
+
+session_write_close();
+while (ob_get_level()) ob_end_clean();
+header('Content-Type: application/json; charset=utf-8');
+header('Content-Disposition: attachment; filename="game_collection_backup_'.date('Ymd').'.json"');
+header('Content-Length: '.strlen($json));
+header('Cache-Control: no-cache, no-store');
+echo $json;
+exit;
