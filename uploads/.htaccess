@@ -1,7 +1,18 @@
 # Prevent directory listing
 Options -Indexes
 
-# PHP files in uploads should never execute
-<FilesMatch "\.php$">
-    Deny from all
+# Scripts in uploads should never execute or be served
+<FilesMatch "\.(php\d?|phtml|phar|pht|phps|cgi|pl|py|sh|asp|aspx)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Deny from all
+    </IfModule>
 </FilesMatch>
+
+# Uploaded files are data only: no scripts, even inside SVG icons
+<IfModule mod_headers.c>
+    Header set Content-Security-Policy "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox"
+    Header set X-Content-Type-Options "nosniff"
+</IfModule>
