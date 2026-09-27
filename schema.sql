@@ -1,4 +1,7 @@
-SET NAMES utf8;
+-- Game Collection — database schema
+-- Import into an EMPTY database created with the utf8mb4 character set.
+-- WARNING: every table is dropped and recreated. Never run this on a database with data you want to keep.
+
 SET time_zone = '+00:00';
 SET foreign_key_checks = 0;
 SET sql_mode = 'NO_AUTO_VALUE_ON_ZERO';
@@ -34,7 +37,7 @@ CREATE TABLE `collection_entries` (
   KEY `idx_user_game` (`user_id`,`game_id`),
   CONSTRAINT `collection_entries_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
   CONSTRAINT `collection_entries_ibfk_2` FOREIGN KEY (`game_id`) REFERENCES `games` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 
 DROP TABLE IF EXISTS `copy_photos`;
@@ -50,7 +53,7 @@ CREATE TABLE `copy_photos` (
   KEY `user_id` (`user_id`),
   CONSTRAINT `copy_photos_ibfk_1` FOREIGN KEY (`entry_id`) REFERENCES `collection_entries` (`id`) ON DELETE CASCADE,
   CONSTRAINT `copy_photos_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 
 DROP TABLE IF EXISTS `games`;
@@ -77,7 +80,7 @@ CREATE TABLE `games` (
   KEY `idx_sort` (`system_id`,`sort_title`),
   KEY `idx_pc_id` (`pc_id`),
   CONSTRAINT `games_ibfk_1` FOREIGN KEY (`system_id`) REFERENCES `systems` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 
 DROP TABLE IF EXISTS `invite_codes`;
@@ -94,7 +97,7 @@ CREATE TABLE `invite_codes` (
   KEY `used_by` (`used_by`),
   CONSTRAINT `invite_codes_ibfk_1` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`),
   CONSTRAINT `invite_codes_ibfk_2` FOREIGN KEY (`used_by`) REFERENCES `users` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 
 DROP TABLE IF EXISTS `login_attempts`;
@@ -104,7 +107,7 @@ CREATE TABLE `login_attempts` (
   `last_fail_at` timestamp NULL DEFAULT NULL,
   `locked_until` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`attempt_key`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 
 DROP TABLE IF EXISTS `remember_tokens`;
@@ -119,7 +122,7 @@ CREATE TABLE `remember_tokens` (
   KEY `user_id` (`user_id`),
   KEY `idx_token` (`token`),
   CONSTRAINT `remember_tokens_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 
 DROP TABLE IF EXISTS `systems`;
@@ -133,7 +136,7 @@ CREATE TABLE `systems` (
   `active` tinyint(1) NOT NULL DEFAULT 1,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 
 DROP TABLE IF EXISTS `users`;
@@ -153,7 +156,7 @@ CREATE TABLE `users` (
   `auction_sites` text DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `username` (`username`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 
 DROP TABLE IF EXISTS `user_completeness_options`;
@@ -165,7 +168,7 @@ CREATE TABLE `user_completeness_options` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_user_label` (`user_id`,`label`),
   CONSTRAINT `user_completeness_options_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 
 DROP TABLE IF EXISTS `user_played_options`;
@@ -177,7 +180,7 @@ CREATE TABLE `user_played_options` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_user_label` (`user_id`,`label`),
   CONSTRAINT `user_played_options_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 
 DROP TABLE IF EXISTS `user_system_prefs`;
@@ -193,7 +196,7 @@ CREATE TABLE `user_system_prefs` (
   KEY `system_id` (`system_id`),
   CONSTRAINT `user_system_prefs_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
   CONSTRAINT `user_system_prefs_ibfk_2` FOREIGN KEY (`system_id`) REFERENCES `systems` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 
 DROP TABLE IF EXISTS `user_tag_options`;
@@ -205,4 +208,4 @@ CREATE TABLE `user_tag_options` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_user_tag` (`user_id`,`label`),
   CONSTRAINT `user_tag_options_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

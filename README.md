@@ -65,7 +65,7 @@ Built with plain PHP, MySQL and vanilla JavaScript. No frameworks, no build step
 |---|---|
 | PHP | **8.1 or newer** (uses `never`, `mixed` and union return types) |
 | PHP extensions | `pdo_mysql`, `gd` (image resizing — with WebP support if you upload WebP), `exif` (optional, auto-rotates phone photos), `json` |
-| Database | MySQL 8+ (or a compatible MariaDB) |
+| Database | MySQL 8+ or MariaDB 10.5+ |
 | Web server | IIS (a `web.config` is included) or Apache / nginx |
 
 ---
@@ -76,11 +76,15 @@ Built with plain PHP, MySQL and vanilla JavaScript. No frameworks, no build step
 
 2. **Create a MySQL database** and a user with full rights on it, using the `utf8mb4` character set.
 
-3. **Create the database tables.** The app uses these tables:
+3. **Import the schema** into the new database:
 
-   `users`, `invite_codes`, `remember_tokens`, `login_attempts`, `systems`, `games`, `collection_entries`, `copy_photos`, `user_system_prefs`, `user_completeness_options`, `user_played_options`, `user_tag_options`
+   ```bash
+   mysql -u game_user -p game_collection < schema.sql
+   ```
 
-   > ⚠️ A schema file is not included in the repository yet. See [Database](#database) below.
+   (Or import `schema.sql` with phpMyAdmin, Adminer or HeidiSQL.)
+
+   > ⚠️ `schema.sql` **drops and recreates every table**. Only run it on an empty database, never on a live install.
 
 4. **Edit `config.php`:**
 
@@ -158,6 +162,7 @@ The `console` value must match a system's **short name** (case-insensitive). Row
 ## Project structure
 
 ```
+├── schema.sql           Database schema (fresh installs only)
 ├── index.php            Sign in / register (invite code)
 ├── dashboard.php        Overview and per-system completion cards
 ├── collection.php       Main collection table and edit drawer
@@ -178,9 +183,24 @@ The `console` value must match a system's **short name** (case-insensitive). Row
 
 ## Database
 
-The repository does not include a SQL schema file yet. The table names are listed under [Installation](#installation), and the column names can be found in the queries in `core.php`, `admin.php` and `api/*.php`.
+`schema.sql` creates 12 tables:
 
-Adding a `schema.sql` (a `mysqldump --no-data` of a working install) would make fresh installs a one-step process.
+| Table | Purpose |
+|---|---|
+| `users` | Accounts, roles, wishlist sharing, and per-user preferences (columns, auction sites) |
+| `invite_codes` | Invite codes and who created or used them |
+| `remember_tokens` | Hashed "remember me" tokens |
+| `login_attempts` | Failed-login counters and lockouts |
+| `systems` | Consoles / systems (name, short name, region, icon, order) |
+| `games` | Master game list per system, including PriceCharting IDs and prices |
+| `collection_entries` | One row per user, per game, per copy (owned, condition, prices, notes…) |
+| `copy_photos` | Photos attached to a collection entry |
+| `user_system_prefs` | Per-user system visibility, order, and whether a system counts toward totals |
+| `user_completeness_options` | Each user's completeness labels |
+| `user_played_options` | Each user's played-status labels |
+| `user_tag_options` | Each user's tag labels |
+
+Foreign keys use `ON DELETE CASCADE`, so deleting a user, system or game also removes its related entries and photo records. The image files themselves stay in `uploads/`.
 
 ---
 
