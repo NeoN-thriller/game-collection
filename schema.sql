@@ -298,6 +298,7 @@ CREATE TABLE `users` (
   `auction_sites` text DEFAULT NULL,
   `grading_mode` enum('simple','points','both') NOT NULL DEFAULT 'simple',
   `grading_default` enum('simple','points') NOT NULL DEFAULT 'simple',
+  `theme` varchar(50) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `username` (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

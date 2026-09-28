@@ -112,12 +112,12 @@ $backupSystems = $backupSysSt->fetchAll();
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Settings — Game Collection</title>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/main.css?v=<?= @filemtime(__DIR__.'/assets/css/main.css') ?>">
+<?= themeHead($user) ?>
 <style>
   .settings-wrap { max-width:640px; margin:36px auto; padding:0 20px 60px; }
   .settings-section { margin-bottom:40px; }
-  .settings-section h2 { font-family:'Bebas Neue',sans-serif; font-size:1.4rem; color:var(--accent); letter-spacing:.06em; margin-bottom:14px; border-bottom:1px solid var(--border); padding-bottom:8px; }
+  .settings-section h2 { font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case); font-size:1.4rem; color:var(--accent); letter-spacing:.06em; margin-bottom:14px; border-bottom:1px solid var(--border); padding-bottom:8px; }
   .comp-list { display:flex; flex-direction:column; gap:8px; margin-bottom:12px; }
   .comp-item { display:flex; gap:8px; align-items:center; }
   .comp-item input { flex:1; }
@@ -129,10 +129,10 @@ $backupSystems = $backupSysSt->fetchAll();
   .export-desc { font-size:.73rem; color:var(--muted); margin-bottom:12px; }
   .gm-cards { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
   .gm-card { display:flex; flex-direction:column; gap:6px; padding:14px 14px; background:var(--surface2); border:1px solid var(--border2); cursor:pointer; }
-  .gm-card:has(input:checked) { background:rgba(201,165,60,.07); border-color:var(--accent2); }
+  .gm-card:has(input:checked) { background:color-mix(in srgb,var(--accent2) 7%,transparent); border-color:var(--accent2); }
   .gm-card input { position:absolute; opacity:0; pointer-events:none; }
   .gm-card:has(input:focus-visible) { outline:1px solid var(--accent); }
-  .gm-title { display:flex; align-items:center; gap:8px; font-family:'Bebas Neue',sans-serif; font-size:1.15rem; letter-spacing:.06em; color:var(--accent); }
+  .gm-title { display:flex; align-items:center; gap:8px; font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case); font-size:1.15rem; letter-spacing:.06em; color:var(--accent); }
   .gm-dot { width:13px; height:13px; border-radius:50%; border:2px solid var(--border2); flex-shrink:0; }
   .gm-card:has(input:checked) .gm-dot { border:4px solid var(--accent2); background:var(--bg); }
   .gm-desc { font-size:.7rem; color:var(--text2); line-height:1.6; }
@@ -159,13 +159,13 @@ $backupSystems = $backupSysSt->fetchAll();
 </header>
 
 <div class="settings-wrap">
-  <h1 style="font-family:'Bebas Neue',sans-serif;font-size:2rem;color:var(--accent);letter-spacing:.06em;margin-bottom:28px">Settings</h1>
+  <h1 style="font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case);font-size:2rem;color:var(--accent);letter-spacing:.06em;margin-bottom:28px">Settings</h1>
 
   <?php if ($msg): ?>
-    <div style="background:rgba(74,158,107,.1);border:1px solid rgba(74,158,107,.3);color:var(--green);padding:10px 16px;margin-bottom:20px;font-size:.8rem;"><?= htmlspecialchars($msg) ?></div>
+    <div style="background:color-mix(in srgb,var(--green) 10%,transparent);border:1px solid color-mix(in srgb,var(--green) 30%,transparent);color:var(--green);padding:10px 16px;margin-bottom:20px;font-size:.8rem;"><?= htmlspecialchars($msg) ?></div>
   <?php endif; ?>
   <?php if ($err): ?>
-    <div style="background:rgba(201,79,58,.1);border:1px solid rgba(201,79,58,.3);color:var(--red);padding:10px 16px;margin-bottom:20px;font-size:.8rem;"><?= htmlspecialchars($err) ?></div>
+    <div style="background:color-mix(in srgb,var(--red) 10%,transparent);border:1px solid color-mix(in srgb,var(--red) 30%,transparent);color:var(--red);padding:10px 16px;margin-bottom:20px;font-size:.8rem;"><?= htmlspecialchars($err) ?></div>
   <?php endif; ?>
 
   <!-- ACCOUNT INFO -->
@@ -173,6 +173,15 @@ $backupSystems = $backupSysSt->fetchAll();
     <h2>Account</h2>
     <p style="font-size:.8rem;color:var(--text2)">Username: <strong style="color:var(--accent)"><?= htmlspecialchars($user['username']) ?></strong></p>
     <p style="font-size:.75rem;color:var(--muted);margin-top:6px">To change your username, ask the admin.</p>
+  </div>
+
+  <!-- THEME -->
+  <div class="settings-section">
+    <h2>Theme</h2>
+    <p class="export-desc">Changes colours, fonts and effects on every page. Only you see your choice; your public wishlist is shown in it too. The theme marked <span style="color:var(--accent2)">★ Site default</span> is the one the admin picked for everyone.</p>
+    <div class="theme-grid" role="radiogroup" aria-label="Theme">
+      <?php foreach (availableThemes() as $t) echo themeCardHtml($t, 'theme', activeTheme($user) === $t['slug'], 'pickTheme'); ?>
+    </div>
   </div>
 
   <!-- CONDITION GRADING -->
@@ -210,7 +219,7 @@ $backupSystems = $backupSysSt->fetchAll();
       <div class="gm-box">
         <span class="gm-lbl">Points looks like</span>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <span style="font-family:'Bebas Neue',sans-serif;font-size:1.5rem;line-height:1;color:<?= htmlspecialchars($previewLabel['color'] ?? 'var(--text2)') ?>">93</span>
+          <span style="font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case);font-size:1.5rem;line-height:1;color:<?= htmlspecialchars($previewLabel['color'] ?? 'var(--text2)') ?>">93</span>
           <?= gradeBadgeHtml($previewLabel) ?>
           <span style="font-size:.64rem;color:var(--muted)">Box 86 · Cart 98 · Man 97</span>
         </div>
@@ -243,7 +252,7 @@ $backupSystems = $backupSysSt->fetchAll();
       <?php $wtoken = $user['wishlist_token'] ?? ''; ?>
       <?php if ($wtoken): ?>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <code id="wishlist-link-code" style="font-size:.75rem;color:var(--wiiu);background:rgba(0,154,199,.07);padding:6px 10px;border:1px solid rgba(0,154,199,.2);flex:1;word-break:break-all"><?= BASE_URL ?>/wishlist.php?token=<?= htmlspecialchars($wtoken) ?></code>
+        <code id="wishlist-link-code" style="font-size:.75rem;color:var(--wiiu);background:color-mix(in srgb,var(--wiiu) 7%,transparent);padding:6px 10px;border:1px solid color-mix(in srgb,var(--wiiu) 20%,transparent);flex:1;word-break:break-all"><?= BASE_URL ?>/wishlist.php?token=<?= htmlspecialchars($wtoken) ?></code>
         <button class="btn-ghost" onclick="copyLink()" style="white-space:nowrap">Copy</button>
       </div>
       <div style="margin-top:8px">
@@ -549,6 +558,43 @@ async function saveGrading() {
     body:JSON.stringify({action:'save_grading', mode, default: gmDefault})
   }).then(r=>r.json()).catch(()=>({ok:false}));
   toast(res.ok ? 'Grading preferences saved.' : (res.error||'Error.'), !res.ok);
+}
+
+// ── THEME ──
+const THEMES     = <?= themesClientJson() ?>;
+const SITE_THEME = <?= json_encode(siteTheme()) ?>;
+let savedTheme   = <?= json_encode(activeTheme($user)) ?>;
+
+/** Swaps the theme stylesheets in place, so the choice shows immediately. */
+function applyTheme(slug) {
+  const t = THEMES[slug];
+  if (!t) return;
+  document.getElementById('theme-css').href = t.css;
+  let fonts = document.getElementById('theme-fonts');
+  if (t.fonts) {
+    if (!fonts) {
+      fonts = Object.assign(document.createElement('link'), { id: 'theme-fonts', rel: 'stylesheet' });
+      document.getElementById('theme-css').before(fonts);
+    }
+    fonts.href = t.fonts;
+  } else if (fonts) fonts.remove();
+  const meta = document.querySelector('meta[name="color-scheme"]');
+  if (meta) meta.content = t.scheme;
+}
+
+async function pickTheme(slug) {
+  applyTheme(slug);
+  const res = await fetch(`${BASE}/api/settings.php`,{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    // Picking the site default stores "no choice", so the user keeps following it if the admin changes it
+    body:JSON.stringify({action:'save_theme', theme: slug === SITE_THEME ? '' : slug})
+  }).then(r=>r.json()).catch(()=>({ok:false}));
+  if (res.ok) { savedTheme = slug; toast('Theme saved.'); return; }
+  // Put the previous theme back
+  applyTheme(savedTheme);
+  const prev = document.querySelector(`input[name="theme"][value="${CSS.escape(savedTheme)}"]`);
+  if (prev) prev.checked = true;
+  toast(res.error || 'Could not save the theme.', true);
 }
 
 // ── AUCTION SITES ──

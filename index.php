@@ -109,18 +109,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Game Collection — Sign In</title>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/main.css?v=<?= @filemtime(__DIR__.'/assets/css/main.css') ?>">
+<?= themeHead(null) ?>
 <style>
   body { display:flex; align-items:center; justify-content:center; min-height:100vh; }
   .auth-box { width:100%; max-width:400px; background:var(--surface); border:1px solid var(--border2); padding:40px 36px; }
-  .auth-logo { font-family:'Bebas Neue',sans-serif; font-size:2.2rem; color:var(--accent); letter-spacing:.1em; margin-bottom:4px; }
+  .auth-logo { font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case); font-size:2.2rem; color:var(--accent); letter-spacing:.1em; margin-bottom:4px; }
   .auth-logo span { color:var(--wiiu); }
   .auth-sub  { font-size:.65rem; color:var(--muted); letter-spacing:.2em; text-transform:uppercase; margin-bottom:28px; }
   .tab-row   { display:flex; gap:0; margin-bottom:24px; border-bottom:2px solid var(--border2); }
-  .tab       { flex:1; padding:8px; font-family:'Bebas Neue',sans-serif; font-size:1.1rem; letter-spacing:.1em; background:none; border:none; color:var(--muted); cursor:pointer; }
+  .tab       { flex:1; padding:8px; font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case); font-size:1.1rem; letter-spacing:.1em; background:none; border:none; color:var(--muted); cursor:pointer; }
   .tab.active{ color:var(--accent2); border-bottom:2px solid var(--accent2); margin-bottom:-2px; }
-  .error-msg { background:rgba(201,79,58,.12); border:1px solid rgba(201,79,58,.4); color:#d44f3a; font-size:.75rem; padding:8px 12px; margin-bottom:16px; }
+  .error-msg { background:color-mix(in srgb,var(--red) 12%,transparent); border:1px solid color-mix(in srgb,var(--red) 40%,transparent); color:var(--red); font-size:.75rem; padding:8px 12px; margin-bottom:16px; }
 </style>
 </head>
 <body>

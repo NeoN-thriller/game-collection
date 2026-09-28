@@ -45,8 +45,8 @@ $gradeLabels = gradingConfig()['labels'];
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><?= htmlspecialchars($curSys['name'] ?? 'Collection') ?> — Game Collection</title>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/main.css?v=<?= @filemtime(__DIR__.'/assets/css/main.css') ?>">
+<?= themeHead($user) ?>
 <?= csrfScript() ?>
 </head>
 <body>
@@ -222,9 +222,9 @@ $gradeLabels = gradingConfig()['labels'];
         <div class="section-label">Pricing (PriceCharting)</div>
         <div id="d-pc-prices-row" style="display:none;margin-bottom:8px">
           <table style="font-size:.75rem;width:100%;border-collapse:collapse">
-            <tr id="d-loose-row" style="display:none"><td style="color:var(--muted);padding:2px 0;width:60px">Loose</td><td><span id="d-loose-price-val" style="color:var(--wiiu);font-family:'Bebas Neue',sans-serif;font-size:1rem"></span></td></tr>
-            <tr id="d-cib-row"   style="display:none"><td style="color:var(--muted);padding:2px 0">CIB</td>  <td><span id="d-cib-price-val"   style="color:var(--wiiu);font-family:'Bebas Neue',sans-serif;font-size:1rem"></span></td></tr>
-            <tr id="d-new-row"   style="display:none"><td style="color:var(--muted);padding:2px 0">New</td>  <td><span id="d-new-price-val"   style="color:var(--wiiu);font-family:'Bebas Neue',sans-serif;font-size:1rem"></span></td></tr>
+            <tr id="d-loose-row" style="display:none"><td style="color:var(--muted);padding:2px 0;width:60px">Loose</td><td><span id="d-loose-price-val" style="color:var(--wiiu);font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case);font-size:1rem"></span></td></tr>
+            <tr id="d-cib-row"   style="display:none"><td style="color:var(--muted);padding:2px 0">CIB</td>  <td><span id="d-cib-price-val"   style="color:var(--wiiu);font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case);font-size:1rem"></span></td></tr>
+            <tr id="d-new-row"   style="display:none"><td style="color:var(--muted);padding:2px 0">New</td>  <td><span id="d-new-price-val"   style="color:var(--wiiu);font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case);font-size:1rem"></span></td></tr>
           </table>
           <a id="d-pc-link" href="#" target="_blank" style="color:var(--wiiu);font-size:.68rem;display:none">View on PriceCharting ↗</a>
         </div>
@@ -585,7 +585,7 @@ function render() {
       cibParts.push(`<a href="${escAttr(g.pc_link)}" target="_blank" style="color:var(--wiiu);text-decoration:none;font-size:.75rem" title="View on PriceCharting">PC ↗</a>`);
     }
     if (c1.chart_price != null) {
-      cibParts.push(`<span class="price" style="color:#e05a7a" title="Personal price">€${parseFloat(c1.chart_price).toFixed(2)}</span>`);
+      cibParts.push(`<span class="price" style="color:var(--personal-price)" title="Personal price">€${parseFloat(c1.chart_price).toFixed(2)}</span>`);
     }
     const chartCell = cibParts.length ? cibParts.join(' <span style="color:var(--border2)">·</span> ') : `<span class="price-na">—</span>`;
 

@@ -260,6 +260,142 @@ function sanitizeFilename(string $name): string {
     return preg_replace('/[^a-z0-9_\-\.]/i', '_', $name);
 }
 
+// ── Themes ──────────────────────────────
+// A theme is one file in assets/themes/<slug>.css that overrides the :root
+// variables of main.css. Its header comment holds the metadata:
+//   /* Theme:  Nintendo
+//      Scheme: light
+//      Fonts:  https://fonts.googleapis.com/css2?family=...   (optional)
+//      About:  one line for the picker                         (optional) */
+const THEME_DIR     = __DIR__ . '/assets/themes/';
+const DEFAULT_THEME = 'arcade-gold';
+
+/** CSS variables used for the swatch previews in the theme pickers. */
+const THEME_SWATCH_VARS = ['bg', 'surface', 'accent', 'accent2', 'wiiu', 'text'];
+
+/** Reads `--name: value` pairs (hex colours only) from the first :root block of a stylesheet. */
+function themeRootVars(string $css): array {
+    if (!preg_match('~:root\s*\{(.*?)\}~s', $css, $m)) return [];
+    preg_match_all('~--([a-z0-9-]+)\s*:\s*(#[0-9a-f]{3,8})\b~i', $m[1], $vars, PREG_SET_ORDER);
+    $out = [];
+    foreach ($vars as $v) $out[strtolower($v[1])] = strtolower($v[2]);
+    return $out;
+}
+
+/**
+ * All installed themes, keyed by slug: slug, name, scheme, fonts (URL), font_names, about, swatches.
+ * Slugs come from file names and are whitelisted, so a slug is always safe to put in a path.
+ */
+function availableThemes(): array {
+    static $themes = null;
+    if ($themes !== null) return $themes;
+    $themes = [];
+    $base = themeRootVars((string)@file_get_contents(__DIR__ . '/assets/css/main.css'));
+    foreach (glob(THEME_DIR . '*.css') ?: [] as $file) {
+        $slug = basename($file, '.css');
+        if (!preg_match('/^[a-z0-9-]+$/', $slug)) continue;
+        $css  = (string)@file_get_contents($file);
+        $meta = [];
+        if (preg_match('~^\s*/\*(.*?)\*/~s', $css, $m)) {
+            foreach (preg_split('/\R/', $m[1]) as $line) {
+                if (preg_match('/^\s*([A-Za-z]+)\s*:\s*(.+?)\s*$/', $line, $kv)) $meta[strtolower($kv[1])] = $kv[2];
+            }
+        }
+        $fonts = $meta['fonts'] ?? '';
+        // Only Google Fonts: it's the only font host the Content-Security-Policy allows
+        if (!preg_match('~^https://fonts\.googleapis\.com/css2?\?[^"\'<>\s]+$~', $fonts)) $fonts = '';
+        preg_match_all('/family=([^:&]+)/', $fonts, $fam);
+        $vars = themeRootVars($css) + $base;
+        $themes[$slug] = [
+            'slug'     => $slug,
+            'name'     => $meta['theme'] ?? ucwords(str_replace('-', ' ', $slug)),
+            'scheme'   => strtolower($meta['scheme'] ?? '') === 'light' ? 'light' : 'dark',
+            'fonts'    => $fonts,
+            'font_names' => array_map(fn($f) => urldecode(str_replace('+', ' ', $f)), $fam[1]),
+            'about'    => $meta['about'] ?? '',
+            'swatches' => array_map(fn($k) => $vars[$k] ?? '#888888', THEME_SWATCH_VARS),
+        ];
+    }
+    // Default theme first, the rest alphabetically
+    uasort($themes, fn($a, $b) => [$a['slug'] !== DEFAULT_THEME, $a['name']] <=> [$b['slug'] !== DEFAULT_THEME, $b['name']]);
+    return $themes;
+}
+
+/** Site-wide default theme (admin setting), falling back to Arcade Gold. */
+function siteTheme(): string {
+    static $slug = null;
+    if ($slug === null) {
+        $themes = availableThemes();
+        try { $s = appSetting('default_theme'); } catch (PDOException) { $s = null; }
+        $slug = ($s !== null && isset($themes[$s])) ? $s
+              : (isset($themes[DEFAULT_THEME]) ? DEFAULT_THEME : (string)array_key_first($themes));
+    }
+    return $slug;
+}
+
+/** Theme for a page: the user's own choice, else the site default. */
+function activeTheme(?array $user = null): string {
+    $pick = $user['theme'] ?? null;
+    return (is_string($pick) && isset(availableThemes()[$pick])) ? $pick : siteTheme();
+}
+
+/**
+ * <head> tags for the active theme: font stylesheet + theme stylesheet.
+ * Put it right after main.css. Rendered server-side, so there is no flash of the wrong theme.
+ */
+function themeHead(?array $user = null): string {
+    $t = availableThemes()[activeTheme($user)] ?? null;
+    if (!$t) return '';
+    $h = fn(string $s) => htmlspecialchars($s, ENT_QUOTES);
+    $out = '<meta name="color-scheme" content="'.$t['scheme'].'">'."\n";
+    if ($t['fonts']) {
+        $out .= '<link rel="preconnect" href="https://fonts.googleapis.com">'."\n"
+              . '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'."\n"
+              . '<link id="theme-fonts" href="'.$h($t['fonts']).'" rel="stylesheet">'."\n";
+    }
+    $file = THEME_DIR . $t['slug'] . '.css';
+    $out .= '<link id="theme-css" rel="stylesheet" href="'.$h(BASE_URL.'/assets/themes/'.$t['slug'].'.css?v='.@filemtime($file)).'">'."\n";
+    return $out;
+}
+
+/** Theme list for the pickers' live preview (JS), with ready-to-use URLs. */
+function themesClientJson(): string {
+    $out = [];
+    foreach (availableThemes() as $t) {
+        $out[$t['slug']] = [
+            'name'   => $t['name'],
+            'scheme' => $t['scheme'],
+            'fonts'  => $t['fonts'],
+            'css'    => BASE_URL.'/assets/themes/'.$t['slug'].'.css?v='.@filemtime(THEME_DIR.$t['slug'].'.css'),
+        ];
+    }
+    return json_encode($out, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+}
+
+/** Small row of colour dots previewing a theme. */
+function themeSwatchesHtml(array $t): string {
+    $html = '<span class="theme-swatches" aria-hidden="true">';
+    foreach ($t['swatches'] as $c) $html .= '<i style="background:'.htmlspecialchars($c).'"></i>';
+    return $html.'</span>';
+}
+
+/**
+ * One clickable theme card (a radio in a label) for the theme pickers in Settings and Admin.
+ * The site default gets a small "Site default" mark. $notes are optional extra lines, one per entry.
+ */
+function themeCardHtml(array $t, string $group, bool $checked, string $onchange, array $notes = []): string {
+    $h = fn(string $s) => htmlspecialchars($s, ENT_QUOTES);
+    return '<label class="theme-card">'
+         . '<input type="radio" name="'.$h($group).'" value="'.$h($t['slug']).'"'.($checked ? ' checked' : '').' onchange="'.$h($onchange).'(this.value)">'
+         . '<span class="theme-card-head"><span class="theme-name">'.$h($t['name']).'</span>'.themeSwatchesHtml($t).'</span>'
+         . ($t['about'] ? '<span class="theme-about">'.$h($t['about']).'</span>' : '')
+         . '<span class="theme-card-foot"><span class="theme-tag">'.$t['scheme'].'</span>'
+         . ($t['slug'] === siteTheme() ? '<span class="theme-default">★ Site default</span>' : '')
+         . '</span>'
+         . ($notes ? '<span class="theme-note">'.implode('<br>', array_map($h, $notes)).'</span>' : '')
+         . '</label>';
+}
+
 // Condition grading (labels, templates, profiles, scoring)
 require_once __DIR__ . '/grading.php';
 

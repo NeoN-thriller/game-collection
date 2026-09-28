@@ -1,0 +1,54 @@
+/* Theme:  Xbox
+   Scheme: dark
+   Fonts:  https://fonts.googleapis.com/css2?family=Saira+Semi+Condensed:wght@500;600&family=Open+Sans:wght@400;500;600&display=swap
+   About:  Carbon black with Xbox green and clean, slightly rounded tiles. */
+
+:root {
+  --bg:       #0d0e0d;
+  --surface:  #161816;
+  --surface2: #1e211e;
+  --surface3: #282b28;
+  --border:   #2c302c;
+  --border2:  #3e433e;
+
+  --accent:   #9bf00b;
+  --accent2:  #5ec83a;
+  --accent3:  #9bf00b;
+  --wiiu:     #4fb3ff;
+  --wiiu2:    #7cc8ff;
+
+  --red:      #ec625a;
+  --green:    #52b043;
+  --orange:   #f0a030;
+  --mint:     #6fd35a;
+  --blue:     #6fb0ef;
+  --pink:     #d77ac0;
+  --personal-price: #ff7a8a;
+
+  --text:     #f2f2f2;
+  --text2:    #b8bdb8;
+  --muted:    #888e88;
+
+  --btn-bg:       #107c10;
+  --btn-hover:    #17941a;
+  --on-accent:    #ffffff;
+
+  --header-bg:    linear-gradient(180deg,#1b1e1b 0%,#141614 100%);
+  --header-border:#107c10;
+  --header-logo:  #ffffff;
+  --header-logo2: #9bf00b;
+  --header-link:  #b8bdb8;
+  --header-link-hover: #9bf00b;
+
+  --overlay:      rgba(0,0,0,.85);
+  --hover:        rgba(155,240,11,.04);
+  --scanlines:    none;
+
+  --radius:        4px;
+  --font-body:     'Segoe UI', 'Open Sans', system-ui, sans-serif;
+  --font-display:  'Saira Semi Condensed', sans-serif;
+  --display-weight: 600;
+  --display-case:  uppercase;
+}
+
+.btn { letter-spacing:.06em; }

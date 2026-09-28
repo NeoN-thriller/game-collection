@@ -1,0 +1,55 @@
+/* Theme:  PlayStation
+   Scheme: dark
+   Fonts:  https://fonts.googleapis.com/css2?family=Exo+2:wght@500;600&family=Inter:wght@400;500;600&display=swap
+   About:  Deep midnight blue with PlayStation blue and the four face-button colours. */
+
+:root {
+  --bg:       #060a17;
+  --surface:  #0b1226;
+  --surface2: #111a33;
+  --surface3: #182343;
+  --border:   #1d2a4d;
+  --border2:  #2a3a66;
+
+  --accent:   #e9f0ff;
+  --accent2:  #4d9dff;
+  --accent3:  #86bcff;
+  --wiiu:     #2fc5b0;   /* triangle */
+  --wiiu2:    #5ee0cc;
+
+  --red:      #f0525f;   /* circle */
+  --green:    #2fbf87;
+  --orange:   #f2a34a;
+  --mint:     #52d6a0;
+  --blue:     #7fb2ff;   /* cross */
+  --pink:     #e97fc4;   /* square */
+  --personal-price: #ff7aa2;
+
+  --text:     #eef2fb;
+  --text2:    #aab5d0;
+  --muted:    #7886aa;
+
+  --btn-bg:       #0070d1;
+  --btn-hover:    #1a86ea;
+  --on-accent:    #ffffff;
+
+  --header-bg:    linear-gradient(180deg,#0a2a6e 0%,#0b1226 100%);
+  --header-border:#0070d1;
+  --header-logo:  #ffffff;
+  --header-logo2: #4d9dff;
+  --header-link:  #aab5d0;
+  --header-link-hover: #ffffff;
+  --header-link-border: #2a3a66;
+
+  --overlay:      rgba(3,6,16,.88);
+  --hover:        rgba(120,160,255,.05);
+  --scanlines:    none;
+
+  --radius:        6px;
+  --font-body:     'Inter', system-ui, sans-serif;
+  --font-display:  'Exo 2', sans-serif;
+  --display-weight: 600;
+  --display-case:  none;
+}
+
+.btn { letter-spacing:.06em; }

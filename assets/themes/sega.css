@@ -1,0 +1,56 @@
+/* Theme:  Sega
+   Scheme: dark
+   Fonts:  https://fonts.googleapis.com/css2?family=Russo+One&family=Share+Tech+Mono&display=swap
+   About:  16-bit Mega Drive: black casing, Sega blue, red stripe and CRT scanlines. */
+
+:root {
+  --bg:       #07080b;
+  --surface:  #0f1116;
+  --surface2: #161920;
+  --surface3: #1e222b;
+  --border:   #252a35;
+  --border2:  #363d4c;
+
+  --accent:   #3fa4ff;
+  --accent2:  #2a8fe6;
+  --accent3:  #7cc2ff;
+  --wiiu:     #ffc933;   /* Sonic ring gold */
+  --wiiu2:    #ffdb70;
+
+  --red:      #f24c44;
+  --green:    #3fbf6a;
+  --orange:   #f5a524;
+  --mint:     #5fd68a;
+  --blue:     #7cb8f5;
+  --pink:     #e070b0;
+  --personal-price: #ff7a93;
+
+  --text:     #e8ecf2;
+  --text2:    #a9b1bf;
+  --muted:    #7a8394;
+
+  --btn-bg:       #1b6fd1;
+  --btn-hover:    #2a8fe6;
+  --on-accent:    #ffffff;
+
+  --header-bg:    linear-gradient(180deg,#14161c 0%,#0a0b0e 100%);
+  --header-border:#ef3b33;
+  --header-logo:  #ffffff;
+  --header-logo2: #3fa4ff;
+  --header-link:  #a9b1bf;
+  --header-link-hover: #3fa4ff;
+
+  --overlay:      rgba(3,4,6,.9);
+  --scanlines:    block;
+  --scanline-color: rgba(0,0,0,.08);
+
+  --radius:        0px;
+  --font-body:     'Share Tech Mono', monospace;
+  --font-display:  'Russo One', sans-serif;
+  --display-weight: 400;
+  --display-case:  uppercase;
+}
+
+/* Russo One is wider than Bebas Neue: tone the big numbers down a little */
+.hstat-val { font-size:1.45rem; }
+.site-logo { font-size:1.5rem; }

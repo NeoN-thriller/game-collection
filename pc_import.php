@@ -8,24 +8,24 @@ $user = requireAdmin();
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PriceCharting Import — Game Collection</title>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/main.css?v=<?= @filemtime(__DIR__.'/assets/css/main.css') ?>">
+<?= themeHead($user) ?>
 <style>
   .pc-wrap { max-width:960px; margin:36px auto; padding:0 20px 60px; }
-  .pc-wrap h1 { font-family:'Bebas Neue',sans-serif; font-size:2rem; color:var(--accent); letter-spacing:.06em; margin-bottom:6px; }
+  .pc-wrap h1 { font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case); font-size:2rem; color:var(--accent); letter-spacing:.06em; margin-bottom:6px; }
   .pc-wrap p.desc { font-size:.75rem; color:var(--muted); margin-bottom:28px; line-height:1.7; }
   .step { background:var(--surface); border:1px solid var(--border2); padding:22px 24px; margin-bottom:16px; }
   .step-label { font-size:.58rem; letter-spacing:.25em; text-transform:uppercase; color:var(--muted); margin-bottom:6px; }
-  .step h3 { font-family:'Bebas Neue',sans-serif; font-size:1.2rem; color:var(--accent2); letter-spacing:.06em; margin-bottom:12px; }
+  .step h3 { font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case); font-size:1.2rem; color:var(--accent2); letter-spacing:.06em; margin-bottom:12px; }
   textarea.csv-input { width:100%; height:160px; font-size:.7rem; line-height:1.6; padding:10px; resize:vertical; }
   .preview-table { width:100%; border-collapse:collapse; font-size:.71rem; margin-top:12px; }
   .preview-table th { padding:7px 10px; font-size:.58rem; letter-spacing:.15em; text-transform:uppercase; color:var(--muted); text-align:left; border-bottom:1px solid var(--border2); }
   .preview-table td { padding:7px 10px; border-bottom:1px solid var(--border); vertical-align:middle; }
-  .tag-match  { background:rgba(74,158,107,.12); color:var(--green);  border:1px solid rgba(74,158,107,.3); padding:1px 6px; font-size:.6rem; }
-  .tag-new    { background:rgba(0,154,199,.1);   color:var(--wiiu);   border:1px solid rgba(0,154,199,.3);  padding:1px 6px; font-size:.6rem; }
-  .tag-nosy   { background:rgba(201,79,58,.1);   color:var(--red);    border:1px solid rgba(201,79,58,.3);  padding:1px 6px; font-size:.6rem; }
-  .tag-skip   { background:rgba(106,101,96,.1);  color:var(--muted);  border:1px solid var(--border);       padding:1px 6px; font-size:.6rem; }
-  .tag-update { background:rgba(212,121,59,.1);  color:var(--orange); border:1px solid rgba(212,121,59,.3); padding:1px 6px; font-size:.6rem; }
+  .tag-match  { background:color-mix(in srgb,var(--green) 12%,transparent); color:var(--green);  border:1px solid color-mix(in srgb,var(--green) 30%,transparent); padding:1px 6px; font-size:.6rem; }
+  .tag-new    { background:color-mix(in srgb,var(--wiiu) 10%,transparent);   color:var(--wiiu);   border:1px solid color-mix(in srgb,var(--wiiu) 30%,transparent);  padding:1px 6px; font-size:.6rem; }
+  .tag-nosy   { background:color-mix(in srgb,var(--red) 10%,transparent);   color:var(--red);    border:1px solid color-mix(in srgb,var(--red) 30%,transparent);  padding:1px 6px; font-size:.6rem; }
+  .tag-skip   { background:color-mix(in srgb,var(--muted) 10%,transparent);  color:var(--muted);  border:1px solid var(--border);       padding:1px 6px; font-size:.6rem; }
+  .tag-update { background:color-mix(in srgb,var(--orange) 10%,transparent);  color:var(--orange); border:1px solid color-mix(in srgb,var(--orange) 30%,transparent); padding:1px 6px; font-size:.6rem; }
   .s-chip { padding:4px 12px; font-size:.68rem; }
   .summary-chips { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
   .thumb { width:30px; height:30px; object-fit:cover; border:1px solid var(--border2); display:block; }

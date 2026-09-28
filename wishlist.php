@@ -132,10 +132,10 @@ foreach ($entries as $e) {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><?= $isPublicView ? htmlspecialchars($user['username'])."'s Wishlist" : 'Wishlist' ?> — Game Collection</title>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/main.css?v=<?= @filemtime(__DIR__.'/assets/css/main.css') ?>">
+<?= themeHead($user) ?>
 <style>
-  .sys-badge { display:inline-block; padding:2px 8px; font-size:.6rem; letter-spacing:.1em; text-transform:uppercase; background:rgba(0,154,199,.1); color:var(--wiiu); border:1px solid rgba(0,154,199,.3); white-space:nowrap; }
+  .sys-badge { display:inline-block; padding:2px 8px; font-size:.6rem; letter-spacing:.1em; text-transform:uppercase; background:color-mix(in srgb,var(--wiiu) 10%,transparent); color:var(--wiiu); border:1px solid color-mix(in srgb,var(--wiiu) 30%,transparent); white-space:nowrap; }
   .wish-filters { display:flex; gap:8px; flex-wrap:wrap; align-items:center; padding:10px 32px; background:var(--surface2); border-bottom:1px solid var(--border); }
   td.td-title { cursor:pointer; }
   .img-thumb { cursor:pointer; }
@@ -305,9 +305,9 @@ foreach ($entries as $e) {
         <div class="section-label">Pricing (PriceCharting)</div>
         <div id="d-pc-prices-row" style="display:none;margin-bottom:8px">
           <table style="font-size:.75rem;width:100%;border-collapse:collapse">
-            <tr id="d-loose-row" style="display:none"><td style="color:var(--muted);padding:2px 0;width:60px">Loose</td><td><span id="d-loose-price-val" style="color:var(--wiiu);font-family:'Bebas Neue',sans-serif;font-size:1rem"></span></td></tr>
-            <tr id="d-cib-row"   style="display:none"><td style="color:var(--muted);padding:2px 0">CIB</td>  <td><span id="d-cib-price-val"   style="color:var(--wiiu);font-family:'Bebas Neue',sans-serif;font-size:1rem"></span></td></tr>
-            <tr id="d-new-row"   style="display:none"><td style="color:var(--muted);padding:2px 0">New</td>  <td><span id="d-new-price-val"   style="color:var(--wiiu);font-family:'Bebas Neue',sans-serif;font-size:1rem"></span></td></tr>
+            <tr id="d-loose-row" style="display:none"><td style="color:var(--muted);padding:2px 0;width:60px">Loose</td><td><span id="d-loose-price-val" style="color:var(--wiiu);font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case);font-size:1rem"></span></td></tr>
+            <tr id="d-cib-row"   style="display:none"><td style="color:var(--muted);padding:2px 0">CIB</td>  <td><span id="d-cib-price-val"   style="color:var(--wiiu);font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case);font-size:1rem"></span></td></tr>
+            <tr id="d-new-row"   style="display:none"><td style="color:var(--muted);padding:2px 0">New</td>  <td><span id="d-new-price-val"   style="color:var(--wiiu);font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case);font-size:1rem"></span></td></tr>
           </table>
           <a id="d-pc-link" href="#" target="_blank" style="color:var(--wiiu);font-size:.68rem;display:none">View on PriceCharting ↗</a>
         </div>
@@ -485,7 +485,7 @@ function buildRow(entryId, gameId) {
   } else if (g.pc_link) {
     cibParts.push(`<a href="${esc(g.pc_link)}" target="_blank" style="color:var(--wiiu);text-decoration:none;font-size:.75rem" title="View on PriceCharting">PC ↗</a>`);
   }
-  if (isSet(e.chart_price)) cibParts.push(`<span class="price" style="color:#e05a7a" title="Personal price">€${money(e.chart_price)}</span>`);
+  if (isSet(e.chart_price)) cibParts.push(`<span class="price" style="color:var(--personal-price)" title="Personal price">€${money(e.chart_price)}</span>`);
   const cibCell = cibParts.length ? cibParts.join(' <span style="color:var(--border2)">·</span> ') : '<span class="price-na">—</span>';
 
   const looseCell = isSet(g.loose_price)

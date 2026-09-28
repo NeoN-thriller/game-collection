@@ -1,0 +1,68 @@
+/* Theme:  Nintendo
+   Scheme: light
+   Fonts:  https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Nunito:wght@400;600;700&display=swap
+   About:  Light and friendly: white panels, Nintendo red, rounded corners. */
+
+:root {
+  color-scheme: light;
+
+  --bg:       #eeeef1;
+  --surface:  #ffffff;
+  --surface2: #f6f6f8;
+  --surface3: #e9e9ee;
+  --border:   #dcdce3;
+  --border2:  #c3c3cc;
+
+  --accent:   #e4000f;
+  --accent2:  #c8000d;
+  --accent3:  #ff3341;
+  --wiiu:     #0068b0;
+  --wiiu2:    #0070bd;
+
+  --red:      #c62828;
+  --green:    #17733e;
+  --orange:   #a34a06;
+  --mint:     #17733e;
+  --blue:     #2b62a8;
+  --pink:     #b8246f;
+  --personal-price: #c2185b;
+
+  --text:     #1c1c21;
+  --text2:    #45454f;
+  --muted:    #6b6b76;
+
+  --btn-bg:       #d4000e;
+  --btn-hover:    #b8000c;
+  --on-accent:    #ffffff;
+
+  --header-bg:    #d4000e;
+  --header-border:#a8000b;
+  --header-logo:  #ffffff;
+  --header-logo2: #ffe1e3;
+  --header-link:  #fff0f1;
+  --header-link-hover: #ffffff;
+  --header-link-border: rgba(255,255,255,.55);
+
+  --overlay:      rgba(40,40,52,.5);
+  --lightbox:     rgba(20,20,26,.94);
+  --hover:        rgba(0,0,0,.035);
+  --shadow-color: rgba(0,0,0,.18);
+  --scanlines:    none;
+  --label-filter: brightness(.72) saturate(1.3);
+
+  --radius:        8px;
+  --font-body:     'Nunito', system-ui, sans-serif;
+  --font-display:  'Fredoka', 'Nunito', sans-serif;
+  --display-weight: 600;
+  --display-case:  none;
+}
+
+/* Soft, raised panels instead of hard outlines */
+.admin-section, .modal, .gr-card, .drawer { box-shadow:0 2px 10px rgba(0,0,0,.06); }
+.progress-fill { background:linear-gradient(90deg,var(--accent),var(--accent3)); }
+.progress-label strong { color:var(--accent2); }
+
+/* Stats sitting on the red header bar */
+.site-header .hstat { border-left-color:rgba(255,255,255,.35); }
+.site-header .hstat-val, .site-header .hstat-val.blue, .site-header .hstat-val.green, .site-header .hstat-val.orange { color:#ffffff; }
+.site-header .hstat-label { color:#ffe1e3; }

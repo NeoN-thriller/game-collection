@@ -95,11 +95,11 @@ $totalOwnedVal= array_sum(array_column($statsRaw,   'owned_value'));
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dashboard — Game Collection</title>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/main.css?v=<?= @filemtime(__DIR__.'/assets/css/main.css') ?>">
+<?= themeHead($user) ?>
 <style>
   .dash-wrap { padding:28px 32px 60px; }
-  .dash-title { font-family:'Bebas Neue',sans-serif; font-size:2.2rem; color:var(--accent); letter-spacing:.06em; margin-bottom:6px; }
+  .dash-title { font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case); font-size:2.2rem; color:var(--accent); letter-spacing:.06em; margin-bottom:6px; }
   .dash-sub   { font-size:.65rem; color:var(--muted); letter-spacing:.15em; text-transform:uppercase; margin-bottom:28px; }
 
   /* Overall stats */
@@ -119,7 +119,7 @@ $totalOwnedVal= array_sum(array_column($statsRaw,   'owned_value'));
     min-width:0;
   }
   .overall-val {
-    font-family:'Bebas Neue',sans-serif;
+    font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case);
     font-size:1.7rem; line-height:1;
     color:var(--accent2);
     white-space:nowrap;
@@ -155,9 +155,9 @@ $totalOwnedVal= array_sum(array_column($statsRaw,   'owned_value'));
     justify-content:space-between;
     margin-bottom:12px;
   }
-  .sys-name { font-family:'Bebas Neue',sans-serif; font-size:1.3rem; color:var(--accent); letter-spacing:.06em; line-height:1; }
+  .sys-name { font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case); font-size:1.3rem; color:var(--accent); letter-spacing:.06em; line-height:1; }
   .sys-short { font-size:.62rem; color:var(--muted); letter-spacing:.15em; text-transform:uppercase; margin-top:2px; }
-  .sys-pct { font-family:'Bebas Neue',sans-serif; font-size:2rem; color:var(--wiiu); line-height:1; }
+  .sys-pct { font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case); font-size:2rem; color:var(--wiiu); line-height:1; }
   .sys-pct-label { font-size:.55rem; color:var(--muted); letter-spacing:.12em; text-transform:uppercase; text-align:right; }
 
   /* Progress bar */
@@ -169,7 +169,7 @@ $totalOwnedVal= array_sum(array_column($statsRaw,   'owned_value'));
   .sys-stat-row { display:flex; gap:0; }
   .sys-stat { flex:1; min-width:40px; text-align:center; padding:0 4px; border-right:1px solid var(--border); }
   .sys-stat:last-child { border-right:none; }
-  .sys-stat-val { font-family:'Bebas Neue',sans-serif; font-size:1.2rem; color:var(--text2); line-height:1; }
+  .sys-stat-val { font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case); font-size:1.2rem; color:var(--text2); line-height:1; }
   .sys-stat-val.g { color:var(--green); }
   .sys-stat-val.o { color:var(--orange); }
   .sys-stat-val.b { color:var(--wiiu); }
@@ -180,7 +180,7 @@ $totalOwnedVal= array_sum(array_column($statsRaw,   'owned_value'));
   .qual-seg { height:100%; transition:width .4s; }
 
   .section-head {
-    font-family:'Bebas Neue',sans-serif;
+    font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case);
     font-size:1.1rem; color:var(--muted);
     letter-spacing:.1em; margin-bottom:12px;
     border-bottom:1px solid var(--border);

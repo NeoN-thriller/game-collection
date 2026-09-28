@@ -10,22 +10,22 @@ $systems = db()->query("SELECT * FROM systems WHERE active=1 ORDER BY sort_order
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Import Games — Game Collection</title>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/main.css?v=<?= @filemtime(__DIR__.'/assets/css/main.css') ?>">
+<?= themeHead($user) ?>
 <style>
   .import-wrap { max-width:700px; margin:36px auto; padding:0 20px 60px; }
-  .import-wrap h1 { font-family:'Bebas Neue',sans-serif; font-size:2rem; color:var(--accent); letter-spacing:.06em; margin-bottom:6px; }
+  .import-wrap h1 { font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case); font-size:2rem; color:var(--accent); letter-spacing:.06em; margin-bottom:6px; }
   .import-wrap p.desc { font-size:.75rem; color:var(--muted); margin-bottom:28px; line-height:1.6; }
   .step { background:var(--surface); border:1px solid var(--border2); padding:22px 24px; margin-bottom:16px; }
   .step-label { font-size:.58rem; letter-spacing:.25em; text-transform:uppercase; color:var(--muted); margin-bottom:10px; }
-  .step h3 { font-family:'Bebas Neue',sans-serif; font-size:1.2rem; color:var(--accent2); letter-spacing:.06em; margin-bottom:12px; }
+  .step h3 { font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case); font-size:1.2rem; color:var(--accent2); letter-spacing:.06em; margin-bottom:12px; }
   textarea.game-list { width:100%; height:320px; font-size:.75rem; line-height:1.7; padding:12px; resize:vertical; }
   .preview-table { width:100%; border-collapse:collapse; font-size:.73rem; margin-top:12px; }
   .preview-table th { padding:7px 10px; font-size:.58rem; letter-spacing:.18em; text-transform:uppercase; color:var(--muted); text-align:left; border-bottom:1px solid var(--border2); }
   .preview-table td { padding:7px 10px; border-bottom:1px solid var(--border); }
-  .tag-new  { background:rgba(74,158,107,.12); color:var(--green); border:1px solid rgba(74,158,107,.3); padding:1px 6px; font-size:.6rem; }
-  .tag-dupe { background:rgba(212,121,59,.1); color:var(--orange); border:1px solid rgba(212,121,59,.3); padding:1px 6px; font-size:.6rem; }
-  .tag-skip { background:rgba(106,101,96,.1); color:var(--muted); border:1px solid var(--border); padding:1px 6px; font-size:.6rem; }
+  .tag-new  { background:color-mix(in srgb,var(--green) 12%,transparent); color:var(--green); border:1px solid color-mix(in srgb,var(--green) 30%,transparent); padding:1px 6px; font-size:.6rem; }
+  .tag-dupe { background:color-mix(in srgb,var(--orange) 10%,transparent); color:var(--orange); border:1px solid color-mix(in srgb,var(--orange) 30%,transparent); padding:1px 6px; font-size:.6rem; }
+  .tag-skip { background:color-mix(in srgb,var(--muted) 10%,transparent); color:var(--muted); border:1px solid var(--border); padding:1px 6px; font-size:.6rem; }
   .result-box { background:var(--surface2); border:1px solid var(--border2); padding:16px 20px; margin-top:16px; font-size:.78rem; line-height:1.8; display:none; }
   .result-box.show { display:block; }
   .result-box .ok  { color:var(--green); }

@@ -116,6 +116,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    if ($action === 'set_default_theme') {
+        $theme = (string)($_POST['theme'] ?? '');
+        if (isset(availableThemes()[$theme])) {
+            setAppSetting('default_theme', $theme);
+            $msg = 'Site default theme set to '.availableThemes()[$theme]['name'].'.';
+        } else { $msg = 'Unknown theme.'; $msgErr = true; }
+    }
+
     if ($action === 'delete_invite') {
         $id = (int)$_POST['invite_id'];
         db()->prepare("DELETE FROM invite_codes WHERE id=? AND used_by IS NULL")->execute([$id]);
@@ -145,6 +153,15 @@ $gamesSt->execute([$viewSys]);
 $games = $gamesSt->fetchAll();
 $lockouts = db()->query("SELECT *, locked_until > NOW() AS is_locked FROM login_attempts
                          ORDER BY is_locked DESC, last_fail_at DESC LIMIT 100")->fetchAll();
+try {
+    // Users on each theme; no (or an uninstalled) choice means they're on the site default
+    $themeUse = [];
+    foreach (db()->query("SELECT theme, COUNT(*) FROM users GROUP BY theme")->fetchAll(PDO::FETCH_KEY_PAIR) as $slug => $n) {
+        $slug = isset(availableThemes()[(string)$slug]) ? (string)$slug : siteTheme();
+        $themeUse[$slug] = ($themeUse[$slug] ?? 0) + (int)$n;
+    }
+    $themeMigrated = true;
+} catch (PDOException) { $themeUse = []; $themeMigrated = false; }
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -152,14 +169,14 @@ $lockouts = db()->query("SELECT *, locked_until > NOW() AS is_locked FROM login_
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Admin — Game Collection</title>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/main.css?v=<?= @filemtime(__DIR__.'/assets/css/main.css') ?>">
+<?= themeHead($admin) ?>
 <?= csrfScript() ?>
 </head>
 <body>
 
 <header class="site-header">
-  <a href="<?= BASE_URL ?>/dashboard.php" class="site-logo" style="text-decoration:none">Game <span>Collection</span> <span style="font-size:1rem;color:var(--accent2);letter-spacing:.1em">ADMIN</span></a>
+  <a href="<?= BASE_URL ?>/dashboard.php" class="site-logo" style="text-decoration:none">Game <span>Collection</span> <span style="font-size:1rem;color:var(--header-logo);opacity:.75;letter-spacing:.1em">ADMIN</span></a>
   <nav class="site-nav">
     <a href="<?= BASE_URL ?>/pc_import.php" class="nav-link">PriceCharting Import</a>
     <a href="<?= BASE_URL ?>/dashboard.php" class="nav-link">Dashboard</a>
@@ -173,10 +190,33 @@ $lockouts = db()->query("SELECT *, locked_until > NOW() AS is_locked FROM login_
 <div class="admin-wrap">
 
 <?php if ($msg): ?>
-<div style="background:rgba(74,158,107,.1);border:1px solid rgba(74,158,107,.3);color:var(--green);padding:10px 16px;margin-bottom:20px;font-size:.8rem;">
+<div style="background:color-mix(in srgb,var(--green) 10%,transparent);border:1px solid color-mix(in srgb,var(--green) 30%,transparent);color:var(--green);padding:10px 16px;margin-bottom:20px;font-size:.8rem;">
   <?= htmlspecialchars($msg) ?>
 </div>
 <?php endif; ?>
+
+<!-- ── THEMES ── -->
+<div class="admin-section">
+  <h2>Site Default Theme</h2>
+  <p style="font-size:.74rem;color:var(--muted);margin-bottom:14px;line-height:1.7">
+    Click a theme to make it the <b style="font-weight:400;color:var(--text2)">default for the whole site</b>: the sign-in page and every user who
+    hasn't picked their own theme in Settings. Users who did pick one keep theirs.
+    To add a theme, drop a <code>.css</code> file into <code>assets/themes/</code>: it appears here automatically.
+  </p>
+  <?php if (!$themeMigrated): ?>
+  <div class="ga-box ga-warn" style="margin:0 0 14px">Run <code>migrations/2026-09_themes.sql</code> on the database so users can pick their own theme.</div>
+  <?php endif; ?>
+  <div class="theme-grid" role="radiogroup" aria-label="Site default theme">
+    <?php foreach (availableThemes() as $t) {
+        $n = (int)($themeUse[$t['slug']] ?? 0);
+        echo themeCardHtml($t, 'site_theme', siteTheme() === $t['slug'], 'setSiteTheme', [
+            $t['slug'].'.css',
+            'Fonts: '.($t['font_names'] ? implode(', ', $t['font_names']) : 'browser default'),
+            'Used by '.$n.' user'.($n === 1 ? '' : 's'),
+        ]);
+    } ?>
+  </div>
+</div>
 
 <!-- ── IMAGE SETTINGS ── -->
 <div class="admin-section">
@@ -253,7 +293,7 @@ $lockouts = db()->query("SELECT *, locked_until > NOW() AS is_locked FROM login_
     Paste your PriceCharting CSV export to update CIB prices, links and cover art.<br>
     Match priority: 1) by <code>data-product</code> ID &nbsp;2) by console + title &nbsp;3) import as new game.
   </p>
-  <textarea id="pc-csv" style="width:100%;height:130px;background:var(--surface);border:1px solid var(--border2);color:var(--text);font-family:'DM Mono',monospace;font-size:.7rem;padding:10px;resize:vertical;outline:none" placeholder="Paste CSV here including header row:
+  <textarea id="pc-csv" style="width:100%;height:130px;background:var(--surface);border:1px solid var(--border2);color:var(--text);font-family:var(--font-body);font-size:.7rem;padding:10px;resize:vertical;outline:none" placeholder="Paste CSV here including header row:
 console,name,data-product,link,loose,cib,new,coverArt,coverArtBase64
 WiiU,007 Legends,63286,https://...,17.51,24.86,40.83,63286.jpg,data:image/jpeg;base64,..."></textarea>
   <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
@@ -486,6 +526,20 @@ function adminToast(msg, ok=true) {
   t.style.color       = ok ? 'var(--accent)'  : 'var(--red)';
   t.classList.add('show');
   setTimeout(()=>t.classList.remove('show'), 2500);
+}
+
+// ── SITE DEFAULT THEME ──
+async function setSiteTheme(slug) {
+  const fd = new FormData();
+  fd.append('action', 'set_default_theme');
+  fd.append('theme', slug);
+  try {
+    const res = await fetch(window.location.href, { method:'POST', body: fd, headers:{'X-Admin-Ajax':'1'} }).then(r=>r.json());
+    adminToast(res.msg || res.error || 'Saved.', !!res.ok);
+    setTimeout(()=>window.location.reload(), 800); // refresh the "Site default" marks (and the page theme)
+  } catch(err) {
+    adminToast('Error: ' + err.message, false);
+  }
 }
 
 // ── INTERCEPT ALL ADMIN FORMS WITH AJAX ──

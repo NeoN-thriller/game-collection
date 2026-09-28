@@ -31,6 +31,17 @@ switch ($action) {
         jsonOut(['ok'=>true]);
         break;
 
+    case 'save_theme':
+        $theme = (string)($body['theme'] ?? '');
+        if ($theme !== '' && !isset(availableThemes()[$theme])) jsonOut(['ok'=>false,'error'=>'Unknown theme']);
+        try {
+            db()->prepare("UPDATE users SET theme=? WHERE id=?")->execute([$theme === '' ? null : $theme, $user['id']]);
+        } catch (PDOException) {
+            jsonOut(['ok'=>false,'error'=>'Database update needed: run migrations/2026-09_themes.sql.']);
+        }
+        jsonOut(['ok'=>true]);
+        break;
+
     case 'save_wishlist_public':
         $public = !empty($body['wishlist_public']) ? 1 : 0;
         $token  = $user['wishlist_token'] ?? '';
