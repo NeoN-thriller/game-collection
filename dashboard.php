@@ -30,10 +30,6 @@ $statsSt = db()->prepare("
         COUNT(CASE WHEN ce.owned=1 THEN ce.id END)                  AS total_copies,
         COUNT(CASE WHEN ce.owned=1 AND ce.upgrade=1 THEN ce.id END) AS upgrades,
         COALESCE(SUM(CASE WHEN ce.owned=1 THEN ce.price_paid END),0) AS total_spent,
-        COUNT(CASE WHEN ce.owned=1 AND ce.quality='Mint' THEN ce.id END)  AS mint,
-        COUNT(CASE WHEN ce.owned=1 AND ce.quality='Good' THEN ce.id END)  AS good,
-        COUNT(CASE WHEN ce.owned=1 AND ce.quality='Fair' THEN ce.id END)  AS fair,
-        COUNT(CASE WHEN ce.owned=1 AND ce.quality='Poor' THEN ce.id END)  AS poor,
         COALESCE(SUM(g.cib_price),0)                                      AS cib_total,
         COALESCE(SUM(CASE WHEN ce.owned=1 THEN
             CASE ce.value_price_type
@@ -49,7 +45,37 @@ $statsSt = db()->prepare("
 $statsSt->execute([$user['id']]);
 $statsRaw = $statsSt->fetchAll();
 $stats = [];
-foreach ($statsRaw as $r) $stats[$r['system_id']] = $r;
+foreach ($statsRaw as $r) $stats[$r['system_id']] = $r + ['labels'=>[], 'avg_score'=>null, 'scored'=>0];
+
+// Condition per system: owned copies per effective label (simple label, or the label derived from the point score)
+$gradeLabels = gradingConfig()['labels'];
+$condSt = db()->prepare("
+    SELECT g.system_id, ".gradeLabelSql('ce')." AS label_id, COUNT(*) AS n
+    FROM collection_entries ce JOIN games g ON g.id=ce.game_id
+    WHERE ce.user_id=? AND ce.owned=1 AND g.active=1
+    GROUP BY g.system_id, label_id
+");
+$condSt->execute([$user['id']]);
+foreach ($condSt->fetchAll() as $r) {
+    if ($r['label_id'] !== null && isset($stats[$r['system_id']])) $stats[$r['system_id']]['labels'][(int)$r['label_id']] = (int)$r['n'];
+}
+// Average score over point-graded owned copies
+$avgSt = db()->prepare("
+    SELECT g.system_id, AVG(ce.grade_score) AS avg_score, COUNT(*) AS scored
+    FROM collection_entries ce JOIN games g ON g.id=ce.game_id
+    WHERE ce.user_id=? AND ce.owned=1 AND g.active=1 AND ce.grade_method='points' AND ce.grade_score IS NOT NULL
+    GROUP BY g.system_id
+");
+$avgSt->execute([$user['id']]);
+$scoreSum = 0; $scoredTotal = 0;
+foreach ($avgSt->fetchAll() as $r) {
+    if (!isset($stats[$r['system_id']])) continue;
+    $stats[$r['system_id']]['avg_score'] = (int)round((float)$r['avg_score']);
+    $stats[$r['system_id']]['scored']    = (int)$r['scored'];
+    $scoreSum += (float)$r['avg_score'] * (int)$r['scored'];
+    $scoredTotal += (int)$r['scored'];
+}
+$avgScoreAll = $scoredTotal ? (int)round($scoreSum / $scoredTotal) : null;
 
 // Global totals: games/owned/copies only from count_for_totals systems
 // Value/spent/wishlist include ALL systems
@@ -149,13 +175,9 @@ $totalOwnedVal= array_sum(array_column($statsRaw,   'owned_value'));
   .sys-stat-val.b { color:var(--wiiu); }
   .sys-stat-label { font-size:.5rem; color:var(--muted); letter-spacing:.1em; text-transform:uppercase; margin-top:2px; }
 
-  /* Quality bar */
+  /* Condition bar: one segment per grade label, in the label's colour */
   .qual-bar { display:flex; height:4px; gap:1px; margin-bottom:14px; }
   .qual-seg { height:100%; transition:width .4s; }
-  .q-mint-seg { background:var(--green); }
-  .q-good-seg { background:var(--wiiu); }
-  .q-fair-seg { background:var(--orange); }
-  .q-poor-seg { background:var(--red); }
 
   .section-head {
     font-family:'Bebas Neue',sans-serif;
@@ -237,6 +259,12 @@ $totalOwnedVal= array_sum(array_column($statsRaw,   'owned_value'));
       <div class="overall-val green">€<?= number_format($totalOwnedVal, 0) ?></div>
       <div class="overall-label">Owned Value</div>
     </div>
+    <?php if ($avgScoreAll !== null): $al = gradeLabelForScore($avgScoreAll); ?>
+    <div class="overall-stat" title="Average over <?= $scoredTotal ?> point-graded copies">
+      <div class="overall-val" style="color:<?= htmlspecialchars($al['color'] ?? 'var(--wiiu2)') ?>"><?= $avgScoreAll ?></div>
+      <div class="overall-label">Avg Score</div>
+    </div>
+    <?php endif; ?>
   </div>
 
   <!-- VISIBLE SYSTEMS -->
@@ -246,20 +274,25 @@ $totalOwnedVal= array_sum(array_column($statsRaw,   'owned_value'));
 
   // Helper to render sys-stats rows
   function sysStatsHtml(array $st): string {
-    $qualTotal = $st['mint']+$st['good']+$st['fair']+$st['poor'];
+    global $gradeLabels;
+    $qualTotal = array_sum($st['labels']);
     $html  = '<div class="sys-stats">';
     $html .= '<div class="sys-stat-row">';
     $html .= '<div class="sys-stat"><div class="sys-stat-val">€'.number_format((float)$st['total_spent'],0).'</div><div class="sys-stat-label">Spent</div></div>';
     $html .= '<div class="sys-stat"><div class="sys-stat-val blue">€'.number_format((float)($st['owned_value']??0),0).'</div><div class="sys-stat-label">Val</div></div>';
     $html .= '<div class="sys-stat"><div class="sys-stat-val" style="color:var(--muted)">€'.number_format((float)($st['cib_total']??0),0).'</div><div class="sys-stat-label">CIB All</div></div>';
+    if ($st['avg_score'] !== null) {
+      $al = gradeLabelForScore($st['avg_score']);
+      $html .= '<div class="sys-stat" title="Average over '.(int)$st['scored'].' point-graded copies"><div class="sys-stat-val" style="color:'.htmlspecialchars($al['color'] ?? 'var(--wiiu2)').'">'.(int)$st['avg_score'].'</div><div class="sys-stat-label">Avg Score</div></div>';
+    }
     $html .= '</div>';
     $html .= '<div class="sys-stat-row" style="border-top:1px solid var(--border);padding-top:8px;margin-top:8px">';
     if ($qualTotal > 0) {
       $html .= '<div class="sys-stat"><div class="sys-stat-val" style="font-size:.7rem;display:flex;gap:3px;justify-content:center;flex-wrap:wrap;line-height:1.4">';
-      if ($st['mint'] > 0) $html .= '<span style="color:#5abf84">'.$st['mint'].'M</span>';
-      if ($st['good'] > 0) $html .= '<span style="color:#6a9fd5">'.$st['good'].'G</span>';
-      if ($st['fair'] > 0) $html .= '<span style="color:#d4793b">'.$st['fair'].'F</span>';
-      if ($st['poor'] > 0) $html .= '<span style="color:#c94f3a">'.$st['poor'].'P</span>';
+      foreach ($gradeLabels as $l) {
+        $n = $st['labels'][$l['id']] ?? 0;
+        if ($n > 0) $html .= '<span style="color:'.htmlspecialchars($l['color']).'" title="'.htmlspecialchars($l['name']).': '.$n.'">'.$n.htmlspecialchars($l['short'] !== '' ? $l['short'] : mb_substr($l['name'], 0, 1)).'</span>';
+      }
       $html .= '</div><div class="sys-stat-label">Condition</div></div>';
     }
     $html .= '<div class="sys-stat"><div class="sys-stat-val g">'.(int)$st['total_copies'].'</div><div class="sys-stat-label">Copies</div></div>';
@@ -287,12 +320,14 @@ $totalOwnedVal= array_sum(array_column($statsRaw,   'owned_value'));
   }
 
   function qualBarHtml(array $st): string {
-    $qualTotal = $st['mint']+$st['good']+$st['fair']+$st['poor'];
+    global $gradeLabels;
+    $qualTotal = array_sum($st['labels']);
     if ($qualTotal === 0) return '<div style="height:4px;margin-bottom:14px"></div>';
     $html = '<div class="qual-bar">';
-    foreach (['mint'=>'q-mint-seg','good'=>'q-good-seg','fair'=>'q-fair-seg','poor'=>'q-poor-seg'] as $q => $cls) {
-      $w = round($st[$q]/$qualTotal*100);
-      if ($w > 0) $html .= '<div class="qual-seg '.$cls.'" style="width:'.$w.'%" title="'.ucfirst($q).': '.$st[$q].'"></div>';
+    foreach ($gradeLabels as $l) {
+      $n = $st['labels'][$l['id']] ?? 0;
+      $w = round($n/$qualTotal*100, 2);
+      if ($w > 0) $html .= '<div class="qual-seg" style="width:'.$w.'%;background:'.htmlspecialchars($l['color']).'" title="'.htmlspecialchars($l['name']).': '.$n.'"></div>';
     }
     return $html.'</div>';
   }
@@ -307,7 +342,7 @@ $totalOwnedVal= array_sum(array_column($statsRaw,   'owned_value'));
   <div class="section-head">Active Systems</div>
   <div class="systems-grid" style="margin-bottom:32px">
     <?php foreach ($visibleSystems as $s):
-      $st = $stats[$s['id']] ?? ['total_games'=>0,'owned'=>0,'total_copies'=>0,'upgrades'=>0,'wishlisted'=>0,'total_spent'=>0,'mint'=>0,'good'=>0,'fair'=>0,'poor'=>0,'owned_value'=>0,'cib_total'=>0];
+      $st = $stats[$s['id']] ?? ['total_games'=>0,'owned'=>0,'total_copies'=>0,'upgrades'=>0,'wishlisted'=>0,'total_spent'=>0,'owned_value'=>0,'cib_total'=>0,'labels'=>[],'avg_score'=>null,'scored'=>0];
     ?>
     <a href="<?= BASE_URL ?>/collection.php?s=<?= $s['id'] ?>" class="sys-card">
       <?= sysCardHeader($s, $st, $showIcons) ?>
@@ -327,7 +362,7 @@ $totalOwnedVal= array_sum(array_column($statsRaw,   'owned_value'));
   </div>
   <div class="systems-grid" id="hidden-systems" style="display:none">
     <?php foreach ($hiddenSystems as $s):
-      $st = $stats[$s['id']] ?? ['total_games'=>0,'owned'=>0,'total_copies'=>0,'upgrades'=>0,'wishlisted'=>0,'total_spent'=>0,'mint'=>0,'good'=>0,'fair'=>0,'poor'=>0,'owned_value'=>0,'cib_total'=>0];
+      $st = $stats[$s['id']] ?? ['total_games'=>0,'owned'=>0,'total_copies'=>0,'upgrades'=>0,'wishlisted'=>0,'total_spent'=>0,'owned_value'=>0,'cib_total'=>0,'labels'=>[],'avg_score'=>null,'scored'=>0];
     ?>
     <div class="sys-card hidden-sys" onclick="activateSystem(<?= $s['id'] ?>)" style="cursor:pointer" title="Click to make this system visible">
       <?= sysCardHeader($s, $st, $showIcons) ?>

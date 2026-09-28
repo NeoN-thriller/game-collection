@@ -23,6 +23,14 @@ switch ($action) {
         jsonOut(['ok'=>true]);
         break;
 
+    case 'save_grading':
+        $mode = in_array($body['mode'] ?? '', ['simple','points','both'], true) ? $body['mode'] : 'simple';
+        $def  = in_array($body['default'] ?? '', ['simple','points'], true) ? $body['default'] : 'simple';
+        if ($mode !== 'both') $def = $mode; // the only enabled method is also the default
+        db()->prepare("UPDATE users SET grading_mode=?, grading_default=? WHERE id=?")->execute([$mode, $def, $user['id']]);
+        jsonOut(['ok'=>true]);
+        break;
+
     case 'save_wishlist_public':
         $public = !empty($body['wishlist_public']) ? 1 : 0;
         $token  = $user['wishlist_token'] ?? '';

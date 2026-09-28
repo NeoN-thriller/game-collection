@@ -42,5 +42,7 @@ foreach ($rows as &$row) {
     $row['photos'] = $photos;
     unset($row['photos_raw']);
 }
+unset($row);
+attachEntryGrading($rows);
 
 jsonOut(['ok'=>true,'entries'=>$rows]);

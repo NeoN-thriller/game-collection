@@ -15,20 +15,33 @@ $st = db()->prepare("
 $st->execute([$user['id']]);
 $rows = $st->fetchAll();
 
-// Get completeness options
-$opts = db()->prepare("SELECT label, sort_order FROM user_completeness_options WHERE user_id=? ORDER BY sort_order");
-$opts->execute([$user['id']]);
+// User option lists
+$optionList = function (string $table) use ($user): array {
+    $st = db()->prepare("SELECT label, sort_order FROM $table WHERE user_id=? ORDER BY sort_order");
+    $st->execute([$user['id']]);
+    return $st->fetchAll();
+};
+
+// Condition grading is exported by name (labels, profiles, parts, defects), so it survives
+// an import on a site where the ids differ
+$cfg      = gradingConfig();
+$labels   = array_column($cfg['labels'], null, 'id');
+$gradings = loadEntryGrading(array_column($rows, 'id'));
 
 $entries = [];
 foreach ($rows as $row) {
-    $entries[] = [
+    $simple = $labels[(int)$row['grade_label_id']] ?? null;
+    $eff    = $row['grade_method'] === 'points' && $row['grade_score'] !== null ? gradeLabelForScore((int)$row['grade_score']) : $simple;
+    $entry = [
         'system'          => $row['system_short'],
         'system_name'     => $row['system_name'],
         'game_title'      => $row['game_title'],
         'copy_number'     => (int)$row['copy_number'],
         'owned'           => (bool)$row['owned'],
-        'quality'         => $row['quality'],
+        'quality'         => $eff['name'] ?? '', // shown label; kept for older versions of the app
         'completeness'    => $row['completeness'],
+        'played_status'   => $row['played_status'],
+        'wishlist'        => (bool)$row['wishlist'],
         'price_paid'      => $row['price_paid'],
         'chart_price'     => $row['chart_price'],
         'price_min'       => $row['price_min'],
@@ -36,13 +49,26 @@ foreach ($rows as $row) {
         'upgrade'         => (bool)$row['upgrade'],
         'upgrade_reason'  => $row['upgrade_reason'],
         'notes'           => $row['notes'],
+        'tag'             => $row['tag'],
+        'value_price_type'=> $row['value_price_type'],
+        'grade_method'    => $row['grade_method'],
+        'grade_label'     => $simple['name'] ?? null,
     ];
+    if (!empty($gradings[(int)$row['id']])) {
+        $entry['grade_profile'] = $cfg['profiles'][(int)$row['grade_profile_id']]['name'] ?? null;
+        $entry['grade_score']   = $row['grade_score'] !== null ? (int)$row['grade_score'] : null;
+        $entry['grade_parts']   = exportEntryGrading($gradings[(int)$row['id']]);
+    }
+    $entries[] = $entry;
 }
 
 $data = [
     'exported_at'          => date('c'),
     'username'             => $user['username'],
-    'completeness_options' => $opts->fetchAll(),
+    'completeness_options' => $optionList('user_completeness_options'),
+    'played_options'       => $optionList('user_played_options'),
+    'tag_options'          => $optionList('user_tag_options'),
+    'grading'              => ['mode' => $user['grading_mode'] ?? 'simple', 'default' => $user['grading_default'] ?? 'simple'],
     'entries'              => $entries,
 ];
 

@@ -87,6 +87,12 @@ if ($games) {
         unset($c['photos_raw'], $c['user_id']);
         $games[$gid]['copies'][] = $c;
     }
+    // Point-grading parts per copy
+    $allCopyIds = [];
+    foreach ($games as $g) foreach ($g['copies'] as $c) $allCopyIds[] = (int)$c['id'];
+    $gradingMap = loadEntryGrading($allCopyIds);
+    foreach ($games as &$g) foreach ($g['copies'] as &$c) $c['grading'] = $gradingMap[(int)$c['id']] ?? null;
+    unset($g, $c);
 }
 
 $rowList = array_map(fn($e) => ['entry_id' => (int)$e['id'], 'game_id' => (int)$e['game_id']], $entries);
@@ -277,20 +283,13 @@ foreach ($entries as $e) {
       </div>
 
       <div class="drawer-section">
-        <div class="section-label">Condition</div>
-        <div class="field-row">
-          <div class="field"><label>Quality</label>
-            <select id="d-quality">
-              <option value="">— N/A —</option>
-              <option>Mint</option><option>Good</option><option>Fair</option><option>Poor</option>
-            </select>
-          </div>
-          <div class="field"><label>Completeness</label>
-            <select id="d-completeness">
-              <option value="">— N/A —</option>
-              <?php foreach ($compOpts as $c): ?><option><?= htmlspecialchars($c) ?></option><?php endforeach; ?>
-            </select>
-          </div>
+        <!-- Condition grading (assets/js/grading.js) — takes the Completeness field into its top row -->
+        <div id="d-grading"></div>
+        <div class="field" id="d-completeness-field"><label>Completeness</label>
+          <select id="d-completeness">
+            <option value="">— N/A —</option>
+            <?php foreach ($compOpts as $c): ?><option><?= htmlspecialchars($c) ?></option><?php endforeach; ?>
+          </select>
         </div>
         <div class="field-row">
           <div class="field"><label>Played Status</label>
@@ -417,6 +416,8 @@ foreach ($entries as $e) {
 
 <div class="toast" id="toast"></div>
 
+<script>window.GRADING = <?= gradingClientJson($canEdit ? $user : null) ?>;</script>
+<script src="<?= BASE_URL ?>/assets/js/grading.js?v=<?= @filemtime(__DIR__.'/assets/js/grading.js') ?>"></script>
 <script>
 const BASE     = <?= json_encode(BASE_URL) ?>;
 const CAN_EDIT = <?= json_encode($canEdit) ?>;
@@ -431,6 +432,12 @@ let lbRawNames = [];
 let lbContext  = null;
 let lbIdx      = 0;
 let photoTs    = {}; // filename -> latest timestamp after rotation
+const gradeEditor = new GradingUI.Editor({
+  root:       document.getElementById('d-grading'),
+  compField:  document.getElementById('d-completeness-field'),
+  compSelect: document.getElementById('d-completeness'),
+  readOnly:   !CAN_EDIT,
+});
 
 // ── HELPERS ──
 function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
@@ -460,7 +467,6 @@ function buildRow(entryId, gameId) {
     ? `<img class="img-thumb" src="${esc(imgSrc)}" alt="" onclick="openRowImage(${gameId},${entryId})">`
     : `<div class="img-placeholder" style="cursor:pointer" onclick="openDrawer(${gameId},${entryId})">—</div>`;
 
-  const qcls = {Mint:'q-mint',Good:'q-good',Fair:'q-fair',Poor:'q-poor'}[e.quality||''] || 'q-na';
   const paidCell = isSet(e.price_paid) ? `<span class="price">€${money(e.price_paid)}</span>` : '<span class="price-na">—</span>';
 
   let rangeCell = '<span class="price-na">—</span>';
@@ -508,7 +514,7 @@ function buildRow(entryId, gameId) {
     title: g.title.toLowerCase(),
     tag: tagLabel.toLowerCase(),
     systemName: (g.short_name||'').toLowerCase(),
-    quality: (e.quality||'').toLowerCase(),
+    quality: GradingCore.sortValue(e),
     paid: parseFloat(e.price_paid)||0,
     cib: parseFloat(g.cib_price)||0,
     loose: parseFloat(g.loose_price)||0,
@@ -522,7 +528,7 @@ function buildRow(entryId, gameId) {
     <td data-col="system"><span class="sys-badge">${esc(g.short_name)}</span></td>
     <td data-col="title" class="td-title" onclick="openDrawer(${gameId},${entryId})" title="Show details">${esc(g.title)}</td>
     <td data-col="upgrade_reason" style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.68rem;color:var(--orange);font-style:italic" title="${esc(e.upgrade_reason||'')}">${upReason ? esc(upReason) : '<span style="color:var(--border2)">—</span>'}</td>
-    <td data-col="quality"><span class="qbadge ${qcls}">${esc(e.quality||'—')}</span></td>
+    <td data-col="quality">${GradingUI.cellHtml([e])}</td>
     <td data-col="completeness" style="font-size:.7rem;color:var(--text2)">${esc(e.completeness||'—')}</td>
     <td data-col="price_paid">${paidCell}</td>
     <td data-col="buy_range">${rangeCell}</td>
@@ -538,6 +544,7 @@ function buildRow(entryId, gameId) {
 function renderAllRows() {
   const tbody = document.getElementById('tbody');
   tbody.innerHTML = '';
+  GradingUI.beginRender();
   ROWS.forEach(r => { const tr = buildRow(r.entry_id, r.game_id); if (tr) tbody.appendChild(tr); });
 }
 
@@ -647,26 +654,9 @@ function setWLUpgrade(val) {
 }
 
 // ── SAVING ──
-function payloadFromCopy(c) {
-  return {
-    game_id:          c.game_id,
-    copy_number:      c.copy_number || 1,
-    owned:            c.owned    ? 1 : 0,
-    wishlist:         c.wishlist ? 1 : 0,
-    upgrade:          c.upgrade  ? 1 : 0,
-    upgrade_reason:   c.upgrade_reason || '',
-    quality:          c.quality        || '',
-    completeness:     c.completeness   || '',
-    played_status:    c.played_status  || '',
-    price_paid:       c.price_paid  ?? null,
-    chart_price:      c.chart_price ?? null,
-    price_min:        c.price_min   ?? null,
-    price_max:        c.price_max   ?? null,
-    notes:            c.notes || '',
-    tag:              c.tag   || '',
-    value_price_type: c.value_price_type || 'cib',
-    primary_photo:    c.primary_photo || '',
-  };
+// Quick toggles send only the toggled field; entry_save.php keeps everything else
+function togglePayload(c, field, val) {
+  return { game_id: c.game_id, copy_number: c.copy_number || 1, [field]: val };
 }
 
 function mergeSavedEntry(gameId, entry) {
@@ -679,7 +669,7 @@ function mergeSavedEntry(gameId, entry) {
 async function wlToggleOwned(el, entryId, gameId) {
   if (!CAN_EDIT) return;
   const c = findCopy(gameId, x => x.id == entryId); if (!c) return;
-  const res = await apiFetch('/api/entry_save.php', {...payloadFromCopy(c), owned: c.owned ? 0 : 1});
+  const res = await apiFetch('/api/entry_save.php', togglePayload(c, 'owned', c.owned ? 0 : 1));
   if (res.ok) { mergeSavedEntry(gameId, res.entry); refreshGameRows(gameId); }
   else toast('Error: '+(res.error||''), true);
 }
@@ -687,7 +677,7 @@ async function wlToggleOwned(el, entryId, gameId) {
 async function wlToggleUpgrade(el, entryId, gameId) {
   if (!CAN_EDIT) return;
   const c = findCopy(gameId, x => x.id == entryId); if (!c) return;
-  const res = await apiFetch('/api/entry_save.php', {...payloadFromCopy(c), upgrade: c.upgrade ? 0 : 1});
+  const res = await apiFetch('/api/entry_save.php', togglePayload(c, 'upgrade', c.upgrade ? 0 : 1));
   if (res.ok) { mergeSavedEntry(gameId, res.entry); refreshGameRows(gameId); }
   else toast('Error: '+(res.error||''), true);
 }
@@ -747,7 +737,7 @@ function sortWish(key) {
     switch(key) {
       case 'system':     va=a.dataset.systemName||''; vb=b.dataset.systemName||''; break;
       case 'title':      va=a.dataset.title||'';      vb=b.dataset.title||'';      break;
-      case 'quality':    va=a.dataset.quality||'';    vb=b.dataset.quality||'';    break;
+      case 'quality':    va=-parseFloat(a.dataset.quality); vb=-parseFloat(b.dataset.quality); break; // best condition first
       case 'price_paid': va=parseFloat(a.dataset.paid)||0;  vb=parseFloat(b.dataset.paid)||0;  break;
       case 'cib_price':  va=parseFloat(a.dataset.cib)||0;   vb=parseFloat(b.dataset.cib)||0;   break;
       case 'loose_price':va=parseFloat(a.dataset.loose)||0; vb=parseFloat(b.dataset.loose)||0; break;
@@ -868,8 +858,8 @@ function setTog(inputId,val,labelId,text){document.getElementById(inputId).check
 function loadCopyIntoForm(copyNum) {
   const c = findCopy(editGameId, x => x.copy_number == copyNum) || {};
   setTog('d-owned',   c.owned,   'lbl-owned',   c.owned?'In collection':'Not owned');
-  setSelect('d-quality',      c.quality);
   setSelect('d-completeness', c.completeness);
+  gradeEditor.load(c, {systemId: GAMES[editGameId]?.system_id});
   setSelect('d-played',       c.played_status);
   setSelect('d-tag',          c.tag);
   document.getElementById('d-price').value = isSet(c.price_paid)  ? c.price_paid  : '';
@@ -894,7 +884,6 @@ async function saveEntry() {
   const payload = {
     game_id: gameId, copy_number: editCopy,
     owned:            document.getElementById('d-owned').checked?1:0,
-    quality:          document.getElementById('d-quality').value,
     completeness:     document.getElementById('d-completeness').value,
     played_status:    document.getElementById('d-played').value,
     price_paid:       document.getElementById('d-price').value||null,
@@ -909,6 +898,8 @@ async function saveEntry() {
     value_price_type: document.querySelector('input[name="d-value-type"]:checked')?.value || 'cib',
     primary_photo:    document.getElementById('d-primary').value||null,
   };
+  const grading = gradeEditor.getPayload();
+  if (grading) payload.grading = grading;
   const res = await apiFetch('/api/entry_save.php', payload);
   if (res.ok) {
     mergeSavedEntry(gameId, res.entry);

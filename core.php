@@ -260,6 +260,9 @@ function sanitizeFilename(string $name): string {
     return preg_replace('/[^a-z0-9_\-\.]/i', '_', $name);
 }
 
+// Condition grading (labels, templates, profiles, scoring)
+require_once __DIR__ . '/grading.php';
+
 // Every state-changing request to /api/* must carry a valid CSRF token
 // (X-CSRF-Token header added by csrfScript(), or a 'csrf' form field).
 if (basename(dirname($_SERVER['SCRIPT_FILENAME'] ?? '')) === 'api'

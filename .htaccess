@@ -1,7 +1,7 @@
 Options -Indexes
 
-# Protect config/core files and SQL migrations from direct access
-<FilesMatch "^(config|core)\.php$|\.sql$">
+# Protect config/core/grading files and SQL migrations from direct access
+<FilesMatch "^(config|core|grading)\.php$|\.sql$">
     <IfModule mod_authz_core.c>
         Require all denied
     </IfModule>

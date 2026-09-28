@@ -110,7 +110,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $st = db()->query("SELECT COALESCE(MAX(sort_order),0)+10 FROM systems"); $so = $st->fetchColumn();
             db()->prepare("INSERT INTO systems (name, short_name, region, sort_order) VALUES (?,?,'PAL',?)")
                 ->execute([$name, $short, $so]);
-            $msg = 'System added.';
+            // Default grading profile by name (e.g. "Nintendo 64" → cartridge in box with inner tray)
+            $assigned = applySystemPatterns(null, true, (int)db()->lastInsertId());
+            $msg = 'System added.'.($assigned ? ' Grading profile: '.explode(' → ', $assigned[0])[1].'.' : '');
         }
     }
 
@@ -187,6 +189,29 @@ $lockouts = db()->query("SELECT *, locked_until > NOW() AS is_locked FROM login_
     <button class="btn btn-sm" onclick="saveImgSettings()">Save Image Settings</button>
   </div>
   <div id="img-settings-msg" style="font-size:.75rem;color:var(--green);margin-top:10px;display:none">Settings saved.</div>
+</div>
+
+<!-- ── CONDITION GRADING (assets/js/grading-admin.js) ── -->
+<div class="admin-section">
+  <h2>Grade Labels</h2>
+  <div id="ga-labels"><p class="ga-desc">Loading…</p></div>
+</div>
+
+<div class="admin-section">
+  <h2>Format Profiles</h2>
+  <p class="ga-desc">Which parts a copy can have (box, manual, cartridge…) and how much each one weighs in the score. Each system gets a default profile; users can pick another one per copy.</p>
+  <div id="ga-profiles"></div>
+</div>
+
+<div class="admin-section">
+  <h2>Component Templates</h2>
+  <p class="ga-desc">How a part is graded: categories whose max points add up to 100, and the defects that deduct from them. One template can be shared by many parts (e.g. “Paper insert” for maps, inserts and cover art). Changing a deduction never rewrites logged defects; scores are recalculated when you save.</p>
+  <div id="ga-templates"></div>
+</div>
+
+<div class="admin-section">
+  <h2>Grading System — Export / Import</h2>
+  <div id="ga-io"></div>
 </div>
 
 <!-- ── INVITE CODES ── -->
@@ -485,6 +510,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 const ADMIN_BASE = <?= json_encode(BASE_URL) ?>;
+window.GA_BASE = ADMIN_BASE;
 
 loadImgSettings();
 
@@ -541,5 +567,6 @@ async function pcConfirm() {
   res.innerHTML=`<span style="color:var(--green)">✓ Done — ${imported} added, ${updated} updated${errors?', <span style="color:var(--red)">'+errors+' errors</span>':''}.</span>`;
 }
 </script>
+<script src="<?= BASE_URL ?>/assets/js/grading-admin.js?v=<?= @filemtime(__DIR__.'/assets/js/grading-admin.js') ?>"></script>
 </body>
 </html>

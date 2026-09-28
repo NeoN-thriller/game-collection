@@ -1,0 +1,364 @@
+{
+  "format": "game-collection-grading",
+  "version": 1,
+  "exported_at": "2026-09-27T00:00:00+00:00",
+  "own_item_default_weight": 5,
+  "system_patterns_note": "Default profile per system, matched in this order against the system's name + short name (case-insensitive). The first match wins; systems that match nothing are left for the admin to assign.",
+  "system_patterns": [
+    { "profile": "Boxed console",                      "match": "\\b(hardware|consoles?)\\b" },
+    { "profile": "Big-box PC",                         "match": "\\bPC\\b|big ?box|\\bMS-?DOS\\b|\\bwindows\\b", "exclude": "engine|pc-?fx|turbo" },
+    { "profile": "UMD in case",                        "match": "\\bPSP\\b|playstation portable" },
+    { "profile": "Cartridge in plastic case",          "match": "\\bvita\\b|\\bPSV\\b" },
+    { "profile": "Disc in DVD case",                   "match": "playstation ?[2-5]\\b|\\bPS ?[2-5]\\b|game ?cube|\\bN?GC\\b|\\bwii\\b|wii ?u|\\bWIIU\\b|xbox|\\bX360\\b|\\bXB(1|O|OX|SX)?\\b" },
+    { "profile": "Disc in jewel case",                 "match": "playstation|\\bPS(1|X|ONE)?\\b|saturn|dreamcast|\\bDC\\b|mega[- ]?cd|sega[- ]?cd|\\b3DO\\b|\\bCD-?i\\b|(pc[- ]?engine|turbografx)[- ]?cd|neo ?geo ?cd" },
+    { "profile": "Cartridge in plastic case",          "match": "switch|\\bNSW?\\b|\\b3DS\\b|\\bDSi?\\b|nintendo ds|mega ?drive|genesis|\\bMD\\b|master ?system|\\bSMS\\b|\\b32X\\b" },
+    { "profile": "Cartridge in box with inner tray",   "match": "nintendo ?64|\\bN64\\b|game ?boy ?advance|\\bGBA\\b" },
+    { "profile": "Cartridge in cardboard box",         "match": "super nintendo|\\bSNES\\b|super famicom|\\bSFC\\b|virtual ?boy|\\bVB\\b|game ?gear|\\bGG\\b|atari|lynx|neo ?geo pocket|\\bNGPC?\\b|wonderswan" },
+    { "profile": "Cartridge in box with dust sleeve",  "match": "\\bNES\\b|nintendo entertainment|famicom|game ?boy|\\bGBC?\\b" }
+  ],
+  "labels": [
+    { "name": "Mint", "short": "M", "min_score": 95, "color": "#5abf84" },
+    { "name": "Good", "short": "G", "min_score": 80, "color": "#6a9fd5" },
+    { "name": "Fair", "short": "F", "min_score": 60, "color": "#d4793b" },
+    { "name": "Poor", "short": "P", "min_score": 0,  "color": "#c94f3a" }
+  ],
+  "templates": [
+    { "name": "Box", "categories": [
+      { "name": "Corners", "max_points": 20, "defects": [
+        { "name": "Slight whitening", "penalty": 1, "kind": "each" },
+        { "name": "Small crush",      "penalty": 3, "kind": "each" },
+        { "name": "Heavy crush",      "penalty": 7, "kind": "each" }
+      ]},
+      { "name": "Edges", "max_points": 20, "defects": [
+        { "name": "Light wear",    "penalty": 1, "kind": "each" },
+        { "name": "Moderate wear", "penalty": 3, "kind": "each" },
+        { "name": "Heavy wear",    "penalty": 6, "kind": "each" }
+      ]},
+      { "name": "Front & back panels", "max_points": 25, "defects": [
+        { "name": "Hairline scratch",   "penalty": 1,  "kind": "each" },
+        { "name": "Noticeable scratch", "penalty": 3,  "kind": "each" },
+        { "name": "Dent",               "penalty": 2,  "kind": "each" },
+        { "name": "Crease",             "penalty": 5,  "kind": "each" },
+        { "name": "Tear",               "penalty": 10, "kind": "each" }
+      ]},
+      { "name": "Color & finish", "max_points": 20, "defects": [
+        { "name": "Minor",    "penalty": 3,  "kind": "level", "level_group": "Fading" },
+        { "name": "Moderate", "penalty": 7,  "kind": "level", "level_group": "Fading" },
+        { "name": "Heavy",    "penalty": 15, "kind": "level", "level_group": "Fading" },
+        { "name": "Gloss wear", "penalty": 1, "kind": "max", "max_count": 5 }
+      ]},
+      { "name": "Cleanliness & integrity", "max_points": 15, "defects": [
+        { "name": "Sticker",         "penalty": 2,  "kind": "each" },
+        { "name": "Sticker residue", "penalty": 3,  "kind": "each" },
+        { "name": "Writing",         "penalty": 10, "kind": "each" },
+        { "name": "Tape repair",     "penalty": 10, "kind": "each" },
+        { "name": "Water damage",    "penalty": 20, "kind": "once" }
+      ]}
+    ]},
+    { "name": "Cartridge", "categories": [
+      { "name": "Front label", "max_points": 40, "defects": [
+        { "name": "Minor",    "penalty": 3,  "kind": "level", "level_group": "Fading" },
+        { "name": "Moderate", "penalty": 8,  "kind": "level", "level_group": "Fading" },
+        { "name": "Heavy",    "penalty": 15, "kind": "level", "level_group": "Fading" },
+        { "name": "Scratch",           "penalty": 2,  "kind": "each" },
+        { "name": "Lifting / peeling", "penalty": 5,  "kind": "each" },
+        { "name": "Tear",              "penalty": 10, "kind": "each" },
+        { "name": "Writing",           "penalty": 8,  "kind": "each" }
+      ]},
+      { "name": "Shell", "max_points": 30, "defects": [
+        { "name": "Scuff",              "penalty": 1,  "kind": "each" },
+        { "name": "Deep scratch",       "penalty": 3,  "kind": "each" },
+        { "name": "Broken tab / screw", "penalty": 5,  "kind": "each" },
+        { "name": "Crack",              "penalty": 10, "kind": "each" }
+      ]},
+      { "name": "Contacts", "max_points": 15, "defects": [
+        { "name": "Light tarnish", "penalty": 3,  "kind": "level", "level_group": "Contacts" },
+        { "name": "Corrosion",     "penalty": 12, "kind": "level", "level_group": "Contacts" }
+      ]},
+      { "name": "Back & stickers", "max_points": 15, "defects": [
+        { "name": "Shop / rental sticker", "penalty": 3, "kind": "each" },
+        { "name": "Sticker residue",       "penalty": 3, "kind": "each" },
+        { "name": "Writing / engraving",   "penalty": 8, "kind": "each" }
+      ]}
+    ]},
+    { "name": "Manual", "categories": [
+      { "name": "Cover", "max_points": 30, "defects": [
+        { "name": "Corner wear", "penalty": 1, "kind": "each" },
+        { "name": "Crease",      "penalty": 3, "kind": "each" },
+        { "name": "Tear",        "penalty": 8, "kind": "each" }
+      ]},
+      { "name": "Spine & binding", "max_points": 20, "defects": [
+        { "name": "Spine wear",     "penalty": 2,  "kind": "each" },
+        { "name": "Loose staple",   "penalty": 5,  "kind": "each" },
+        { "name": "Detached cover", "penalty": 15, "kind": "once" }
+      ]},
+      { "name": "Pages", "max_points": 30, "defects": [
+        { "name": "Page crease",  "penalty": 2,  "kind": "each" },
+        { "name": "Writing",      "penalty": 5,  "kind": "each" },
+        { "name": "Missing page", "penalty": 15, "kind": "each" }
+      ]},
+      { "name": "Cleanliness", "max_points": 20, "defects": [
+        { "name": "Stain",        "penalty": 5,  "kind": "each" },
+        { "name": "Sticker",      "penalty": 2,  "kind": "each" },
+        { "name": "Water damage", "penalty": 20, "kind": "once" }
+      ]}
+    ]},
+    { "name": "Disc", "categories": [
+      { "name": "Data side", "max_points": 50, "defects": [
+        { "name": "Light",    "penalty": 2,  "kind": "level", "level_group": "Scratches" },
+        { "name": "Moderate", "penalty": 6,  "kind": "level", "level_group": "Scratches" },
+        { "name": "Heavy",    "penalty": 15, "kind": "level", "level_group": "Scratches" },
+        { "name": "Deep scratch",        "penalty": 10, "kind": "each" },
+        { "name": "Disc rot / pinholes", "penalty": 25, "kind": "once" }
+      ]},
+      { "name": "Label side", "max_points": 30, "defects": [
+        { "name": "Scuff",         "penalty": 2,  "kind": "each" },
+        { "name": "Label scratch", "penalty": 4,  "kind": "each" },
+        { "name": "Writing",       "penalty": 10, "kind": "once" }
+      ]},
+      { "name": "Hub & rim", "max_points": 20, "defects": [
+        { "name": "Rim chip",  "penalty": 5,  "kind": "each" },
+        { "name": "Hub crack", "penalty": 15, "kind": "once" }
+      ]}
+    ]},
+    { "name": "Jewel case", "categories": [
+      { "name": "Case body", "max_points": 60, "defects": [
+        { "name": "Light", "penalty": 2, "kind": "level", "level_group": "Scuffs" },
+        { "name": "Heavy", "penalty": 6, "kind": "level", "level_group": "Scuffs" },
+        { "name": "Cracked hinge", "penalty": 10, "kind": "each" },
+        { "name": "Cracked front", "penalty": 15, "kind": "once" },
+        { "name": "Broken teeth",  "penalty": 8,  "kind": "once" }
+      ]},
+      { "name": "Clarity & finish", "max_points": 40, "defects": [
+        { "name": "Hazing",          "penalty": 5, "kind": "once" },
+        { "name": "Sticker",         "penalty": 2, "kind": "each" },
+        { "name": "Sticker residue", "penalty": 3, "kind": "each" }
+      ]}
+    ]},
+    { "name": "Plastic case", "categories": [
+      { "name": "Case", "max_points": 60, "defects": [
+        { "name": "Light", "penalty": 2, "kind": "level", "level_group": "Scuffs" },
+        { "name": "Heavy", "penalty": 6, "kind": "level", "level_group": "Scuffs" },
+        { "name": "Broken clip", "penalty": 8,  "kind": "once" },
+        { "name": "Crack",       "penalty": 15, "kind": "once" }
+      ]},
+      { "name": "Clear sleeve", "max_points": 40, "defects": [
+        { "name": "Sticker",         "penalty": 2, "kind": "each" },
+        { "name": "Sticker residue", "penalty": 3, "kind": "each" },
+        { "name": "Tear in sleeve",  "penalty": 8, "kind": "each" }
+      ]}
+    ]},
+    { "name": "Paper insert", "categories": [
+      { "name": "Paper condition", "max_points": 60, "defects": [
+        { "name": "Fold wear", "penalty": 2, "kind": "each" },
+        { "name": "Crease",    "penalty": 3, "kind": "each" },
+        { "name": "Tear",      "penalty": 8, "kind": "each" }
+      ]},
+      { "name": "Cleanliness", "max_points": 40, "defects": [
+        { "name": "Writing",   "penalty": 8,  "kind": "each" },
+        { "name": "Stain",     "penalty": 5,  "kind": "each" },
+        { "name": "Filled in", "penalty": 10, "kind": "once" }
+      ]}
+    ]},
+    { "name": "Dust sleeve / protector", "categories": [
+      { "name": "Plastic", "max_points": 70, "defects": [
+        { "name": "Light", "penalty": 2, "kind": "level", "level_group": "Scuffs" },
+        { "name": "Heavy", "penalty": 6, "kind": "level", "level_group": "Scuffs" },
+        { "name": "Crease",     "penalty": 3,  "kind": "each" },
+        { "name": "Split seam", "penalty": 8,  "kind": "each" },
+        { "name": "Tear / crack", "penalty": 10, "kind": "each" }
+      ]},
+      { "name": "Clarity & cleanliness", "max_points": 30, "defects": [
+        { "name": "Yellowing / hazing", "penalty": 5, "kind": "once" },
+        { "name": "Sticker residue",    "penalty": 3, "kind": "each" },
+        { "name": "Writing",            "penalty": 8, "kind": "each" }
+      ]}
+    ]},
+    { "name": "Inner tray / packaging", "categories": [
+      { "name": "Structure", "max_points": 60, "defects": [
+        { "name": "Crease",        "penalty": 2,  "kind": "each" },
+        { "name": "Crush",         "penalty": 4,  "kind": "each" },
+        { "name": "Tear / crack",  "penalty": 8,  "kind": "each" },
+        { "name": "Missing piece", "penalty": 12, "kind": "each" }
+      ]},
+      { "name": "Cleanliness", "max_points": 40, "defects": [
+        { "name": "Discoloration", "penalty": 5, "kind": "once" },
+        { "name": "Stain",         "penalty": 5, "kind": "each" },
+        { "name": "Writing",       "penalty": 8, "kind": "each" }
+      ]}
+    ]},
+    { "name": "UMD", "categories": [
+      { "name": "Shell", "max_points": 50, "defects": [
+        { "name": "Light", "penalty": 2, "kind": "level", "level_group": "Scuffs" },
+        { "name": "Heavy", "penalty": 6, "kind": "level", "level_group": "Scuffs" },
+        { "name": "Broken shutter / slider", "penalty": 10, "kind": "once" },
+        { "name": "Crack",                   "penalty": 15, "kind": "once" },
+        { "name": "Sticker residue",         "penalty": 3,  "kind": "each" }
+      ]},
+      { "name": "Window & disc", "max_points": 35, "defects": [
+        { "name": "Light", "penalty": 2, "kind": "level", "level_group": "Window scratches" },
+        { "name": "Heavy", "penalty": 6, "kind": "level", "level_group": "Window scratches" },
+        { "name": "Light", "penalty": 3,  "kind": "level", "level_group": "Disc scratches" },
+        { "name": "Heavy", "penalty": 10, "kind": "level", "level_group": "Disc scratches" },
+        { "name": "Dust inside shell", "penalty": 3, "kind": "once" }
+      ]},
+      { "name": "Label", "max_points": 15, "defects": [
+        { "name": "Scuff",   "penalty": 2, "kind": "each" },
+        { "name": "Sticker", "penalty": 2, "kind": "each" },
+        { "name": "Writing", "penalty": 8, "kind": "once" }
+      ]}
+    ]},
+    { "name": "Slipcover / Steelbook", "categories": [
+      { "name": "Surface", "max_points": 40, "defects": [
+        { "name": "Light",    "penalty": 2,  "kind": "level", "level_group": "Scratches" },
+        { "name": "Moderate", "penalty": 6,  "kind": "level", "level_group": "Scratches" },
+        { "name": "Heavy",    "penalty": 12, "kind": "level", "level_group": "Scratches" },
+        { "name": "Scuff",    "penalty": 1,  "kind": "each" }
+      ]},
+      { "name": "Corners & edges", "max_points": 30, "defects": [
+        { "name": "Corner wear", "penalty": 1, "kind": "each" },
+        { "name": "Edge wear",   "penalty": 2, "kind": "each" },
+        { "name": "Dent",        "penalty": 4, "kind": "each" }
+      ]},
+      { "name": "Integrity", "max_points": 30, "defects": [
+        { "name": "Crease",          "penalty": 5,  "kind": "each" },
+        { "name": "Tear",            "penalty": 10, "kind": "each" },
+        { "name": "Sticker residue", "penalty": 3,  "kind": "each" },
+        { "name": "Rust spot",       "penalty": 5,  "kind": "each" }
+      ]}
+    ]},
+    { "name": "Console / hardware", "categories": [
+      { "name": "Shell", "max_points": 50, "defects": [
+        { "name": "Light",    "penalty": 2,  "kind": "level", "level_group": "Scuffs" },
+        { "name": "Moderate", "penalty": 5,  "kind": "level", "level_group": "Scuffs" },
+        { "name": "Heavy",    "penalty": 10, "kind": "level", "level_group": "Scuffs" },
+        { "name": "Minor",    "penalty": 3,  "kind": "level", "level_group": "Yellowing" },
+        { "name": "Moderate", "penalty": 8,  "kind": "level", "level_group": "Yellowing" },
+        { "name": "Heavy",    "penalty": 15, "kind": "level", "level_group": "Yellowing" },
+        { "name": "Deep scratch", "penalty": 3,  "kind": "each" },
+        { "name": "Crack",        "penalty": 15, "kind": "each" }
+      ]},
+      { "name": "Ports & mechanisms", "max_points": 30, "defects": [
+        { "name": "Loose / broken flap or door", "penalty": 5, "kind": "each" },
+        { "name": "Worn / sticky button",        "penalty": 3, "kind": "each" },
+        { "name": "Damaged port",                "penalty": 8, "kind": "each" },
+        { "name": "Missing screw / cover",       "penalty": 3, "kind": "each" }
+      ]},
+      { "name": "Labels & cleanliness", "max_points": 20, "defects": [
+        { "name": "Sticker / residue",       "penalty": 3, "kind": "each" },
+        { "name": "Damaged / missing label", "penalty": 5, "kind": "each" },
+        { "name": "Writing / engraving",     "penalty": 8, "kind": "each" },
+        { "name": "Grime",                   "penalty": 3, "kind": "once" }
+      ]}
+    ]},
+    { "name": "Controller", "categories": [
+      { "name": "Shell", "max_points": 40, "defects": [
+        { "name": "Light", "penalty": 2, "kind": "level", "level_group": "Scuffs" },
+        { "name": "Heavy", "penalty": 6, "kind": "level", "level_group": "Scuffs" },
+        { "name": "Minor", "penalty": 3,  "kind": "level", "level_group": "Yellowing" },
+        { "name": "Heavy", "penalty": 10, "kind": "level", "level_group": "Yellowing" },
+        { "name": "Crack", "penalty": 10, "kind": "each" }
+      ]},
+      { "name": "Buttons & sticks", "max_points": 40, "defects": [
+        { "name": "Worn / sticky button",   "penalty": 3, "kind": "each" },
+        { "name": "Worn D-pad",             "penalty": 4, "kind": "once" },
+        { "name": "Stick wear / drift",     "penalty": 8, "kind": "each" },
+        { "name": "Worn / loose trigger",   "penalty": 4, "kind": "each" }
+      ]},
+      { "name": "Cable & connector", "max_points": 20, "defects": [
+        { "name": "Cable wear / kink",    "penalty": 3,  "kind": "each" },
+        { "name": "Damaged plug",         "penalty": 10, "kind": "once" }
+      ]}
+    ]},
+    { "name": "Cables & accessories", "categories": [
+      { "name": "Condition", "max_points": 60, "defects": [
+        { "name": "Wear / kinks",  "penalty": 3,  "kind": "each" },
+        { "name": "Damaged plug",  "penalty": 10, "kind": "each" },
+        { "name": "Exposed wire",  "penalty": 20, "kind": "once" }
+      ]},
+      { "name": "Cleanliness", "max_points": 40, "defects": [
+        { "name": "Grime",           "penalty": 3, "kind": "once" },
+        { "name": "Sticker residue", "penalty": 3, "kind": "each" },
+        { "name": "Yellowing",       "penalty": 5, "kind": "once" }
+      ]}
+    ]}
+  ],
+  "profiles": [
+    { "name": "Cartridge in cardboard box", "systems": [], "components": [
+      { "label": "Box",               "abbr": "Box",  "template": "Box",          "weight": 35, "default_qty": 1 },
+      { "label": "Cartridge",         "abbr": "Cart", "template": "Cartridge",    "weight": 30, "default_qty": 1 },
+      { "label": "Manual",            "abbr": "Man",  "template": "Manual",       "weight": 20, "default_qty": 1 },
+      { "label": "Map / Poster",      "abbr": "Map",  "template": "Paper insert", "weight": 5,  "default_qty": 0 },
+      { "label": "Insert",            "abbr": "Ins",  "template": "Paper insert", "weight": 5,  "default_qty": 0 },
+      { "label": "Registration card", "abbr": "Reg",  "template": "Paper insert", "weight": 5,  "default_qty": 0 }
+    ]},
+    { "name": "Cartridge in box with dust sleeve", "systems": [], "components": [
+      { "label": "Box",                     "abbr": "Box",    "template": "Box",                     "weight": 33, "default_qty": 1 },
+      { "label": "Cartridge",               "abbr": "Cart",   "template": "Cartridge",               "weight": 28, "default_qty": 1 },
+      { "label": "Dust sleeve / protector", "abbr": "Sleeve", "template": "Dust sleeve / protector", "weight": 4,  "default_qty": 1 },
+      { "label": "Manual",                  "abbr": "Man",    "template": "Manual",                  "weight": 20, "default_qty": 1 },
+      { "label": "Map / Poster",            "abbr": "Map",    "template": "Paper insert",            "weight": 5,  "default_qty": 0 },
+      { "label": "Insert",                  "abbr": "Ins",    "template": "Paper insert",            "weight": 5,  "default_qty": 0 },
+      { "label": "Registration card",       "abbr": "Reg",    "template": "Paper insert",            "weight": 5,  "default_qty": 0 }
+    ]},
+    { "name": "Cartridge in box with inner tray", "systems": [], "components": [
+      { "label": "Box",               "abbr": "Box",  "template": "Box",                    "weight": 33, "default_qty": 1 },
+      { "label": "Inner tray",        "abbr": "Tray", "template": "Inner tray / packaging", "weight": 4,  "default_qty": 1 },
+      { "label": "Cartridge",         "abbr": "Cart", "template": "Cartridge",              "weight": 28, "default_qty": 1 },
+      { "label": "Manual",            "abbr": "Man",  "template": "Manual",                 "weight": 20, "default_qty": 1 },
+      { "label": "Map / Poster",      "abbr": "Map",  "template": "Paper insert",           "weight": 5,  "default_qty": 0 },
+      { "label": "Insert",            "abbr": "Ins",  "template": "Paper insert",           "weight": 5,  "default_qty": 0 },
+      { "label": "Registration card", "abbr": "Reg",  "template": "Paper insert",           "weight": 5,  "default_qty": 0 }
+    ]},
+    { "name": "Cartridge in plastic case", "systems": [], "components": [
+      { "label": "Case",      "abbr": "Case",  "template": "Plastic case", "weight": 25, "default_qty": 1 },
+      { "label": "Cover art", "abbr": "Cover", "template": "Paper insert", "weight": 20, "default_qty": 1 },
+      { "label": "Cartridge", "abbr": "Cart",  "template": "Cartridge",    "weight": 35, "default_qty": 1 },
+      { "label": "Manual",    "abbr": "Man",   "template": "Manual",       "weight": 20, "default_qty": 1 }
+    ]},
+    { "name": "Disc in jewel case", "systems": [], "components": [
+      { "label": "Jewel case",  "abbr": "Case",  "template": "Jewel case",   "weight": 15, "default_qty": 1 },
+      { "label": "Front cover", "abbr": "Front", "template": "Paper insert", "weight": 20, "default_qty": 1 },
+      { "label": "Back insert", "abbr": "Back",  "template": "Paper insert", "weight": 15, "default_qty": 1 },
+      { "label": "Disc",        "abbr": "Disc",  "template": "Disc",         "weight": 35, "default_qty": 1 },
+      { "label": "Manual",      "abbr": "Man",   "template": "Manual",       "weight": 15, "default_qty": 1 }
+    ]},
+    { "name": "Disc in DVD case", "systems": [], "components": [
+      { "label": "Case",      "abbr": "Case",  "template": "Plastic case", "weight": 20, "default_qty": 1 },
+      { "label": "Cover art", "abbr": "Cover", "template": "Paper insert", "weight": 20, "default_qty": 1 },
+      { "label": "Disc",      "abbr": "Disc",  "template": "Disc",         "weight": 40, "default_qty": 1 },
+      { "label": "Manual",    "abbr": "Man",   "template": "Manual",       "weight": 20, "default_qty": 1 }
+    ]},
+    { "name": "Disc in DVD case + slipcover / steelbook", "systems": [], "components": [
+      { "label": "Case",                  "abbr": "Case",  "template": "Plastic case",          "weight": 15, "default_qty": 1 },
+      { "label": "Slipcover / Steelbook", "abbr": "Slip",  "template": "Slipcover / Steelbook", "weight": 15, "default_qty": 1 },
+      { "label": "Cover art",             "abbr": "Cover", "template": "Paper insert",          "weight": 15, "default_qty": 1 },
+      { "label": "Disc",                  "abbr": "Disc",  "template": "Disc",                  "weight": 35, "default_qty": 1 },
+      { "label": "Manual",                "abbr": "Man",   "template": "Manual",                "weight": 20, "default_qty": 1 }
+    ]},
+    { "name": "UMD in case", "systems": [], "components": [
+      { "label": "Case",      "abbr": "Case",  "template": "Plastic case", "weight": 25, "default_qty": 1 },
+      { "label": "Cover art", "abbr": "Cover", "template": "Paper insert", "weight": 20, "default_qty": 1 },
+      { "label": "UMD",       "abbr": "UMD",   "template": "UMD",          "weight": 35, "default_qty": 1 },
+      { "label": "Manual",    "abbr": "Man",   "template": "Manual",       "weight": 20, "default_qty": 1 }
+    ]},
+    { "name": "Big-box PC", "systems": [], "components": [
+      { "label": "Box",               "abbr": "Box",  "template": "Box",                    "weight": 35, "default_qty": 1 },
+      { "label": "Inner tray",        "abbr": "Tray", "template": "Inner tray / packaging", "weight": 5,  "default_qty": 1 },
+      { "label": "Disc",              "abbr": "Disc", "template": "Disc",                   "weight": 20, "default_qty": 1 },
+      { "label": "Jewel case",        "abbr": "Case", "template": "Jewel case",             "weight": 5,  "default_qty": 1 },
+      { "label": "Manual",            "abbr": "Man",  "template": "Manual",                 "weight": 20, "default_qty": 1 },
+      { "label": "Reference card",    "abbr": "Ref",  "template": "Paper insert",           "weight": 5,  "default_qty": 0 },
+      { "label": "Registration card", "abbr": "Reg",  "template": "Paper insert",           "weight": 5,  "default_qty": 0 },
+      { "label": "Map / Poster",      "abbr": "Map",  "template": "Paper insert",           "weight": 5,  "default_qty": 0 }
+    ]},
+    { "name": "Boxed console", "systems": [], "components": [
+      { "label": "Box",             "abbr": "Box",   "template": "Box",                    "weight": 30, "default_qty": 1 },
+      { "label": "Inner packaging", "abbr": "Pack",  "template": "Inner tray / packaging", "weight": 10, "default_qty": 1 },
+      { "label": "Console",         "abbr": "Cons",  "template": "Console / hardware",     "weight": 35, "default_qty": 1 },
+      { "label": "Controller",      "abbr": "Pad",   "template": "Controller",             "weight": 10, "default_qty": 1 },
+      { "label": "Cables & PSU",    "abbr": "Cable", "template": "Cables & accessories",   "weight": 5,  "default_qty": 1 },
+      { "label": "Manual",          "abbr": "Man",   "template": "Manual",                 "weight": 10, "default_qty": 1 }
+    ]}
+  ]
+}

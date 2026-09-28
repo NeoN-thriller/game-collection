@@ -78,6 +78,11 @@ $compOpts->execute([$user['id']]); $compOpts = $compOpts->fetchAll(PDO::FETCH_CO
 $playedOpts = db()->prepare("SELECT label FROM user_played_options WHERE user_id=? ORDER BY sort_order");
 $playedOpts->execute([$user['id']]); $playedOpts = $playedOpts->fetchAll(PDO::FETCH_COLUMN);
 
+$gradeLabels  = gradingConfig()['labels'];
+$gradingMode  = $user['grading_mode']    ?? 'simple';
+$gradingDef   = $user['grading_default'] ?? 'simple';
+$previewLabel = gradeLabelForScore(93);
+
 $systems = db()->prepare("SELECT s.*, COALESCE(usp.visible,1) AS visible FROM systems s LEFT JOIN user_system_prefs usp ON usp.system_id=s.id AND usp.user_id=? WHERE s.active=1 ORDER BY s.sort_order");
 $systems->execute([$user['id']]); $systems = $systems->fetchAll();
 
@@ -122,6 +127,21 @@ $backupSystems = $backupSysSt->fetchAll();
   .sys-toggle label { font-size:.75rem; color:var(--text2); cursor:pointer; flex:1; }
   .export-row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
   .export-desc { font-size:.73rem; color:var(--muted); margin-bottom:12px; }
+  .gm-cards { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+  .gm-card { display:flex; flex-direction:column; gap:6px; padding:14px 14px; background:var(--surface2); border:1px solid var(--border2); cursor:pointer; }
+  .gm-card:has(input:checked) { background:rgba(201,165,60,.07); border-color:var(--accent2); }
+  .gm-card input { position:absolute; opacity:0; pointer-events:none; }
+  .gm-card:has(input:focus-visible) { outline:1px solid var(--accent); }
+  .gm-title { display:flex; align-items:center; gap:8px; font-family:'Bebas Neue',sans-serif; font-size:1.15rem; letter-spacing:.06em; color:var(--accent); }
+  .gm-dot { width:13px; height:13px; border-radius:50%; border:2px solid var(--border2); flex-shrink:0; }
+  .gm-card:has(input:checked) .gm-dot { border:4px solid var(--accent2); background:var(--bg); }
+  .gm-desc { font-size:.7rem; color:var(--text2); line-height:1.6; }
+  .gm-box { margin-top:12px; background:var(--surface2); border:1px solid var(--border); padding:12px 14px; font-size:.7rem; color:var(--text2); line-height:1.6; }
+  .gm-default { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  .gm-lbl { font-size:.56rem; letter-spacing:.2em; text-transform:uppercase; color:var(--muted); }
+  .gm-previews { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .gm-previews .gm-box { display:flex; flex-direction:column; gap:8px; }
+  @media(max-width:600px) { .gm-cards, .gm-previews { grid-template-columns:1fr; } }
 </style>
 <?= csrfScript() ?>
 </head>
@@ -153,6 +173,55 @@ $backupSystems = $backupSysSt->fetchAll();
     <h2>Account</h2>
     <p style="font-size:.8rem;color:var(--text2)">Username: <strong style="color:var(--accent)"><?= htmlspecialchars($user['username']) ?></strong></p>
     <p style="font-size:.75rem;color:var(--muted);margin-top:6px">To change your username, ask the admin.</p>
+  </div>
+
+  <!-- CONDITION GRADING -->
+  <div class="settings-section">
+    <h2>Condition Grading</h2>
+    <p class="export-desc">Choose which grading methods you use. You can switch at any time — nothing is lost: point scores and simple labels are both kept on every copy.</p>
+    <div class="gm-cards" role="radiogroup" aria-label="Grading method">
+      <?php foreach ([
+        'simple' => ['Simple only', 'One label per copy, picked from a list. Quick, and what you used so far.'],
+        'points' => ['Points only', 'Grade each part (box, manual, cartridge…) out of 100 by logging defects. The score maps to a label.'],
+        'both'   => ['Both', 'Use either per copy. Pick a default below and switch any copy in its edit drawer.'],
+      ] as $val => [$title, $desc]): ?>
+      <label class="gm-card">
+        <input type="radio" name="grading_mode" value="<?= $val ?>" <?= $gradingMode === $val ? 'checked' : '' ?> onchange="gmRefresh()">
+        <span class="gm-title"><span class="gm-dot"></span><?= $title ?></span>
+        <span class="gm-desc"><?= $desc ?></span>
+      </label>
+      <?php endforeach; ?>
+    </div>
+
+    <div class="gm-box gm-default" id="gm-default" style="<?= $gradingMode === 'both' ? '' : 'display:none' ?>">
+      <span class="gm-lbl">Default for new copies</span>
+      <div class="gr-switch" role="group" aria-label="Default grading method">
+        <button type="button" data-def="simple" class="<?= $gradingDef === 'simple' ? 'on' : '' ?>" aria-pressed="<?= $gradingDef === 'simple' ? 'true' : 'false' ?>" onclick="gmSetDefault('simple')">Simple</button>
+        <button type="button" data-def="points" class="<?= $gradingDef === 'points' ? 'on' : '' ?>" aria-pressed="<?= $gradingDef === 'points' ? 'true' : 'false' ?>" onclick="gmSetDefault('points')">Points</button>
+      </div>
+      <span style="color:var(--muted)">Switch any copy between Simple and Points in its edit drawer.</span>
+    </div>
+
+    <div class="gm-previews">
+      <div class="gm-box">
+        <span class="gm-lbl">Simple looks like</span>
+        <div style="display:flex;gap:6px;flex-wrap:wrap"><?php foreach ($gradeLabels as $l) echo gradeBadgeHtml($l); ?></div>
+      </div>
+      <div class="gm-box">
+        <span class="gm-lbl">Points looks like</span>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <span style="font-family:'Bebas Neue',sans-serif;font-size:1.5rem;line-height:1;color:<?= htmlspecialchars($previewLabel['color'] ?? 'var(--text2)') ?>">93</span>
+          <?= gradeBadgeHtml($previewLabel) ?>
+          <span style="font-size:.64rem;color:var(--muted)">Box 86 · Cart 98 · Man 97</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="gm-box">
+      <span style="color:var(--wiiu2)">Managed by the admin:</span> the grade labels (and the score each one starts at), format profiles and component templates.
+      Both methods use the same labels, so stats and filters stay consistent.
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn btn-sm" onclick="saveGrading()">Save Grading</button></div>
   </div>
 
   <!-- WISHLIST SHARING -->
@@ -307,7 +376,7 @@ $backupSystems = $backupSysSt->fetchAll();
   <!-- EXPORT / IMPORT -->
   <div class="settings-section">
     <h2>Backup & Restore</h2>
-    <p class="export-desc">Export your collection data (entries, prices, notes, options) as a JSON file. Photos are not included — use Image Backups below. Import restores the data; older exports that still contain photos restore those too.</p>
+    <p class="export-desc">Export your collection data (entries, prices, notes, condition grades, options) as a JSON file. Photos are not included — use Image Backups below. Import restores the data; older exports that still contain photos restore those too.</p>
     <div class="export-row">
       <button class="btn btn-sm" onclick="exportData()">⬇ Export Collection</button>
       <label class="btn btn-sm" style="cursor:pointer">⬆ Import Collection
@@ -459,6 +528,28 @@ function addItem(listId) {
 }
 
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+// ── CONDITION GRADING ──
+let gmDefault = <?= json_encode($gradingDef) ?>;
+function gmRefresh() {
+  const mode = document.querySelector('input[name="grading_mode"]:checked')?.value;
+  document.getElementById('gm-default').style.display = mode === 'both' ? '' : 'none';
+}
+function gmSetDefault(v) {
+  gmDefault = v;
+  document.querySelectorAll('#gm-default [data-def]').forEach(b => {
+    b.classList.toggle('on', b.dataset.def === v);
+    b.setAttribute('aria-pressed', b.dataset.def === v ? 'true' : 'false');
+  });
+}
+async function saveGrading() {
+  const mode = document.querySelector('input[name="grading_mode"]:checked')?.value || 'simple';
+  const res = await fetch(`${BASE}/api/settings.php`,{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({action:'save_grading', mode, default: gmDefault})
+  }).then(r=>r.json()).catch(()=>({ok:false}));
+  toast(res.ok ? 'Grading preferences saved.' : (res.error||'Error.'), !res.ok);
+}
 
 // ── AUCTION SITES ──
 async function loadAuctionSites() {

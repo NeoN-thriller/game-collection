@@ -5,74 +5,75 @@ $user = requireAuth();
 $body = json_decode(file_get_contents('php://input'), true);
 if (!$body) jsonOut(['ok'=>false,'error'=>'No data'], 400);
 
-$gameId       = (int)($body['game_id']      ?? 0);
-$copyNum      = max(1, (int)($body['copy_number'] ?? 1));
-$owned        = isset($body['owned'])        ? (int)(bool)$body['owned']    : 0;
-$quality      = $body['quality']             ?? '';
-$complete     = $body['completeness']        ?? '';
-$played       = $body['played_status']       ?? '';
-$wishlist     = isset($body['wishlist'])     ? (int)(bool)$body['wishlist']  : 0;
-$pricePaid    = isset($body['price_paid'])   && $body['price_paid']   !== '' ? (float)$body['price_paid']   : null;
-$chartPrice   = isset($body['chart_price'])  && $body['chart_price']  !== '' ? (float)$body['chart_price']  : null;
-$priceMin     = isset($body['price_min'])    && $body['price_min']    !== '' ? (float)$body['price_min']    : null;
-$priceMax     = isset($body['price_max'])    && $body['price_max']    !== '' ? (float)$body['price_max']    : null;
-$upgrade      = isset($body['upgrade'])      ? (int)(bool)$body['upgrade']   : 0;
-$upReason     = $body['upgrade_reason']      ?? null;
-$notes        = $body['notes']               ?? null;
-$tag          = $body['tag']                 ?? null;
-$valuePriceType = in_array($body['value_price_type']??'', ['loose','cib','new']) ? $body['value_price_type'] : 'cib';
-$primaryPhoto = isset($body['primary_photo']) && $body['primary_photo'] !== '' ? $body['primary_photo'] : null;
-
+$gameId  = (int)($body['game_id'] ?? 0);
+$copyNum = max(1, (int)($body['copy_number'] ?? 1));
 if (!$gameId) jsonOut(['ok'=>false,'error'=>'Invalid game'], 400);
 
 $chk = db()->prepare("SELECT id FROM games WHERE id=?");
 $chk->execute([$gameId]);
 if (!$chk->fetch()) jsonOut(['ok'=>false,'error'=>'Game not found'], 404);
 
-$st = db()->prepare("
-    INSERT INTO collection_entries
-        (user_id, game_id, copy_number, owned, quality, completeness, played_status,
-         wishlist, price_paid, chart_price, price_min, price_max,
-         upgrade, upgrade_reason, notes, tag, value_price_type, primary_photo)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-    ON DUPLICATE KEY UPDATE
-        owned          = VALUES(owned),
-        quality        = VALUES(quality),
-        completeness   = VALUES(completeness),
-        played_status  = VALUES(played_status),
-        wishlist       = VALUES(wishlist),
-        price_paid     = VALUES(price_paid),
-        chart_price    = VALUES(chart_price),
-        price_min      = VALUES(price_min),
-        price_max      = VALUES(price_max),
-        upgrade        = VALUES(upgrade),
-        upgrade_reason = VALUES(upgrade_reason),
-        notes          = VALUES(notes),
-        tag            = VALUES(tag),
-        value_price_type = VALUES(value_price_type),
-        primary_photo  = VALUES(primary_photo),
-        updated_at     = NOW()
-");
-$st->execute([
-    $user['id'], $gameId, $copyNum,
-    $owned, $quality, $complete, $played,
-    $wishlist, $pricePaid, $chartPrice, $priceMin, $priceMax,
-    $upgrade, $upReason, $notes, $tag, $valuePriceType, $primaryPhoto
-]);
+// Only the fields present in the request are written, so quick toggles
+// (owned / wishlist / upgrade) never wipe the copy's other details or its grading.
+$money = fn($v) => ($v !== null && $v !== '') ? (float)$v : null;
+$text  = fn($v) => $v === null ? null : (string)$v;
+$fields = [];
+foreach (['owned','wishlist','upgrade'] as $f)                    if (array_key_exists($f, $body)) $fields[$f] = (int)(bool)$body[$f];
+foreach (['completeness','played_status'] as $f)                   if (array_key_exists($f, $body)) $fields[$f] = (string)($body[$f] ?? '');
+foreach (['price_paid','chart_price','price_min','price_max'] as $f) if (array_key_exists($f, $body)) $fields[$f] = $money($body[$f]);
+foreach (['upgrade_reason','notes','tag'] as $f)                   if (array_key_exists($f, $body)) $fields[$f] = $text($body[$f]);
+if (array_key_exists('value_price_type', $body)) {
+    $fields['value_price_type'] = in_array($body['value_price_type'], ['loose','cib','new'], true) ? $body['value_price_type'] : 'cib';
+}
+if (array_key_exists('primary_photo', $body)) {
+    $fields['primary_photo'] = ($body['primary_photo'] ?? '') !== '' ? (string)$body['primary_photo'] : null;
+}
+
+gradingConfig(); // loads (and on first run seeds) grading data before the transaction starts
+
+$pdo = db();
+$pdo->beginTransaction();
+try {
+    $find = $pdo->prepare("SELECT id FROM collection_entries WHERE user_id=? AND game_id=? AND copy_number=? FOR UPDATE");
+    $find->execute([$user['id'], $gameId, $copyNum]);
+    $entryId = $find->fetchColumn();
+
+    if (!$entryId) {
+        $cols = array_merge(['user_id','game_id','copy_number'], array_keys($fields));
+        $vals = array_merge([$user['id'], $gameId, $copyNum], array_values($fields));
+        $pdo->prepare("INSERT INTO collection_entries (".implode(',', $cols).") VALUES (".implode(',', array_fill(0, count($cols), '?')).")")
+            ->execute($vals);
+        $entryId = (int)$pdo->lastInsertId();
+    } elseif ($fields) {
+        $set = implode(', ', array_map(fn($c) => "$c=?", array_keys($fields)));
+        $pdo->prepare("UPDATE collection_entries SET $set, updated_at=NOW() WHERE id=?")
+            ->execute([...array_values($fields), $entryId]);
+    }
+
+    // Condition grading: {method, label_id, profile_id, parts?}
+    if (isset($body['grading']) && is_array($body['grading'])) {
+        saveEntryGrading((int)$entryId, (int)$user['id'], $body['grading']);
+    }
+    $pdo->commit();
+} catch (Throwable $e) {
+    $pdo->rollBack();
+    jsonOut(['ok'=>false,'error'=>'Saving failed: '.$e->getMessage()], 500);
+}
 
 $st2 = db()->prepare("
     SELECT ce.*, GROUP_CONCAT(cp.filename ORDER BY cp.sort_order SEPARATOR '||') AS photos_raw
     FROM collection_entries ce
     LEFT JOIN copy_photos cp ON cp.entry_id = ce.id
-    WHERE ce.user_id=? AND ce.game_id=? AND ce.copy_number=?
+    WHERE ce.id=?
     GROUP BY ce.id
 ");
-$st2->execute([$user['id'], $gameId, $copyNum]);
+$st2->execute([$entryId]);
 $entry = $st2->fetch();
 $entry['owned']    = (bool)$entry['owned'];
 $entry['upgrade']  = (bool)$entry['upgrade'];
 $entry['wishlist'] = (bool)$entry['wishlist'];
 $entry['photos']   = $entry['photos_raw'] ? explode('||', $entry['photos_raw']) : [];
 unset($entry['photos_raw']);
+$entry['grading']  = loadEntryGrading([$entry['id']])[(int)$entry['id']] ?? null;
 
 jsonOut(['ok'=>true,'entry'=>$entry]);

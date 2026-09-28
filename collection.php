@@ -36,6 +36,8 @@ $playedOpts->execute([$user['id']]); $playedOpts = $playedOpts->fetchAll(PDO::FE
 
 $tagOptsQ = db()->prepare("SELECT label FROM user_tag_options WHERE user_id=? ORDER BY sort_order");
 $tagOptsQ->execute([$user['id']]); $tagOpts = $tagOptsQ->fetchAll(PDO::FETCH_COLUMN);
+
+$gradeLabels = gradingConfig()['labels'];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -89,7 +91,15 @@ $tagOptsQ->execute([$user['id']]); $tagOpts = $tagOptsQ->fetchAll(PDO::FETCH_COL
   <select id="tb-quality">
     <option value="" disabled selected>— All Conditions —</option>
     <option value="">All Conditions</option>
-    <option>Mint</option><option>Good</option><option>Fair</option><option>Poor</option>
+    <?php foreach ($gradeLabels as $l): ?><option value="label:<?= $l['id'] ?>"><?= htmlspecialchars($l['name']) ?> (<?= $l['min_score'] ?>+)</option><?php endforeach; ?>
+    <option value="m:points">Point grades</option>
+    <option value="m:simple">Simple grades</option>
+    <option value="m:none">Not graded</option>
+  </select>
+  <select id="tb-minscore" style="max-width:150px">
+    <option value="" disabled selected>— Min Score —</option>
+    <option value="">Any score</option>
+    <?php foreach ([50,60,70,80,85,90,95] as $m): ?><option value="<?= $m ?>">Score ≥ <?= $m ?></option><?php endforeach; ?>
   </select>
   <select id="tb-completeness">
     <option value="" disabled selected>— All Completeness —</option>
@@ -190,20 +200,13 @@ $tagOptsQ->execute([$user['id']]); $tagOpts = $tagOptsQ->fetchAll(PDO::FETCH_COL
       </div>
 
       <div class="drawer-section">
-        <div class="section-label">Condition</div>
-        <div class="field-row">
-          <div class="field"><label>Quality</label>
-            <select id="d-quality">
-              <option value="">— N/A —</option>
-              <option>Mint</option><option>Good</option><option>Fair</option><option>Poor</option>
-            </select>
-          </div>
-          <div class="field"><label>Completeness</label>
-            <select id="d-completeness">
-              <option value="">— N/A —</option>
-              <?php foreach ($compOpts as $c): ?><option><?= htmlspecialchars($c) ?></option><?php endforeach; ?>
-            </select>
-          </div>
+        <!-- Condition grading (assets/js/grading.js) — takes the Completeness field into its top row -->
+        <div id="d-grading"></div>
+        <div class="field" id="d-completeness-field"><label>Completeness</label>
+          <select id="d-completeness">
+            <option value="">— N/A —</option>
+            <?php foreach ($compOpts as $c): ?><option><?= htmlspecialchars($c) ?></option><?php endforeach; ?>
+          </select>
         </div>
         <div class="field-row">
           <div class="field"><label>Played Status</label>
@@ -320,6 +323,8 @@ $tagOptsQ->execute([$user['id']]); $tagOpts = $tagOptsQ->fetchAll(PDO::FETCH_COL
 
 <div class="toast" id="toast"></div>
 
+<script>window.GRADING = <?= gradingClientJson($user) ?>;</script>
+<script src="<?= BASE_URL ?>/assets/js/grading.js?v=<?= @filemtime(__DIR__.'/assets/js/grading.js') ?>"></script>
 <script>
 const BASE     = <?= json_encode(BASE_URL) ?>;
 const USER_ID  = <?= (int)$user['id'] ?>;
@@ -340,6 +345,11 @@ let lbRawNames= [];
 let lbContext  = null;
 let lbIdx     = 0;
 let photoTs   = {}; // filename -> latest timestamp after rotation
+const gradeEditor = new GradingUI.Editor({
+  root:       document.getElementById('d-grading'),
+  compField:  document.getElementById('d-completeness-field'),
+  compSelect: document.getElementById('d-completeness'),
+});
 
 // Column preferences
 const DEFAULT_COL_ORDER = ['img','owned','wishlist','upgrade','title','quality','completeness','played','copies','price_paid','buy_range','loose_price','cib_price','new_price','upgrade_reason','tag','notes'];
@@ -451,7 +461,8 @@ function getDisplayPhoto(game) {
 function render() {
   const q  = document.getElementById('tb-search').value.toLowerCase();
   const fo = document.getElementById('tb-owned').value;    // 'all'|'owned'|'1'|'0'
-  const fq = document.getElementById('tb-quality').value;
+  const fq = document.getElementById('tb-quality').value;   // ''|'label:<id>'|'m:points'|'m:simple'|'m:none'
+  const fmin = parseInt(document.getElementById('tb-minscore').value, 10);
   const fc = document.getElementById('tb-completeness').value;
   const fp = document.getElementById('tb-played').value;
   const ftag = document.getElementById('tb-tag').value;
@@ -469,7 +480,8 @@ function render() {
     // fo === 'all' → show everything
 
     if (q  && !g.title.toLowerCase().includes(q)) return false;
-    if (fq && !copies.some(c=>c.quality===fq)) return false;
+    if (fq && !copies.some(c=>matchesCondition(c, fq))) return false;
+    if (fmin && !copies.some(c=>{ const e=GradingCore.effective(c); return e.score!==null && e.score>=fmin; })) return false;
     if (fc && !copies.some(c=>c.completeness===fc)) return false;
     if (fp && !copies.some(c=>c.played_status===fp)) return false;
     if (ftag && !copies.some(c=>c.tag===ftag)) return false;
@@ -478,7 +490,8 @@ function render() {
     return true;
   });
 
-  const qualOrder = {Mint:0,Good:1,Fair:2,Poor:3,'':4};
+  // Best condition among the copies (owned ones first): higher score / label = higher
+  const condValue = g => { const cs=entryMap[g.id]||[]; const own=cs.filter(c=>c.owned); return Math.max(-1, ...(own.length?own:cs).map(c=>GradingCore.sortValue(c))); };
   list.sort((a,b) => {
     let va, vb;
     const ca = (entryMap[a.id]||[]).find(c=>c.copy_number==1)||{};
@@ -486,7 +499,7 @@ function render() {
     switch(sortKey) {
       case 'title':        va=a.sort_title||a.title; vb=b.sort_title||b.title; break;
       case 'owned':        va=(entryMap[a.id]||[]).some(c=>c.owned)?0:1; vb=(entryMap[b.id]||[]).some(c=>c.owned)?0:1; break;
-      case 'quality':      va=qualOrder[ca.quality||'']; vb=qualOrder[cb.quality||'']; break;
+      case 'quality':      va=-condValue(a); vb=-condValue(b); break;
       case 'completeness': va=ca.completeness||'zzz'; vb=cb.completeness||'zzz'; break;
       case 'played_status':va=ca.played_status||'zzz'; vb=cb.played_status||'zzz'; break;
       case 'copies':       va=(entryMap[a.id]||[]).length; vb=(entryMap[b.id]||[]).length; break;
@@ -505,6 +518,7 @@ function render() {
 
   const tbody = document.getElementById('tbody');
   tbody.innerHTML = '';
+  GradingUI.beginRender();
 
   list.forEach(g => {
     const copies    = entryMap[g.id] || [];
@@ -528,20 +542,11 @@ function render() {
       imgCell = `<div class="img-placeholder" onclick="openDrawer(${g.id})">+</div>`;
     }
 
-    const qcls = {Mint:'q-mint',Good:'q-good',Fair:'q-fair',Poor:'q-poor'}[c1.quality||'']||'q-na';
-
     // For multi-copy display: only show condition/paid/notes for owned copies
     const displayCopies = ownedCopies; // only owned copies shown in detail columns
 
-    // Condition — owned copies only
-    const qualCell = displayCopies.length === 0
-      ? `<span class="price-na">—</span>`
-      : displayCopies.length > 1
-        ? `<div style="display:flex;flex-direction:column;gap:2px;align-items:flex-start">${displayCopies.map(c => {
-            const cls = {Mint:'q-mint',Good:'q-good',Fair:'q-fair',Poor:'q-poor'}[c.quality||'']||'q-na';
-            return `<span class="qbadge ${cls}">${c.quality||'—'}</span>`;
-          }).join('')}</div>`
-        : `<span class="qbadge ${{Mint:'q-mint',Good:'q-good',Fair:'q-fair',Poor:'q-poor'}[displayCopies[0].quality||'']||'q-na'}">${displayCopies[0].quality||'—'}</span>`;
+    // Condition — owned copies only (score + label for point grades, label for simple grades)
+    const qualCell = GradingUI.cellHtml(displayCopies, {switchLink:true});
 
     // Completeness — owned copies only
     const compCell = displayCopies.length === 0
@@ -683,29 +688,15 @@ document.querySelectorAll('th[data-sort]').forEach(th => {
   });
 });
 
-// TOGGLE OWNED — independent of wishlist
+// TOGGLE OWNED — independent of wishlist (only the toggled field is sent; the server keeps the rest)
 async function toggleOwned(gameId) {
   const copies   = entryMap[gameId]||[];
   const c1       = copies.find(c=>c.copy_number==1);
   const newOwned = c1 ? !c1.owned : true;
-  // Preserve all existing values, only change owned
-  const existing = c1 || {};
   const res = await apiFetch('/api/entry_save.php', {
-    game_id:        gameId,
-    copy_number:    1,
-    owned:          newOwned ? 1 : 0,
-    wishlist:       existing.wishlist ? 1 : 0,
-    upgrade:        existing.upgrade  ? 1 : 0,
-    quality:        existing.quality        || '',
-    completeness:   existing.completeness   || '',
-    played_status:  existing.played_status  || '',
-    price_paid:     existing.price_paid     ?? null,
-    chart_price:    existing.chart_price    ?? null,
-    price_min:      existing.price_min      ?? null,
-    price_max:      existing.price_max      ?? null,
-    upgrade_reason: existing.upgrade_reason || '',
-    notes:          existing.notes          || '',
-    primary_photo:  existing.primary_photo  || null,
+    game_id:     gameId,
+    copy_number: 1,
+    owned:       newOwned ? 1 : 0,
   });
   if (res.ok) {
     if (!entryMap[gameId]) entryMap[gameId] = [];
@@ -721,23 +712,10 @@ async function toggleWishlist(gameId) {
   const copies  = entryMap[gameId]||[];
   const c1      = copies.find(c=>c.copy_number==1);
   const newWish = c1 ? !c1.wishlist : true;
-  const existing = c1 || {};
   const res = await apiFetch('/api/entry_save.php', {
-    game_id:        gameId,
-    copy_number:    1,
-    owned:          existing.owned   ? 1 : 0,
-    wishlist:       newWish ? 1 : 0,
-    upgrade:        existing.upgrade ? 1 : 0,
-    quality:        existing.quality        || '',
-    completeness:   existing.completeness   || '',
-    played_status:  existing.played_status  || '',
-    price_paid:     existing.price_paid     ?? null,
-    chart_price:    existing.chart_price    ?? null,
-    price_min:      existing.price_min      ?? null,
-    price_max:      existing.price_max      ?? null,
-    upgrade_reason: existing.upgrade_reason || '',
-    notes:          existing.notes          || '',
-    primary_photo:  existing.primary_photo  || null,
+    game_id:     gameId,
+    copy_number: 1,
+    wishlist:    newWish ? 1 : 0,
   });
   if (res.ok) {
     if (!entryMap[gameId]) entryMap[gameId] = [];
@@ -753,23 +731,10 @@ async function toggleUpgrade(gameId) {
   const copies     = entryMap[gameId]||[];
   const c1         = copies.find(c=>c.copy_number==1);
   const newUpgrade = c1 ? !c1.upgrade : true;
-  const existing   = c1 || {};
   const res = await apiFetch('/api/entry_save.php', {
-    game_id:        gameId,
-    copy_number:    1,
-    owned:          existing.owned    ? 1 : 0,
-    wishlist:       existing.wishlist ? 1 : 0,
-    upgrade:        newUpgrade ? 1 : 0,
-    quality:        existing.quality        || '',
-    completeness:   existing.completeness   || '',
-    played_status:  existing.played_status  || '',
-    price_paid:     existing.price_paid     ?? null,
-    chart_price:    existing.chart_price    ?? null,
-    price_min:      existing.price_min      ?? null,
-    price_max:      existing.price_max      ?? null,
-    upgrade_reason: existing.upgrade_reason || '',
-    notes:          existing.notes          || '',
-    primary_photo:  existing.primary_photo  || null,
+    game_id:     gameId,
+    copy_number: 1,
+    upgrade:     newUpgrade ? 1 : 0,
   });
   if (res.ok) {
     if (!entryMap[gameId]) entryMap[gameId] = [];
@@ -866,8 +831,8 @@ function renderCopyTabs() {
 function loadCopyIntoForm(copyNum) {
   const c=(entryMap[editGameId]||[]).find(x=>x.copy_number==copyNum)||{};
   setTog('d-owned',   c.owned||false,   'lbl-owned',   c.owned?'In collection':'Not owned');
-  document.getElementById('d-quality').value      = c.quality       ||'';
   document.getElementById('d-completeness').value = c.completeness  ||'';
+  gradeEditor.load(c, {systemId: SYS_ID});
   document.getElementById('d-played').value       = c.played_status ||'';
   document.getElementById('d-price').value        = c.price_paid   !=null?c.price_paid:'';
   document.getElementById('d-chart').value        = c.chart_price  !=null?c.chart_price:'';
@@ -891,7 +856,6 @@ async function saveEntry() {
   const payload = {
     game_id:editGameId, copy_number:editCopy,
     owned:          document.getElementById('d-owned').checked?1:0,
-    quality:        document.getElementById('d-quality').value,
     completeness:   document.getElementById('d-completeness').value,
     played_status:  document.getElementById('d-played').value,
     price_paid:     document.getElementById('d-price').value||null,
@@ -906,6 +870,8 @@ async function saveEntry() {
     value_price_type: document.querySelector('input[name="d-value-type"]:checked')?.value || 'cib',
     primary_photo:  document.getElementById('d-primary').value||null,
   };
+  const grading = gradeEditor.getPayload();
+  if (grading) payload.grading = grading;
   const res = await apiFetch('/api/entry_save.php', payload);
   if (res.ok) {
     if (!entryMap[editGameId]) entryMap[editGameId]=[];
@@ -1091,6 +1057,23 @@ async function lbRotate(e, degrees) {
 }
 
 
+// CONDITION FILTER — fq: 'label:<id>' | 'm:points' | 'm:simple' | 'm:none'
+function matchesCondition(c, fq) {
+  const e = GradingCore.effective(c);
+  if (fq.startsWith('label:')) return !!e.label && String(e.label.id) === fq.slice(6);
+  if (fq === 'm:points') return e.score !== null;
+  if (fq === 'm:simple') return e.score === null && !!e.label;
+  if (fq === 'm:none')   return !e.label;
+  return true;
+}
+
+// "Simple grade · switch to points" in the Condition column
+window.gradingSwitchToPoints = (gameId, copyNo) => {
+  openDrawer(gameId);
+  if (copyNo && copyNo !== editCopy) { editCopy = copyNo; renderCopyTabs(); loadCopyIntoForm(copyNo); }
+  gradeEditor.showPoints();
+};
+
 // SYSTEM SWITCH
 function switchSystem(id) {
   document.cookie=`last_system=${id};path=/;max-age=${60*60*24*365}`;
@@ -1135,7 +1118,7 @@ function setUpgrade(val) {
 setOwned('owned'); setWishlist(''); setUpgrade('');
 
 // Dropdown filter listeners
-['tb-search','tb-quality','tb-completeness','tb-played','tb-tag'].forEach(id=>{
+['tb-search','tb-quality','tb-minscore','tb-completeness','tb-played','tb-tag'].forEach(id=>{
   document.getElementById(id)?.addEventListener('input',render);
   document.getElementById(id)?.addEventListener('change',render);
 });

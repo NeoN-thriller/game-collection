@@ -1,6 +1,6 @@
 # Game Collection
 
-A self-hosted, invite-only web app for tracking a physical (PAL) video game collection — what you own, what condition it's in, what it's worth, and what you still want.
+A self-hosted, invite-only web app for tracking a physical video game collection — what you own, what condition it's in, what it's worth, and what you still want.
 
 Built with plain PHP, MySQL and vanilla JavaScript. No frameworks, no build step, no Composer — drop the files on a PHP-enabled web server, point it at a database, and go.
 
@@ -12,19 +12,28 @@ Built with plain PHP, MySQL and vanilla JavaScript. No frameworks, no build step
 - **Per-system game lists** — each system (e.g. *PAL Nintendo DS*) has a master list of games maintained by the admin.
 - **Track every copy** — mark games as owned, and record multiple copies of the same game, each with its own details.
 - **Rich per-copy details** in a slide-out edit drawer:
-  - Condition (Mint / Good / Fair / Poor)
+  - Condition — a simple label (*Mint / Good / Fair / Poor* by default), or a point grade (see below)
   - Completeness (*Sealed, CIB, No Manual, No Box, Disc / Cart Only, Loose, Incomplete* — fully customizable)
   - Played status (*Finished, Started, Stuck, Cheated* — fully customizable)
   - Price paid, personal price, and a buy-range (min / max) for wishlist hunting
   - Which price tier (loose / CIB / new) counts toward your collection value
   - Custom tags, notes, and an "upgrade wanted" flag with a reason
 - **Photos** — upload photos per copy, rotate them, and choose a primary photo. Uploads are automatically resized and EXIF-rotated (size and quality configurable by the admin).
-- **Filtering and search** — by title, condition, completeness, played status, tag, owned / not owned, wishlisted, and upgrade-wanted.
+- **Filtering and search** — by title, condition (label, point / simple grades, minimum score), completeness, played status, tag, owned / not owned, wishlisted, and upgrade-wanted.
 - **Configurable columns** — choose which columns are visible in the collection and wishlist tables (saved per user).
 
+### Condition grading
+- Two methods, chosen per user in **Settings**: *Simple only*, *Points only*, or *Both* (with a default for new copies and a Simple | Points switch per copy).
+- **Simple:** one label per copy.
+- **Points:** every part of a copy (box, cartridge, manual, map, disc, jewel case…) starts at **100** and loses points for logged defects (+/− counters, and pick-one levels such as *Fading: minor / moderate / heavy*). The copy's score is a weighted average of the parts that are present — missing parts are skipped, not penalised.
+  - A quantity per part (e.g. 2 posters, each graded separately) and your own extra items (e.g. a magazine flyer).
+  - The score maps back to a label, so badges, filters and dashboard stats work the same for both methods.
+- Switching method never loses data: point grades and simple labels are both kept on every copy.
+- The admin manages the **grade labels** (names, colours, the score each one starts at), **format profiles** (which parts a copy has and their weights, with a default per system) and **component templates** (categories and defects). Defaults for cartridges, discs, UMDs, big-box PC games and boxed consoles are included.
+
 ### Dashboard
-- Overall totals: systems, games, owned, completion %, copies, upgrades, wishlisted, total spent, and owned value.
-- A completion card per system with progress, spend, value, condition breakdown, and counts.
+- Overall totals: systems, games, owned, completion %, copies, upgrades, wishlisted, total spent, owned value, and average condition score.
+- A completion card per system with progress, spend, value, condition breakdown (per grade label), average score, and counts.
 - Hide systems you don't collect for, and reorder the ones you do.
 
 ### Pricing (PriceCharting)
@@ -38,7 +47,7 @@ Built with plain PHP, MySQL and vanilla JavaScript. No frameworks, no build step
 - **Public sharing** — optionally share a read-only wishlist link (`wishlist.php?token=…`). The link can be regenerated at any time, which kills the old one.
 
 ### Backup & restore
-- Export your entire collection (entries and photo references) as JSON, and import it again later (merges with existing data).
+- Export your entire collection (entries, condition grades and option lists) as JSON, and import it again later (merges with existing data). Photos are backed up separately as per-system zips.
 
 ### Admin panel
 - Generate and revoke **invite codes** (registration is invite-only).
@@ -47,6 +56,7 @@ Built with plain PHP, MySQL and vanilla JavaScript. No frameworks, no build step
 - Add **systems** and set a system icon.
 - Maintain **game lists** per system — add titles one by one, or bulk-import a pasted list (duplicates are detected and skipped).
 - **PriceCharting import** and **image settings** (max width / height and JPEG quality).
+- **Condition grading** — edit grade labels, format profiles and component templates; recalculate scores; **export / import the whole grading system** as JSON (merge by name, or replace), or reset it to the built-in defaults.
 
 ### Security
 - Passwords hashed with bcrypt (cost 12), minimum length of 12 characters.
@@ -136,13 +146,25 @@ After you sign in:
 - Add your completeness and played-status options under **Settings** (these are only seeded automatically for users who register with an invite code).
 - Use the **Admin** panel to add systems, fill the game lists, and generate invite codes for other users.
 
+### Upgrading an existing install
+
+1. Back up the database.
+2. Copy the new files over the old ones (keep your `config.php`).
+3. Run the migrations in `migrations/` that you haven't run yet, in date order, e.g.:
+
+   ```bash
+   mysql -u game_user -p game_collection < migrations/2026-09_point_grading.sql
+   ```
+
+4. Open any page. On first load the app seeds the default grading data from `assets/grading-defaults.json`, gives each system a default format profile based on its name, and converts the old Mint / Good / Fair / Poor values to grade labels. Systems it can't match are listed under **Admin → Format Profiles**.
+
 ---
 
 ## Usage
 
 1. **Admin:** add systems (e.g. *PAL Nintendo 64*, short name *N64*), then fill their game lists by pasting titles or importing a PriceCharting CSV.
 2. **Users:** open **Collection**, pick a system, and tick off what you own. Click a game to open the edit drawer and add details and photos.
-3. **Settings:** choose visible systems and their order, table columns, auction sites, tags, completeness and played options, and wishlist sharing. You can also export or import a backup and change your password here.
+3. **Settings:** choose your condition grading method, visible systems and their order, table columns, auction sites, tags, completeness and played options, and wishlist sharing. You can also export or import a backup and change your password here.
 4. **Dashboard:** see your progress and value at a glance.
 
 ### PriceCharting CSV format
@@ -163,6 +185,7 @@ The `console` value must match a system's **short name** (case-insensitive). Row
 
 ```
 ├── schema.sql           Database schema (fresh installs only)
+├── migrations/          Schema updates for existing installs
 ├── index.php            Sign in / register (invite code)
 ├── dashboard.php        Overview and per-system completion cards
 ├── collection.php       Main collection table and edit drawer
@@ -173,9 +196,12 @@ The `console` value must match a system's **short name** (case-insensitive). Row
 ├── pc_import.php        PriceCharting CSV import
 ├── config.php           Site configuration (edit this)
 ├── core.php             Sessions, DB, auth, CSRF, throttling (don't edit)
+├── grading.php          Condition grading: labels, profiles, templates, scoring, export/import
 ├── web.config           IIS configuration
 ├── api/                 JSON endpoints used by the front end
 ├── assets/css/main.css  Stylesheet
+├── assets/js/           grading.js (drawer editor + scoring), grading-admin.js (admin editors)
+├── assets/grading-defaults.json  Default grading system (labels, templates, profiles, system matching)
 └── uploads/             User photos, default images, image settings
 ```
 
@@ -183,7 +209,7 @@ The `console` value must match a system's **short name** (case-insensitive). Row
 
 ## Database
 
-`schema.sql` creates 12 tables:
+`schema.sql` creates 23 tables:
 
 | Table | Purpose |
 |---|---|
@@ -195,10 +221,16 @@ The `console` value must match a system's **short name** (case-insensitive). Row
 | `games` | Master game list per system, including PriceCharting IDs and prices |
 | `collection_entries` | One row per user, per game, per copy (owned, condition, prices, notes…) |
 | `copy_photos` | Photos attached to a collection entry |
+| `user_backups` | Per-system photo backup zips (generated on request, expire after 24 hours) |
 | `user_system_prefs` | Per-user system visibility, order, and whether a system counts toward totals |
 | `user_completeness_options` | Each user's completeness labels |
 | `user_played_options` | Each user's played-status labels |
 | `user_tag_options` | Each user's tag labels |
+| `app_settings` | Site-wide key/value settings (e.g. the default weight of users' own items) |
+| `grade_labels` | Condition labels: name, short code, colour, and the score each one starts at |
+| `grade_templates`, `grade_categories`, `grade_defects` | How a part is graded: categories (max points) and defects (deductions) |
+| `grade_profiles`, `grade_profile_components` | Format profiles: which parts a copy has, their template and weight |
+| `entry_parts`, `entry_part_units`, `entry_defects` | Per-copy point grading: included parts and quantities, one row per unit (cached score), and logged defects |
 
 Foreign keys use `ON DELETE CASCADE`, so deleting a user, system or game also removes its related entries and photo records. The image files themselves stay in `uploads/`.
 
