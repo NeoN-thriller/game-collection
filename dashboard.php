@@ -90,11 +90,11 @@ $totalCibAll  = array_sum(array_column($statsRaw,   'cib_total'));
 $totalOwnedVal= array_sum(array_column($statsRaw,   'owned_value'));
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="<?= currentLang() ?>">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dashboard — Game Collection</title>
+<title><?= pageTitle(tRaw('common.nav.dashboard')) ?></title>
 <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/main.css?v=<?= @filemtime(__DIR__.'/assets/css/main.css') ?>">
 <?= themeHead($user) ?>
 <style>
@@ -196,73 +196,74 @@ $totalOwnedVal= array_sum(array_column($statsRaw,   'owned_value'));
   }
 </style>
 <?= csrfScript() ?>
+<?= appScript(['dashboard']) ?>
 </head>
 <body>
 
 <header class="site-header">
-  <a href="<?= BASE_URL ?>/collection.php" class="site-logo" style="text-decoration:none">Game <span>Collection</span></a>
+  <a href="<?= BASE_URL ?>/collection.php" class="site-logo" style="text-decoration:none"><?= siteLogoHtml() ?></a>
   <nav class="site-nav">
     <span class="nav-user">👤 <?= htmlspecialchars($user['username']) ?></span>
-    <a href="<?= BASE_URL ?>/wishlist.php" class="nav-link">Wishlist</a>
-    <a href="<?= BASE_URL ?>/collection.php" class="nav-link">Collection</a>
+    <a href="<?= BASE_URL ?>/wishlist.php" class="nav-link"><?= t('common.nav.wishlist') ?></a>
+    <a href="<?= BASE_URL ?>/collection.php" class="nav-link"><?= t('common.nav.collection') ?></a>
     <?php if (isAdmin()): ?>
-    <a href="<?= BASE_URL ?>/admin.php" class="nav-link">Admin</a>
+    <a href="<?= BASE_URL ?>/admin.php" class="nav-link"><?= t('common.nav.admin') ?></a>
     <?php endif; ?>
-    <a href="<?= BASE_URL ?>/settings.php" class="nav-link">Settings</a>
-    <a href="<?= BASE_URL ?>/api/logout.php" class="nav-link">Sign Out</a>
+    <a href="<?= BASE_URL ?>/settings.php" class="nav-link"><?= t('common.nav.settings') ?></a>
+    <a href="<?= BASE_URL ?>/api/logout.php" class="nav-link"><?= t('common.nav.sign_out') ?></a>
   </nav>
 </header>
 
 <div class="dash-wrap">
-  <div class="dash-title">Dashboard</div>
-  <div class="dash-sub">Overall collection overview — <?= htmlspecialchars($user['username']) ?></div>
+  <div class="dash-title"><?= t('common.nav.dashboard') ?></div>
+  <div class="dash-sub"><?= t('dashboard.subtitle', ['user' => $user['username']]) ?></div>
 
   <!-- OVERALL STATS -->
   <div class="overall-grid">
     <div class="overall-stat">
       <div class="overall-val"><?= count($systems) ?></div>
-      <div class="overall-label">Systems</div>
+      <div class="overall-label"><?= t('dashboard.systems') ?></div>
     </div>
     <div class="overall-stat">
-      <div class="overall-val"><?= number_format($totalGames) ?></div>
-      <div class="overall-label">Total Games</div>
+      <div class="overall-val"><?= fmtNum($totalGames) ?></div>
+      <div class="overall-label"><?= t('dashboard.total_games') ?></div>
     </div>
     <div class="overall-stat">
-      <div class="overall-val blue"><?= number_format($totalOwned) ?></div>
-      <div class="overall-label">Owned</div>
+      <div class="overall-val blue"><?= fmtNum($totalOwned) ?></div>
+      <div class="overall-label"><?= t('dashboard.owned') ?></div>
     </div>
     <div class="overall-stat">
       <div class="overall-val"><?= $totalGames > 0 ? round($totalOwned/$totalGames*100) : 0 ?>%</div>
-      <div class="overall-label">Completion</div>
+      <div class="overall-label"><?= t('dashboard.completion') ?></div>
     </div>
     <div class="overall-stat">
-      <div class="overall-val green"><?= number_format($totalCopies) ?></div>
-      <div class="overall-label">Total Copies</div>
+      <div class="overall-val green"><?= fmtNum($totalCopies) ?></div>
+      <div class="overall-label"><?= t('dashboard.total_copies') ?></div>
     </div>
     <div class="overall-stat">
-      <div class="overall-val orange"><?= number_format($totalUpgrade) ?></div>
-      <div class="overall-label">Upgrades</div>
+      <div class="overall-val orange"><?= fmtNum($totalUpgrade) ?></div>
+      <div class="overall-label"><?= t('dashboard.upgrades') ?></div>
     </div>
     <div class="overall-stat">
-      <div class="overall-val blue"><?= number_format($totalWish) ?></div>
-      <div class="overall-label">Wishlisted</div>
+      <div class="overall-val blue"><?= fmtNum($totalWish) ?></div>
+      <div class="overall-label"><?= t('dashboard.wishlisted') ?></div>
     </div>
     <div class="overall-stat">
-      <div class="overall-val">€<?= number_format($totalSpent, 0) ?></div>
-      <div class="overall-label">Total Spent</div>
+      <div class="overall-val"><?= money($totalSpent, 0) ?></div>
+      <div class="overall-label"><?= t('dashboard.total_spent') ?></div>
     </div>
     <div class="overall-stat">
-      <div class="overall-val blue">€<?= number_format($totalCibAll, 0) ?></div>
-      <div class="overall-label">CIB All</div>
+      <div class="overall-val blue"><?= money($totalCibAll, 0) ?></div>
+      <div class="overall-label"><?= t('dashboard.cib_all') ?></div>
     </div>
     <div class="overall-stat">
-      <div class="overall-val green">€<?= number_format($totalOwnedVal, 0) ?></div>
-      <div class="overall-label">Owned Value</div>
+      <div class="overall-val green"><?= money($totalOwnedVal, 0) ?></div>
+      <div class="overall-label"><?= t('dashboard.owned_value') ?></div>
     </div>
     <?php if ($avgScoreAll !== null): $al = gradeLabelForScore($avgScoreAll); ?>
-    <div class="overall-stat" title="Average over <?= $scoredTotal ?> point-graded copies">
+    <div class="overall-stat" title="<?= t('dashboard.avg_title', ['n' => $scoredTotal]) ?>">
       <div class="overall-val" style="color:<?= htmlspecialchars($al['color'] ?? 'var(--wiiu2)') ?>"><?= $avgScoreAll ?></div>
-      <div class="overall-label">Avg Score</div>
+      <div class="overall-label"><?= t('dashboard.avg_score') ?></div>
     </div>
     <?php endif; ?>
   </div>
@@ -278,12 +279,12 @@ $totalOwnedVal= array_sum(array_column($statsRaw,   'owned_value'));
     $qualTotal = array_sum($st['labels']);
     $html  = '<div class="sys-stats">';
     $html .= '<div class="sys-stat-row">';
-    $html .= '<div class="sys-stat"><div class="sys-stat-val">€'.number_format((float)$st['total_spent'],0).'</div><div class="sys-stat-label">Spent</div></div>';
-    $html .= '<div class="sys-stat"><div class="sys-stat-val blue">€'.number_format((float)($st['owned_value']??0),0).'</div><div class="sys-stat-label">Val</div></div>';
-    $html .= '<div class="sys-stat"><div class="sys-stat-val" style="color:var(--muted)">€'.number_format((float)($st['cib_total']??0),0).'</div><div class="sys-stat-label">CIB All</div></div>';
+    $html .= '<div class="sys-stat"><div class="sys-stat-val">'.money($st['total_spent'], 0).'</div><div class="sys-stat-label">'.t('dashboard.spent').'</div></div>';
+    $html .= '<div class="sys-stat"><div class="sys-stat-val blue">'.money($st['owned_value'] ?? 0, 0).'</div><div class="sys-stat-label">'.t('dashboard.value_short').'</div></div>';
+    $html .= '<div class="sys-stat"><div class="sys-stat-val" style="color:var(--muted)">'.money($st['cib_total'] ?? 0, 0).'</div><div class="sys-stat-label">'.t('dashboard.cib_all').'</div></div>';
     if ($st['avg_score'] !== null) {
       $al = gradeLabelForScore($st['avg_score']);
-      $html .= '<div class="sys-stat" title="Average over '.(int)$st['scored'].' point-graded copies"><div class="sys-stat-val" style="color:'.htmlspecialchars($al['color'] ?? 'var(--wiiu2)').'">'.(int)$st['avg_score'].'</div><div class="sys-stat-label">Avg Score</div></div>';
+      $html .= '<div class="sys-stat" title="'.t('dashboard.avg_title', ['n' => (int)$st['scored']]).'"><div class="sys-stat-val" style="color:'.htmlspecialchars($al['color'] ?? 'var(--wiiu2)').'">'.(int)$st['avg_score'].'</div><div class="sys-stat-label">'.t('dashboard.avg_score').'</div></div>';
     }
     $html .= '</div>';
     $html .= '<div class="sys-stat-row" style="border-top:1px solid var(--border);padding-top:8px;margin-top:8px">';
@@ -293,11 +294,11 @@ $totalOwnedVal= array_sum(array_column($statsRaw,   'owned_value'));
         $n = $st['labels'][$l['id']] ?? 0;
         if ($n > 0) $html .= '<span style="color:'.htmlspecialchars($l['color']).'" title="'.htmlspecialchars($l['name']).': '.$n.'">'.$n.htmlspecialchars($l['short'] !== '' ? $l['short'] : mb_substr($l['name'], 0, 1)).'</span>';
       }
-      $html .= '</div><div class="sys-stat-label">Condition</div></div>';
+      $html .= '</div><div class="sys-stat-label">'.t('dashboard.condition').'</div></div>';
     }
-    $html .= '<div class="sys-stat"><div class="sys-stat-val g">'.(int)$st['total_copies'].'</div><div class="sys-stat-label">Copies</div></div>';
-    $html .= '<div class="sys-stat"><div class="sys-stat-val b">'.(int)$st['wishlisted'].'</div><div class="sys-stat-label">Wishlist</div></div>';
-    $html .= '<div class="sys-stat"><div class="sys-stat-val o">'.(int)$st['upgrades'].'</div><div class="sys-stat-label">Upgrade</div></div>';
+    $html .= '<div class="sys-stat"><div class="sys-stat-val g">'.(int)$st['total_copies'].'</div><div class="sys-stat-label">'.t('dashboard.copies').'</div></div>';
+    $html .= '<div class="sys-stat"><div class="sys-stat-val b">'.(int)$st['wishlisted'].'</div><div class="sys-stat-label">'.t('common.nav.wishlist').'</div></div>';
+    $html .= '<div class="sys-stat"><div class="sys-stat-val o">'.(int)$st['upgrades'].'</div><div class="sys-stat-label">'.t('dashboard.upgrade').'</div></div>';
     $html .= '</div></div>';
     return $html;
   }
@@ -311,7 +312,7 @@ $totalOwnedVal= array_sum(array_column($statsRaw,   'owned_value'));
     $html  = '<div class="sys-card-header">';
     $html .= '<div style="display:flex;align-items:center">'.$icon.'<div>';
     $html .= '<div class="sys-name">'.htmlspecialchars($s['name']).'</div>';
-    $html .= '<div class="sys-short">'.htmlspecialchars($s['region']).' · '.(int)$st['total_games'].' games</div>';
+    $html .= '<div class="sys-short">'.htmlspecialchars(systemRegion($s)).' · '.t('dashboard.n_games', ['n' => fmtNum($st['total_games'])]).'</div>';
     $html .= '</div></div>';
     $html .= '<div style="text-align:right"><div class="sys-pct">'.$pct.'%</div>';
     $html .= '<div class="sys-pct-label">'.(int)$st['owned'].' / '.(int)$st['total_games'].'</div></div>';
@@ -339,7 +340,7 @@ $totalOwnedVal= array_sum(array_column($statsRaw,   'owned_value'));
   ?>
 
   <?php if ($visibleSystems): ?>
-  <div class="section-head">Active Systems</div>
+  <div class="section-head"><?= t('dashboard.active_systems') ?></div>
   <div class="systems-grid" style="margin-bottom:32px">
     <?php foreach ($visibleSystems as $s):
       $st = $stats[$s['id']] ?? ['total_games'=>0,'owned'=>0,'total_copies'=>0,'upgrades'=>0,'wishlisted'=>0,'total_spent'=>0,'owned_value'=>0,'cib_total'=>0,'labels'=>[],'avg_score'=>null,'scored'=>0];
@@ -358,13 +359,13 @@ $totalOwnedVal= array_sum(array_column($statsRaw,   'owned_value'));
   <?php if ($hiddenSystems): ?>
   <div class="hidden-toggle">
     <input type="checkbox" id="show-hidden" onchange="toggleHidden(this)">
-    <label for="show-hidden">Show hidden systems (<?= count($hiddenSystems) ?>)</label>
+    <label for="show-hidden"><?= t('dashboard.show_hidden', ['n' => count($hiddenSystems)]) ?></label>
   </div>
   <div class="systems-grid" id="hidden-systems" style="display:none">
     <?php foreach ($hiddenSystems as $s):
       $st = $stats[$s['id']] ?? ['total_games'=>0,'owned'=>0,'total_copies'=>0,'upgrades'=>0,'wishlisted'=>0,'total_spent'=>0,'owned_value'=>0,'cib_total'=>0,'labels'=>[],'avg_score'=>null,'scored'=>0];
     ?>
-    <div class="sys-card hidden-sys" onclick="activateSystem(<?= $s['id'] ?>)" style="cursor:pointer" title="Click to make this system visible">
+    <div class="sys-card hidden-sys" onclick="activateSystem(<?= $s['id'] ?>)" style="cursor:pointer" title="<?= t('dashboard.click_to_show') ?>">
       <?= sysCardHeader($s, $st, $showIcons) ?>
       <?= progressHtml($st) ?>
       <?= qualBarHtml($st) ?>
@@ -384,7 +385,7 @@ function toggleHidden(cb) {
 }
 
 async function activateSystem(systemId) {
-  if (!confirm('Make this system visible in your collection?')) return;
+  if (!confirm(tRaw('dashboard.confirm_show'))) return;
   // Get current prefs, set this one to visible
   const res = await fetch(`${DASH_BASE}/api/system_prefs.php`).then(r=>r.json());
   if (!res.ok) return;

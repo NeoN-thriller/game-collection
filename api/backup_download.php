@@ -2,7 +2,7 @@
 require_once __DIR__ . '/../config.php';
 $user  = requireAuth();
 $token = $_GET['token'] ?? '';
-if (!is_string($token) || !preg_match('/^[a-f0-9]{32}$/', $token)) { http_response_code(400); exit('Invalid token'); }
+if (!is_string($token) || !preg_match('/^[a-f0-9]{32}$/', $token)) { http_response_code(400); exit(tRaw('api.invalid_token')); }
 
 // The token only selects a DB row owned by this user; the file path always comes from the DB
 $st = db()->prepare("
@@ -13,12 +13,12 @@ $st = db()->prepare("
 ");
 $st->execute([$token, $user['id']]);
 $backup = $st->fetch();
-if (!$backup) { http_response_code(404); exit('Backup not found or expired'); }
+if (!$backup) { http_response_code(404); exit(tRaw('api.backup_gone')); }
 
 $safePath = realpath(backupFilePath($user['id'], $backup['filename']));
 $safeBase = realpath(BACKUP_DIR);
 if (!$safePath || !$safeBase || !str_starts_with($safePath, $safeBase . DIRECTORY_SEPARATOR) || !is_file($safePath)) {
-    http_response_code(404); exit('File not found');
+    http_response_code(404); exit(tRaw('api.file_not_found'));
 }
 
 $sysName      = preg_replace('/[^a-z0-9_-]+/', '_', strtolower($backup['short_name'])) ?: 'system';

@@ -559,24 +559,24 @@ function exportGradingConfig(): array {
 /** Checks a grading file. Returns a list of problems (empty = fine). */
 function validateGradingData(array $data): array {
     $err = [];
-    if (($data['format'] ?? '') !== GRADING_FORMAT) $err[] = 'Not a grading export file.';
+    if (($data['format'] ?? '') !== GRADING_FORMAT) $err[] = tRaw('gapi.v_format');
     $labels = $data['labels'] ?? [];
-    if (!is_array($labels) || !$labels) $err[] = 'The file has no grade labels.';
+    if (!is_array($labels) || !$labels) $err[] = tRaw('gapi.v_no_labels');
     else {
         $mins = array_map(fn($l) => (int)($l['min_score'] ?? -1), $labels);
-        if (!in_array(0, $mins, true)) $err[] = 'The lowest grade label must start at 0.';
-        if (count($mins) !== count(array_unique($mins))) $err[] = 'Two grade labels start at the same score.';
+        if (!in_array(0, $mins, true)) $err[] = tRaw('ga.err_lowest');
+        if (count($mins) !== count(array_unique($mins))) $err[] = tRaw('ga.err_same');
         foreach ($labels as $l) if (trim((string)($l['name'] ?? '')) === '') $err[] = 'A grade label has no name.';
     }
     $tplNames = [];
     foreach ((array)($data['templates'] ?? []) as $t) {
         $n = trim((string)($t['name'] ?? ''));
         if ($n === '') { $err[] = 'A template has no name.'; continue; }
-        if (isset($tplNames[mb_strtolower($n)])) $err[] = "Template \"$n\" appears twice.";
+        if (isset($tplNames[mb_strtolower($n)])) $err[] = tRaw('gapi.v_tpl_twice', ['name' => $n]);
         $tplNames[mb_strtolower($n)] = true;
         foreach ((array)($t['categories'] ?? []) as $c) {
             foreach ((array)($c['defects'] ?? []) as $d) {
-                if (!in_array($d['kind'] ?? 'each', GRADE_DEFECT_KINDS, true)) $err[] = "Unknown defect kind in \"$n\".";
+                if (!in_array($d['kind'] ?? 'each', GRADE_DEFECT_KINDS, true)) $err[] = tRaw('gapi.v_kind', ['name' => $n]);
             }
         }
     }
@@ -618,7 +618,7 @@ function importGradingConfig(array $data, string $mode, bool $dryRun, bool $dele
         // Final label set must still be valid (merge can combine old and new labels)
         $mins = array_column(gradingConfig(true)['labels'], 'min_score');
         if (!in_array(0, $mins, true) || count($mins) !== count(array_unique($mins))) {
-            throw new RuntimeException('After this import the grade labels would overlap or not start at 0. Tick "remove items that are not in the file", or fix the labels first.');
+            throw new RuntimeException(tRaw('gapi.v_overlap'));
         }
         if ($dryRun) {
             $pdo->rollBack();
@@ -685,7 +685,7 @@ function gradingSystemIdsByKey(): array {
 
 function gradingWriteComponent(int $pid, array $c, int $sort, array $tplIds, ?int $id, array &$report): void {
     $tid = $tplIds[mb_strtolower((string)($c['template'] ?? ''))] ?? null;
-    if (!$tid) { $report['warnings'][] = "Part \"{$c['label']}\" skipped: template \"".($c['template'] ?? '')."\" not found."; return; }
+    if (!$tid) { $report['warnings'][] = tRaw('gapi.w_part_skipped', ['part' => $c['label'], 'template' => $c['template'] ?? '']); return; }
     $vals = [trim((string)$c['label']), mb_substr(trim((string)($c['abbr'] ?? '')), 0, 8), $tid,
              max(0, min(100, (int)($c['weight'] ?? 0))), max(0, min(GRADE_MAX_QTY, (int)($c['default_qty'] ?? 1))), $sort];
     if ($id) {
@@ -703,7 +703,7 @@ function gradingAssignSystems(int $pid, string $profileName, array $systems, arr
     foreach ($systems as $key) {
         $sid = $sysIds[mb_strtolower((string)$key)] ?? null;
         if ($sid) { $up->execute([$pid, $sid]); $report['systems'][] = "$key → $profileName"; }
-        else $report['warnings'][] = "System \"$key\" not found on this site.";
+        else $report['warnings'][] = tRaw('gapi.w_system', ['name' => $key]);
     }
 }
 
@@ -738,7 +738,7 @@ function gradingImportReplace(array $data, array &$report): void {
 
     foreach (array_values((array)($data['templates'] ?? [])) as $i => $t) {
         gradingInsertTemplate($t, $i);
-        $report['added'][] = 'Template: '.trim($t['name']);
+        $report['added'][] = tRaw('gapi.r_template', ['name' => trim($t['name'])]);
     }
     $tplIds = gradingTemplateIdsByName();
     foreach (array_values((array)($data['profiles'] ?? [])) as $i => $p) {
@@ -746,7 +746,7 @@ function gradingImportReplace(array $data, array &$report): void {
         $pid = (int)$pdo->lastInsertId();
         foreach (array_values((array)($p['components'] ?? [])) as $ci => $c) gradingWriteComponent($pid, $c, $ci, $tplIds, null, $report);
         gradingAssignSystems($pid, trim($p['name']), (array)($p['systems'] ?? []), $report);
-        $report['added'][] = 'Profile: '.trim($p['name']);
+        $report['added'][] = tRaw('gapi.r_profile', ['name' => trim($p['name'])]);
     }
 }
 
@@ -775,14 +775,14 @@ function gradingImportMerge(array $data, bool $deleteMissing, array &$report): v
     foreach ($dbLabels as $key => $l) {
         if (isset($seen[$key])) continue;
         $n = $usage("SELECT COUNT(*) FROM collection_entries WHERE grade_label_id=?", [$l['id']]);
-        if (!$deleteMissing) { $report['kept'][] = "Label: {$l['name']}"; continue; }
+        if (!$deleteMissing) { $report['kept'][] = tRaw('gapi.r_label', ['name' => $l['name']]); continue; }
         // Copies move to the label that covers this label's start score
         $st = $pdo->prepare("SELECT id FROM grade_labels WHERE id<>? AND min_score<=? ORDER BY min_score DESC LIMIT 1");
         $st->execute([$l['id'], $l['min_score']]);
         $to = $st->fetchColumn();
         if ($to) $pdo->prepare("UPDATE collection_entries SET grade_label_id=? WHERE grade_label_id=?")->execute([$to, $l['id']]);
         $pdo->prepare("DELETE FROM grade_labels WHERE id=?")->execute([$l['id']]);
-        $report['removed'][] = "Label: {$l['name']}".($n ? " ($n copies moved to the label below it)" : '');
+        $report['removed'][] = tRaw('gapi.r_label', ['name' => $l['name']]).($n ? ' '.tRaw('gapi.s_moved', ['n' => $n]) : '');
     }
 
     // Templates → categories → defects
@@ -792,10 +792,10 @@ function gradingImportMerge(array $data, bool $deleteMissing, array &$report): v
     foreach (array_values((array)($data['templates'] ?? [])) as $ti => $t) {
         $tkey = mb_strtolower(trim($t['name']));
         $seenT[$tkey] = true;
-        if (!isset($dbT[$tkey])) { gradingInsertTemplate($t, $ti); $report['added'][] = 'Template: '.$t['name']; continue; }
+        if (!isset($dbT[$tkey])) { gradingInsertTemplate($t, $ti); $report['added'][] = tRaw('gapi.r_template', ['name' => $t['name']]); continue; }
         $tid = (int)$dbT[$tkey]['id'];
         $pdo->prepare("UPDATE grade_templates SET sort_order=? WHERE id=?")->execute([$ti, $tid]);
-        $report['updated'][] = 'Template: '.$t['name'];
+        $report['updated'][] = tRaw('gapi.r_template', ['name' => $t['name']]);
 
         $st = $pdo->prepare("SELECT * FROM grade_categories WHERE template_id=?"); $st->execute([$tid]);
         $dbC = [];
@@ -804,7 +804,7 @@ function gradingImportMerge(array $data, bool $deleteMissing, array &$report): v
         foreach (array_values((array)($t['categories'] ?? [])) as $ci => $c) {
             $ckey = mb_strtolower(trim($c['name']));
             $seenC[$ckey] = true;
-            if (!isset($dbC[$ckey])) { gradingInsertCategory($tid, $c, $ci); $report['added'][] = "Category: {$t['name']} › {$c['name']}"; continue; }
+            if (!isset($dbC[$ckey])) { gradingInsertCategory($tid, $c, $ci); $report['added'][] = tRaw('gapi.r_category', ['name' => "{$t['name']} › {$c['name']}"]); continue; }
             $cid = (int)$dbC[$ckey]['id'];
             $pdo->prepare("UPDATE grade_categories SET max_points=?, sort_order=? WHERE id=?")
                 ->execute([max(0, min(100, (int)($c['max_points'] ?? 0))), $ci, $cid]);
@@ -816,15 +816,15 @@ function gradingImportMerge(array $data, bool $deleteMissing, array &$report): v
                 $dkey = mb_strtolower((($d['kind'] ?? '') === 'level' ? trim((string)($d['level_group'] ?? '')) : '').'|'.trim($d['name']));
                 $seenD[$dkey] = true;
                 gradingWriteDefect($cid, $d, $di, isset($dbD[$dkey]) ? (int)$dbD[$dkey]['id'] : null);
-                if (!isset($dbD[$dkey])) $report['added'][] = "Defect: {$t['name']} › {$c['name']} › {$d['name']}";
+                if (!isset($dbD[$dkey])) $report['added'][] = tRaw('gapi.r_defect', ['name' => "{$t['name']} › {$c['name']} › {$d['name']}"]);
             }
             foreach ($dbD as $dkey => $d) {
                 if (isset($seenD[$dkey])) continue;
                 $n = $usage("SELECT COUNT(*) FROM entry_defects WHERE defect_id=?", [$d['id']]);
                 if ($deleteMissing) {
                     $pdo->prepare("DELETE FROM grade_defects WHERE id=?")->execute([$d['id']]);
-                    $report['removed'][] = "Defect: {$t['name']} › {$c['name']} › {$d['name']}".($n ? " (logged on $n units)" : '');
-                } else $report['kept'][] = "Defect: {$t['name']} › {$c['name']} › {$d['name']}";
+                    $report['removed'][] = tRaw('gapi.r_defect', ['name' => "{$t['name']} › {$c['name']} › {$d['name']}"]).($n ? ' '.tRaw('gapi.s_logged', ['n' => $n]) : '');
+                } else $report['kept'][] = tRaw('gapi.r_defect', ['name' => "{$t['name']} › {$c['name']} › {$d['name']}"]);
             }
         }
         foreach ($dbC as $ckey => $c) {
@@ -832,8 +832,8 @@ function gradingImportMerge(array $data, bool $deleteMissing, array &$report): v
             $n = $usage("SELECT COUNT(*) FROM entry_defects ed JOIN grade_defects d ON d.id=ed.defect_id WHERE d.category_id=?", [$c['id']]);
             if ($deleteMissing) {
                 $pdo->prepare("DELETE FROM grade_categories WHERE id=?")->execute([$c['id']]);
-                $report['removed'][] = "Category: {$t['name']} › {$c['name']}".($n ? " (defects logged on $n units)" : '');
-            } else $report['kept'][] = "Category: {$t['name']} › {$c['name']}";
+                $report['removed'][] = tRaw('gapi.r_category', ['name' => "{$t['name']} › {$c['name']}"]).($n ? ' '.tRaw('gapi.s_cat_logged', ['n' => $n]) : '');
+            } else $report['kept'][] = tRaw('gapi.r_category', ['name' => "{$t['name']} › {$c['name']}"]);
         }
     }
 
@@ -848,11 +848,11 @@ function gradingImportMerge(array $data, bool $deleteMissing, array &$report): v
         if (isset($dbP[$pkey])) {
             $pid = (int)$dbP[$pkey]['id'];
             $pdo->prepare("UPDATE grade_profiles SET sort_order=? WHERE id=?")->execute([$pi, $pid]);
-            $report['updated'][] = 'Profile: '.$p['name'];
+            $report['updated'][] = tRaw('gapi.r_profile', ['name' => $p['name']]);
         } else {
             $pdo->prepare("INSERT INTO grade_profiles (name, sort_order) VALUES (?,?)")->execute([trim($p['name']), $pi]);
             $pid = (int)$pdo->lastInsertId();
-            $report['added'][] = 'Profile: '.$p['name'];
+            $report['added'][] = tRaw('gapi.r_profile', ['name' => $p['name']]);
         }
         $st = $pdo->prepare("SELECT * FROM grade_profile_components WHERE profile_id=?"); $st->execute([$pid]);
         $dbComp = [];
@@ -868,8 +868,8 @@ function gradingImportMerge(array $data, bool $deleteMissing, array &$report): v
             $n = $usage("SELECT COUNT(DISTINCT entry_id) FROM entry_parts WHERE profile_component_id=?", [$c['id']]);
             if ($deleteMissing) {
                 $pdo->prepare("DELETE FROM grade_profile_components WHERE id=?")->execute([$c['id']]);
-                $report['removed'][] = "Part: {$p['name']} › {$c['label']}".($n ? " (graded on $n copies)" : '');
-            } else $report['kept'][] = "Part: {$p['name']} › {$c['label']}";
+                $report['removed'][] = tRaw('gapi.r_part', ['name' => "{$p['name']} › {$c['label']}"]).($n ? ' '.tRaw('gapi.s_graded', ['n' => $n]) : '');
+            } else $report['kept'][] = tRaw('gapi.r_part', ['name' => "{$p['name']} › {$c['label']}"]);
         }
         gradingAssignSystems($pid, trim($p['name']), (array)($p['systems'] ?? []), $report);
     }
@@ -878,19 +878,19 @@ function gradingImportMerge(array $data, bool $deleteMissing, array &$report): v
         $n = $usage("SELECT COUNT(DISTINCT ep.entry_id) FROM entry_parts ep JOIN grade_profile_components c ON c.id=ep.profile_component_id WHERE c.profile_id=?", [$p['id']]);
         if ($deleteMissing) {
             $pdo->prepare("DELETE FROM grade_profiles WHERE id=?")->execute([$p['id']]);
-            $report['removed'][] = "Profile: {$p['name']}".($n ? " (point grades of $n copies)" : '');
-        } else $report['kept'][] = "Profile: {$p['name']}";
+            $report['removed'][] = tRaw('gapi.r_profile', ['name' => $p['name']]).($n ? ' '.tRaw('gapi.s_point_grades', ['n' => $n]) : '');
+        } else $report['kept'][] = tRaw('gapi.r_profile', ['name' => $p['name']]);
     }
 
     // Templates last: only those no remaining profile uses
     foreach ($dbT as $tkey => $t) {
         if (isset($seenT[$tkey])) continue;
-        if (!$deleteMissing) { $report['kept'][] = "Template: {$t['name']}"; continue; }
+        if (!$deleteMissing) { $report['kept'][] = tRaw('gapi.r_template', ['name' => $t['name']]); continue; }
         $used = $usage("SELECT COUNT(*) FROM grade_profile_components WHERE template_id=?", [$t['id']]);
-        if ($used) { $report['kept'][] = "Template: {$t['name']} (still used by a profile)"; continue; }
+        if ($used) { $report['kept'][] = tRaw('gapi.r_template', ['name' => $t['name']]).' '.tRaw('gapi.s_still_used'); continue; }
         $n = $usage("SELECT COUNT(DISTINCT entry_id) FROM entry_parts WHERE template_id=?", [$t['id']]);
         $pdo->prepare("DELETE FROM grade_templates WHERE id=?")->execute([$t['id']]);
-        $report['removed'][] = "Template: {$t['name']}".($n ? " (own items on $n copies)" : '');
+        $report['removed'][] = tRaw('gapi.r_template', ['name' => $t['name']]).($n ? ' '.tRaw('gapi.s_own_items', ['n' => $n]) : '');
     }
 }
 

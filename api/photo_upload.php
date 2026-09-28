@@ -3,29 +3,28 @@ require_once __DIR__ . '/../config.php';
 $user = requireAuth();
 
 $entryId = (int)($_POST['entry_id'] ?? 0);
-if (!$entryId) jsonOut(['ok'=>false,'error'=>'No entry_id'], 400);
+if (!$entryId) jsonOut(['ok'=>false,'error'=>tRaw('api.no_entry')], 400);
 
 $chk = db()->prepare("SELECT id FROM collection_entries WHERE id=? AND user_id=?");
 $chk->execute([$entryId, $user['id']]);
-if (!$chk->fetch()) jsonOut(['ok'=>false,'error'=>'Not found'], 404);
+if (!$chk->fetch()) jsonOut(['ok'=>false,'error'=>tRaw('api.not_found')], 404);
 
 if (empty($_FILES['photo']) || $_FILES['photo']['error'] !== UPLOAD_ERR_OK) {
-    jsonOut(['ok'=>false,'error'=>'Upload error'], 400);
+    jsonOut(['ok'=>false,'error'=>tRaw('api.upload_error')], 400);
 }
 
 $file = $_FILES['photo'];
-if ($file['size'] > MAX_FILE_SIZE) jsonOut(['ok'=>false,'error'=>'File too large'], 400);
+if ($file['size'] > MAX_FILE_SIZE) jsonOut(['ok'=>false,'error'=>tRaw('api.too_large')], 400);
 
 $finfo = new finfo(FILEINFO_MIME_TYPE);
 $mime  = $finfo->file($file['tmp_name']);
-if (!in_array($mime, ALLOWED_TYPES)) jsonOut(['ok'=>false,'error'=>'Invalid file type'], 400);
+if (!in_array($mime, ALLOWED_TYPES)) jsonOut(['ok'=>false,'error'=>tRaw('api.bad_type')], 400);
 
 // Load image settings
-$cfgFile = __DIR__.'/../uploads/img_settings.json';
-$cfg     = file_exists($cfgFile) ? json_decode(file_get_contents($cfgFile), true) : [];
-$maxW    = (int)($cfg['max_width']  ?? 1200);
-$maxH    = (int)($cfg['max_height'] ?? 1200);
-$qual    = (int)($cfg['quality']    ?? 80);
+$cfg     = imageSettings();
+$maxW    = $cfg['max_width'];
+$maxH    = $cfg['max_height'];
+$qual    = $cfg['quality'];
 
 $userDir = UPLOAD_DIR . $user['id'] . '/';
 if (!is_dir($userDir)) mkdir($userDir, 0755, true);

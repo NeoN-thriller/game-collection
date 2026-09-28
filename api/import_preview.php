@@ -6,7 +6,7 @@ $body     = json_decode(file_get_contents('php://input'), true);
 $systemId = (int)($body['system_id'] ?? 0);
 $titles   = $body['titles'] ?? [];
 
-if (!$systemId || empty($titles)) jsonOut(['ok'=>false,'error'=>'Missing system or titles'], 400);
+if (!$systemId || empty($titles)) jsonOut(['ok'=>false,'error'=>tRaw('api.missing_titles')], 400);
 
 // Fetch existing titles for this system (lowercase for comparison)
 $st = db()->prepare("SELECT LOWER(title) AS t FROM games WHERE system_id=?");

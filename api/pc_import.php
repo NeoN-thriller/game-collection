@@ -4,7 +4,7 @@ requireAdmin();
 
 $body = json_decode(file_get_contents('php://input'), true);
 $rows = $body['rows'] ?? [];
-if (empty($rows)) jsonOut(['ok'=>false,'error'=>'No rows'], 400);
+if (empty($rows)) jsonOut(['ok'=>false,'error'=>tRaw('api.no_rows')], 400);
 
 $imported  = 0;
 $updated   = 0;

@@ -3,15 +3,15 @@ require_once __DIR__ . '/../config.php';
 $user = requireAuth();
 
 $body = json_decode(file_get_contents('php://input'), true);
-if (!$body) jsonOut(['ok'=>false,'error'=>'No data'], 400);
+if (!$body) jsonOut(['ok'=>false,'error'=>tRaw('api.no_data')], 400);
 
 $gameId  = (int)($body['game_id'] ?? 0);
 $copyNum = max(1, (int)($body['copy_number'] ?? 1));
-if (!$gameId) jsonOut(['ok'=>false,'error'=>'Invalid game'], 400);
+if (!$gameId) jsonOut(['ok'=>false,'error'=>tRaw('api.invalid_game')], 400);
 
 $chk = db()->prepare("SELECT id FROM games WHERE id=?");
 $chk->execute([$gameId]);
-if (!$chk->fetch()) jsonOut(['ok'=>false,'error'=>'Game not found'], 404);
+if (!$chk->fetch()) jsonOut(['ok'=>false,'error'=>tRaw('api.game_not_found')], 404);
 
 // Only the fields present in the request are written, so quick toggles
 // (owned / wishlist / upgrade) never wipe the copy's other details or its grading.
@@ -57,7 +57,7 @@ try {
     $pdo->commit();
 } catch (Throwable $e) {
     $pdo->rollBack();
-    jsonOut(['ok'=>false,'error'=>'Saving failed: '.$e->getMessage()], 500);
+    jsonOut(['ok'=>false,'error'=>tRaw('api.save_failed', ['error' => $e->getMessage()])], 500);
 }
 
 $st2 = db()->prepare("

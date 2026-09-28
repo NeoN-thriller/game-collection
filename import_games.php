@@ -5,11 +5,11 @@ $user = requireAdmin();
 $systems = db()->query("SELECT * FROM systems WHERE active=1 ORDER BY sort_order")->fetchAll();
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="<?= currentLang() ?>">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Import Games — Game Collection</title>
+<title><?= pageTitle(tRaw('common.nav.import_games')) ?></title>
 <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/main.css?v=<?= @filemtime(__DIR__.'/assets/css/main.css') ?>">
 <?= themeHead($user) ?>
 <style>
@@ -33,32 +33,32 @@ $systems = db()->query("SELECT * FROM systems WHERE active=1 ORDER BY sort_order
   #preview-wrap { display:none; }
 </style>
 <?= csrfScript() ?>
+<?= appScript(['import']) ?>
 </head>
 <body>
 
 <header class="site-header">
-  <a href="<?= BASE_URL ?>/collection.php" class="site-logo" style="text-decoration:none">Game <span>Collection</span></a>
+  <a href="<?= BASE_URL ?>/collection.php" class="site-logo" style="text-decoration:none"><?= siteLogoHtml() ?></a>
   <nav class="site-nav">
-    <a href="<?= BASE_URL ?>/dashboard.php" class="nav-link">Dashboard</a>
-    <a href="<?= BASE_URL ?>/collection.php" class="nav-link">← Collection</a>
-    <a href="<?= BASE_URL ?>/admin.php" class="nav-link">Admin</a>
-    <a href="<?= BASE_URL ?>/api/logout.php" class="nav-link">Sign Out</a>
+    <a href="<?= BASE_URL ?>/dashboard.php" class="nav-link"><?= t('common.nav.dashboard') ?></a>
+    <a href="<?= BASE_URL ?>/collection.php" class="nav-link">← <?= t('common.nav.collection') ?></a>
+    <a href="<?= BASE_URL ?>/admin.php" class="nav-link"><?= t('common.nav.admin') ?></a>
+    <a href="<?= BASE_URL ?>/api/logout.php" class="nav-link"><?= t('common.nav.sign_out') ?></a>
   </nav>
 </header>
 
 <div class="import-wrap">
-  <h1>Import Game List</h1>
+  <h1><?= t('import.title') ?></h1>
   <p class="desc">
-    Paste a list of game titles — one per line — select the system and click Preview.<br>
-    Duplicate titles already in the database will be flagged and skipped automatically.
+    <?= t('import.intro') ?>
   </p>
 
   <!-- STEP 1: System -->
   <div class="step">
-    <div class="step-label">Step 1</div>
-    <h3>Select System</h3>
+    <div class="step-label"><?= t('import.step', ['n' => 1]) ?></div>
+    <h3><?= t('import.select_system') ?></h3>
     <select id="sel-system" style="width:100%;padding:10px">
-      <option value="">— Choose a system —</option>
+      <option value="">— <?= t('import.choose_system') ?> —</option>
       <?php foreach ($systems as $s): ?>
       <option value="<?= $s['id'] ?>"><?= htmlspecialchars($s['name']) ?> (<?= htmlspecialchars($s['short_name']) ?>)</option>
       <?php endforeach; ?>
@@ -67,9 +67,9 @@ $systems = db()->query("SELECT * FROM systems WHERE active=1 ORDER BY sort_order
 
   <!-- STEP 2: Paste -->
   <div class="step">
-    <div class="step-label">Step 2</div>
-    <h3>Paste Game Titles</h3>
-    <textarea class="game-list" id="game-list" placeholder="Paste one game title per line, e.g.:
+    <div class="step-label"><?= t('import.step', ['n' => 2]) ?></div>
+    <h3><?= t('import.paste_titles') ?></h3>
+    <textarea class="game-list" id="game-list" placeholder="<?= t('import.placeholder') ?>
 
 Super Mario 64
 GoldenEye 007
@@ -77,23 +77,23 @@ Banjo-Kazooie
 Mario Kart 64
 ..."></textarea>
     <div style="display:flex;justify-content:flex-end;margin-top:10px">
-      <button class="btn" onclick="previewImport()">Preview Import →</button>
+      <button class="btn" onclick="previewImport()"><?= t('import.preview') ?> →</button>
     </div>
   </div>
 
   <!-- STEP 3: Preview -->
   <div id="preview-wrap">
     <div class="step">
-      <div class="step-label">Step 3</div>
-      <h3>Review & Confirm</h3>
+      <div class="step-label"><?= t('import.step', ['n' => 3]) ?></div>
+      <h3><?= t('import.review') ?></h3>
       <div id="preview-summary" style="font-size:.75rem;color:var(--muted);margin-bottom:10px"></div>
       <table class="preview-table">
-        <thead><tr><th>#</th><th>Title</th><th>Status</th></tr></thead>
+        <thead><tr><th>#</th><th><?= t('import.col_title') ?></th><th><?= t('import.col_status') ?></th></tr></thead>
         <tbody id="preview-body"></tbody>
       </table>
       <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px">
-        <button class="btn-ghost" onclick="resetImport()">← Start Over</button>
-        <button class="btn" id="btn-confirm" onclick="confirmImport()">Import New Games</button>
+        <button class="btn-ghost" onclick="resetImport()">← <?= t('import.start_over') ?></button>
+        <button class="btn" id="btn-confirm" onclick="confirmImport()"><?= t('import.import_new') ?></button>
       </div>
     </div>
   </div>
@@ -112,17 +112,17 @@ let systemId = null;
 
 function previewImport() {
   systemId = document.getElementById('sel-system').value;
-  if (!systemId) { toast('Please select a system first.', true); return; }
+  if (!systemId) { toast(tRaw('import.err_no_system'), true); return; }
 
   const raw = document.getElementById('game-list').value.trim();
-  if (!raw) { toast('Please paste some game titles first.', true); return; }
+  if (!raw) { toast(tRaw('import.err_no_titles'), true); return; }
 
   // Parse: one title per line, trim whitespace, skip empty lines
   parsedTitles = raw.split('\n')
     .map(l => l.trim())
     .filter(l => l.length > 0);
 
-  if (!parsedTitles.length) { toast('No valid titles found.', true); return; }
+  if (!parsedTitles.length) { toast(tRaw('import.err_no_valid'), true); return; }
 
   // Check against existing games in DB
   fetch(`${BASE}/api/import_preview.php`, {
@@ -132,7 +132,7 @@ function previewImport() {
   })
   .then(r => r.json())
   .then(res => {
-    if (!res.ok) { toast('Preview failed: ' + res.error, true); return; }
+    if (!res.ok) { toast(tRaw('import.err_preview', {error: res.error}), true); return; }
     renderPreview(res.items);
   });
 }
@@ -148,10 +148,10 @@ function renderPreview(items) {
     const tr = document.createElement('tr');
     let tag = '';
     if (item.status === 'new') {
-      tag = '<span class="tag-new">New</span>';
+      tag = `<span class="tag-new">${t('import.status_new')}</span>`;
       newCount++;
     } else if (item.status === 'duplicate') {
-      tag = '<span class="tag-dupe">Already exists</span>';
+      tag = `<span class="tag-dupe">${t('import.status_exists')}</span>`;
       dupeCount++;
     }
     tr.innerHTML = `<td style="color:var(--muted);font-size:.65rem">${i+1}</td><td>${esc(item.title)}</td><td>${tag}</td>`;
@@ -159,10 +159,10 @@ function renderPreview(items) {
   });
 
   document.getElementById('preview-summary').innerHTML =
-    `<strong style="color:var(--green)">${newCount} new</strong> game${newCount!==1?'s':''} will be added &nbsp;·&nbsp; ` +
-    `<strong style="color:var(--orange)">${dupeCount}</strong> already exist and will be skipped`;
+    `<span style="color:var(--green)">${tn('import.summary_new', newCount)}</span> &nbsp;·&nbsp; ` +
+    `<span style="color:var(--orange)">${tn('import.summary_dupe', dupeCount)}</span>`;
 
-  document.getElementById('btn-confirm').textContent = `Import ${newCount} New Game${newCount!==1?'s':''}`;
+  document.getElementById('btn-confirm').textContent = tnRaw('import.import_n', newCount);
   document.getElementById('btn-confirm').disabled = newCount === 0;
 
   document.getElementById('preview-wrap').style.display = 'block';
@@ -171,7 +171,7 @@ function renderPreview(items) {
 
 function confirmImport() {
   const btn = document.getElementById('btn-confirm');
-  btn.textContent = 'Importing...';
+  btn.textContent = tRaw('import.importing');
   btn.disabled = true;
 
   fetch(`${BASE}/api/import_games.php`, {
@@ -184,14 +184,14 @@ function confirmImport() {
     const box = document.getElementById('result-box');
     box.classList.add('show');
     if (res.ok) {
-      box.innerHTML = `<div class="ok">✓ Import complete — <strong>${res.imported}</strong> game${res.imported!==1?'s':''} added, <strong>${res.skipped}</strong> skipped (already existed).</div>`;
+      box.innerHTML = `<div class="ok">✓ ${tn('import.done', res.imported, {skipped: res.skipped})}</div>`;
       document.getElementById('preview-wrap').style.display = 'none';
       document.getElementById('game-list').value = '';
-      toast('Import complete!');
+      toast(tRaw('import.done_toast'));
     } else {
-      box.innerHTML = `<div class="err">✗ Import failed: ${esc(res.error||'Unknown error')}</div>`;
+      box.innerHTML = `<div class="err">✗ ${t('import.failed', {error: res.error || tRaw('common.err_unknown')})}</div>`;
       btn.disabled = false;
-      btn.textContent = 'Retry Import';
+      btn.textContent = tRaw('import.retry');
     }
   });
 }

@@ -74,7 +74,7 @@ $data = [
 
 // Sent as a file download (no fetch/blob in the browser, so nothing can fail silently)
 $json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
-if ($json === false) { http_response_code(500); exit('Export failed: '.json_last_error_msg()); }
+if ($json === false) { http_response_code(500); exit(tRaw('api.export_failed', ['error' => json_last_error_msg()])); }
 
 session_write_close();
 while (ob_get_level()) ob_end_clean();

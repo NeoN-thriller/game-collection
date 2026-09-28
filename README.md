@@ -55,6 +55,9 @@ Built with plain PHP, MySQL and vanilla JavaScript. No frameworks, no build step
 - View and clear **login lockouts**.
 - Add **systems** and set a system icon.
 - Maintain **game lists** per system — add titles one by one, or bulk-import a pasted list (duplicates are detected and skipped).
+- **Site settings** — site name (and how its words are coloured), currency symbol and number format, date format, default region, default language, and the grading method new users start with. Prices are never converted: import them in your own currency.
+- **Themes** — pick the site default theme; users can choose their own in Settings. Drop a `.css` file into `assets/themes/` to add one.
+- **Languages** — English and Dutch included. Download a language file, translate it, upload it again; the page shows which texts are still missing compared to English. Users choose their own language in Settings.
 - **PriceCharting import** and **image settings** (max width / height and JPEG quality).
 - **Condition grading** — edit grade labels, format profiles and component templates; recalculate scores; **export / import the whole grading system** as JSON (merge by name, or replace), or reset it to the built-in defaults.
 
@@ -117,7 +120,7 @@ Built with plain PHP, MySQL and vanilla JavaScript. No frameworks, no build step
    uploads/defaults/
    ```
 
-   `uploads/img_settings.json` must also be writable, because the admin image settings are saved there.
+   `lang/` must also be writable if you want to upload language files from the admin page.
 
 6. **Protect the uploads folder.**
    - **IIS:** make sure PHP cannot run inside `uploads/` (remove the PHP handler for that folder, or add a `web.config` there).
@@ -197,12 +200,16 @@ The `console` value must match a system's **short name** (case-insensitive). Row
 ├── config.php           Site configuration (edit this)
 ├── core.php             Sessions, DB, auth, CSRF, throttling (don't edit)
 ├── grading.php          Condition grading: labels, profiles, templates, scoring, export/import
+├── site.php             Site settings, money / number / date formatting, site name
+├── i18n.php             Languages: t() lookups, the JS helpers, language file checks
+├── lang/                Language files (en.json is the base)
 ├── web.config           IIS configuration
 ├── api/                 JSON endpoints used by the front end
-├── assets/css/main.css  Stylesheet
+├── assets/css/main.css  Stylesheet (the default theme's variables)
+├── assets/themes/       Theme files
 ├── assets/js/           grading.js (drawer editor + scoring), grading-admin.js (admin editors)
 ├── assets/grading-defaults.json  Default grading system (labels, templates, profiles, system matching)
-└── uploads/             User photos, default images, image settings
+└── uploads/             User photos, default images, backups
 ```
 
 ---

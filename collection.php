@@ -40,41 +40,42 @@ $tagOptsQ->execute([$user['id']]); $tagOpts = $tagOptsQ->fetchAll(PDO::FETCH_COL
 $gradeLabels = gradingConfig()['labels'];
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="<?= currentLang() ?>">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><?= htmlspecialchars($curSys['name'] ?? 'Collection') ?> — Game Collection</title>
+<title><?= pageTitle($curSys['name'] ?? tRaw('common.nav.collection')) ?></title>
 <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/main.css?v=<?= @filemtime(__DIR__.'/assets/css/main.css') ?>">
 <?= themeHead($user) ?>
 <?= csrfScript() ?>
+<?= appScript(['coll', 'drawer', 'grading']) ?>
 </head>
 <body>
 
 <header class="site-header">
-  <a href="<?= BASE_URL ?>/collection.php" class="site-logo" style="text-decoration:none">Game <span>Collection</span></a>
+  <a href="<?= BASE_URL ?>/collection.php" class="site-logo" style="text-decoration:none"><?= siteLogoHtml() ?></a>
   <div id="hstats" class="hstats">
-    <div class="hstat"><div class="hstat-val blue"  id="st-owned">0</div><div class="hstat-label">Owned</div></div>
-    <div class="hstat"><div class="hstat-val"        id="st-pct">0%</div><div class="hstat-label">Complete</div></div>
-    <div class="hstat"><div class="hstat-val green"  id="st-copies">0</div><div class="hstat-label">Copies</div></div>
-    <div class="hstat"><div class="hstat-val orange" id="st-upgrade">0</div><div class="hstat-label">Upgrade</div></div>
-    <div class="hstat"><div class="hstat-val"        id="st-spent">€0</div><div class="hstat-label">Spent</div></div>
-    <div class="hstat"><div class="hstat-val blue"   id="st-cib-all">€0</div><div class="hstat-label">CIB All</div></div>
-    <div class="hstat"><div class="hstat-val green"  id="st-cib-owned">€0</div><div class="hstat-label">Owned Value</div></div>
+    <div class="hstat"><div class="hstat-val blue"  id="st-owned">0</div><div class="hstat-label"><?= t('dashboard.owned') ?></div></div>
+    <div class="hstat"><div class="hstat-val"        id="st-pct">0%</div><div class="hstat-label"><?= t('coll.complete') ?></div></div>
+    <div class="hstat"><div class="hstat-val green"  id="st-copies">0</div><div class="hstat-label"><?= t('dashboard.copies') ?></div></div>
+    <div class="hstat"><div class="hstat-val orange" id="st-upgrade">0</div><div class="hstat-label"><?= t('dashboard.upgrade') ?></div></div>
+    <div class="hstat"><div class="hstat-val"        id="st-spent"><?= money(0, 0) ?></div><div class="hstat-label"><?= t('dashboard.spent') ?></div></div>
+    <div class="hstat"><div class="hstat-val blue"   id="st-cib-all"><?= money(0, 0) ?></div><div class="hstat-label"><?= t('dashboard.cib_all') ?></div></div>
+    <div class="hstat"><div class="hstat-val green"  id="st-cib-owned"><?= money(0, 0) ?></div><div class="hstat-label"><?= t('dashboard.owned_value') ?></div></div>
   </div>
   <nav class="site-nav">
     <span class="nav-user">👤 <?= htmlspecialchars($user['username']) ?></span>
-    <a href="<?= BASE_URL ?>/dashboard.php" class="nav-link">Dashboard</a>
-    <a href="<?= BASE_URL ?>/wishlist.php" class="nav-link">Wishlist</a>
-    <?php if (isAdmin()): ?><a href="<?= BASE_URL ?>/admin.php" class="nav-link">Admin</a><?php endif; ?>
-    <a href="<?= BASE_URL ?>/settings.php" class="nav-link">Settings</a>
-    <a href="<?= BASE_URL ?>/api/logout.php" class="nav-link">Sign Out</a>
+    <a href="<?= BASE_URL ?>/dashboard.php" class="nav-link"><?= t('common.nav.dashboard') ?></a>
+    <a href="<?= BASE_URL ?>/wishlist.php" class="nav-link"><?= t('common.nav.wishlist') ?></a>
+    <?php if (isAdmin()): ?><a href="<?= BASE_URL ?>/admin.php" class="nav-link"><?= t('common.nav.admin') ?></a><?php endif; ?>
+    <a href="<?= BASE_URL ?>/settings.php" class="nav-link"><?= t('common.nav.settings') ?></a>
+    <a href="<?= BASE_URL ?>/api/logout.php" class="nav-link"><?= t('common.nav.sign_out') ?></a>
   </nav>
 </header>
 
 <div class="progress-wrap">
   <div class="progress-track"><div class="progress-fill" id="prog-fill" style="width:0%"></div></div>
-  <div class="progress-label"><strong id="prog-text">0 / 0</strong> owned</div>
+  <div class="progress-label"><strong id="prog-text">0 / 0</strong> <?= t('coll.owned_lc') ?></div>
 </div>
 
 <div class="system-bar">
@@ -86,49 +87,49 @@ $gradeLabels = gradingConfig()['labels'];
 <div class="toolbar">
   <div class="search-wrap">
     <span class="search-icon">⌕</span>
-    <input type="text" id="tb-search" placeholder="Search titles...">
+    <input type="text" id="tb-search" placeholder="<?= t('coll.search') ?>">
   </div>
   <select id="tb-quality">
-    <option value="" disabled selected>— All Conditions —</option>
-    <option value="">All Conditions</option>
+    <option value="" disabled selected>— <?= t('coll.all_conditions') ?> —</option>
+    <option value=""><?= t('coll.all_conditions') ?></option>
     <?php foreach ($gradeLabels as $l): ?><option value="label:<?= $l['id'] ?>"><?= htmlspecialchars($l['name']) ?> (<?= $l['min_score'] ?>+)</option><?php endforeach; ?>
-    <option value="m:points">Point grades</option>
-    <option value="m:simple">Simple grades</option>
-    <option value="m:none">Not graded</option>
+    <option value="m:points"><?= t('coll.point_grades') ?></option>
+    <option value="m:simple"><?= t('coll.simple_grades') ?></option>
+    <option value="m:none"><?= t('coll.not_graded') ?></option>
   </select>
   <select id="tb-minscore" style="max-width:150px">
-    <option value="" disabled selected>— Min Score —</option>
-    <option value="">Any score</option>
-    <?php foreach ([50,60,70,80,85,90,95] as $m): ?><option value="<?= $m ?>">Score ≥ <?= $m ?></option><?php endforeach; ?>
+    <option value="" disabled selected>— <?= t('coll.min_score') ?> —</option>
+    <option value=""><?= t('coll.any_score') ?></option>
+    <?php foreach ([50,60,70,80,85,90,95] as $m): ?><option value="<?= $m ?>"><?= t('coll.score_min', ['n' => $m]) ?></option><?php endforeach; ?>
   </select>
   <select id="tb-completeness">
-    <option value="" disabled selected>— All Completeness —</option>
-    <option value="">All Completeness</option>
+    <option value="" disabled selected>— <?= t('coll.all_completeness') ?> —</option>
+    <option value=""><?= t('coll.all_completeness') ?></option>
     <?php foreach ($compOpts as $c): ?><option><?= htmlspecialchars($c) ?></option><?php endforeach; ?>
   </select>
   <select id="tb-played">
-    <option value="" disabled selected>— All Played Status —</option>
-    <option value="">All Played Status</option>
+    <option value="" disabled selected>— <?= t('coll.all_played') ?> —</option>
+    <option value=""><?= t('coll.all_played') ?></option>
     <?php foreach ($playedOpts as $p): ?><option><?= htmlspecialchars($p) ?></option><?php endforeach; ?>
   </select>
   <select id="tb-tag">
-    <option value="" disabled selected>— All Tags —</option>
-    <option value="">All Tags</option>
+    <option value="" disabled selected>— <?= t('coll.all_tags') ?> —</option>
+    <option value=""><?= t('coll.all_tags') ?></option>
     <?php foreach ($tagOpts as $t): ?><option><?= htmlspecialchars($t) ?></option><?php endforeach; ?>
   </select>
   <!-- Owned filter — Show All / Owned / Not Owned -->
   <div class="filter-btn-group">
-    <button class="filter-btn" id="fbtn-owned-showall" onclick="setOwned('all')"  title="Show all games">All</button>
-    <button class="filter-btn" id="fbtn-owned-yes"     onclick="setOwned('1')"   title="Owned only">✓ Own</button>
-    <button class="filter-btn" id="fbtn-owned-no"      onclick="setOwned('0')"   title="Not owned">✗ Own</button>
+    <button class="filter-btn" id="fbtn-owned-showall" onclick="setOwned('all')"  title="<?= t('coll.f_all_title') ?>"><?= t('coll.f_all') ?></button>
+    <button class="filter-btn" id="fbtn-owned-yes"     onclick="setOwned('1')"   title="<?= t('coll.f_owned_title') ?>">✓ <?= t('coll.f_own') ?></button>
+    <button class="filter-btn" id="fbtn-owned-no"      onclick="setOwned('0')"   title="<?= t('coll.f_notowned_title') ?>">✗ <?= t('coll.f_own') ?></button>
   </div>
   <div class="filter-btn-group">
-    <button class="filter-btn" id="fbtn-wish-off"  onclick="setWishlist('')"  title="Any">♥ All</button>
-    <button class="filter-btn" id="fbtn-wish-on"   onclick="setWishlist('1')" title="Wishlisted">♥ Yes</button>
+    <button class="filter-btn" id="fbtn-wish-off"  onclick="setWishlist('')"  title="<?= t('coll.f_any') ?>">♥ <?= t('coll.f_all') ?></button>
+    <button class="filter-btn" id="fbtn-wish-on"   onclick="setWishlist('1')" title="<?= t('dashboard.wishlisted') ?>">♥ <?= t('coll.f_yes') ?></button>
   </div>
   <div class="filter-btn-group">
-    <button class="filter-btn" id="fbtn-up-off"    onclick="setUpgrade('')"   title="Any">↑ All</button>
-    <button class="filter-btn" id="fbtn-up-on"     onclick="setUpgrade('1')"  title="Needs upgrade">↑ Yes</button>
+    <button class="filter-btn" id="fbtn-up-off"    onclick="setUpgrade('')"   title="<?= t('coll.f_any') ?>">↑ <?= t('coll.f_all') ?></button>
+    <button class="filter-btn" id="fbtn-up-on"     onclick="setUpgrade('1')"  title="<?= t('coll.f_upgrade_title') ?>">↑ <?= t('coll.f_yes') ?></button>
   </div>
   <!-- Hidden inputs to store filter state -->
   <input type="hidden" id="tb-owned"    value="owned">
@@ -140,38 +141,38 @@ $gradeLabels = gradingConfig()['labels'];
   <table>
     <thead>
       <tr id="thead-row">
-        <th data-col="img" style="width:36px">IMG</th>
-        <th data-col="owned" style="width:28px;text-align:center" data-sort="owned">OWN</th>
+        <th data-col="img" style="width:36px"><?= t('coll.th_img') ?></th>
+        <th data-col="owned" style="width:28px;text-align:center" data-sort="owned"><?= t('coll.th_own') ?></th>
         <th data-col="wishlist" style="width:28px;text-align:center" data-sort="wishlist">♥</th>
         <th data-col="upgrade" style="width:28px;text-align:center" data-sort="upgrade">↑</th>
-        <th data-col="title" data-sort="title">Title ↕</th>
-        <th data-col="quality" data-sort="quality">Cond ↕</th>
-        <th data-col="completeness" data-sort="completeness">Complete ↕</th>
-        <th data-col="played" data-sort="played_status">Played ↕</th>
-        <th data-col="copies" data-sort="copies">Copies ↕</th>
-        <th data-col="price_paid" data-sort="price_paid">Paid ↕</th>
-        <th data-col="buy_range">Buy Range</th>
-        <th data-col="loose_price" data-sort="loose_price">Loose ↕</th>
-        <th data-col="cib_price" data-sort="chart_price">CIB Price ↕</th>
-        <th data-col="new_price" data-sort="new_price">New ↕</th>
-        <th data-col="upgrade_reason">Upgrade Reason</th>
-        <th data-col="tag" data-sort="tag">Tag ↕</th>
-        <th data-col="notes">Note</th>
+        <th data-col="title" data-sort="title"><?= t('common.col.title') ?> ↕</th>
+        <th data-col="quality" data-sort="quality"><?= t('coll.th_cond') ?> ↕</th>
+        <th data-col="completeness" data-sort="completeness"><?= t('coll.complete') ?> ↕</th>
+        <th data-col="played" data-sort="played_status"><?= t('common.col.played') ?> ↕</th>
+        <th data-col="copies" data-sort="copies"><?= t('common.col.copies') ?> ↕</th>
+        <th data-col="price_paid" data-sort="price_paid"><?= t('common.col.price_paid') ?> ↕</th>
+        <th data-col="buy_range"><?= t('common.col.buy_range') ?></th>
+        <th data-col="loose_price" data-sort="loose_price"><?= t('common.price.loose') ?> ↕</th>
+        <th data-col="cib_price" data-sort="chart_price"><?= t('common.col.cib_price') ?> ↕</th>
+        <th data-col="new_price" data-sort="new_price"><?= t('common.price.new') ?> ↕</th>
+        <th data-col="upgrade_reason"><?= t('common.col.upgrade_reason') ?></th>
+        <th data-col="tag" data-sort="tag"><?= t('common.col.tag') ?> ↕</th>
+        <th data-col="notes"><?= t('coll.th_note') ?></th>
         <th data-col="__edit"></th>
       </tr>
     </thead>
     <tbody id="tbody"></tbody>
   </table>
   <div class="empty-state" id="empty-state">
-    <p>NO RESULTS</p><p>Try adjusting your filters.</p>
+    <p><?= t('coll.no_results') ?></p><p><?= t('coll.no_results_hint') ?></p>
   </div>
 </div>
 
 <div class="summary-bar">
-  Showing <strong id="sum-show">0</strong> of <strong id="sum-tot">0</strong> &nbsp;·&nbsp;
-  Owned: <strong id="sum-own">0</strong> &nbsp;·&nbsp;
-  Spend: <strong id="sum-spend">€0</strong> &nbsp;·&nbsp;
-  CIB Total: <strong id="sum-chart">—</strong>
+  <?= t('coll.sum_showing') ?> <strong id="sum-show">0</strong> <?= t('coll.sum_of') ?> <strong id="sum-tot">0</strong> &nbsp;·&nbsp;
+  <?= t('dashboard.owned') ?>: <strong id="sum-own">0</strong> &nbsp;·&nbsp;
+  <?= t('coll.sum_spend') ?>: <strong id="sum-spend"><?= money(0) ?></strong> &nbsp;·&nbsp;
+  <?= t('coll.sum_cib') ?>: <strong id="sum-chart">—</strong>
 </div>
 
 <!-- EDIT DRAWER -->
@@ -180,38 +181,38 @@ $gradeLabels = gradingConfig()['labels'];
     <div class="drawer-header">
       <div class="drawer-header-info">
         <div class="drawer-title" id="d-title">—</div>
-        <div class="drawer-subtitle" id="d-system">PAL System</div>
+        <div class="drawer-subtitle" id="d-system"></div>
       </div>
       <button class="drawer-close" onclick="closeDrawer()">✕</button>
     </div>
     <div class="drawer-body">
 
       <div class="drawer-section">
-        <div class="section-label">Copies</div>
+        <div class="section-label"><?= t('common.col.copies') ?></div>
         <div class="copy-tabs" id="copy-tabs"></div>
       </div>
 
       <div class="drawer-section">
-        <div class="section-label">Ownership</div>
+        <div class="section-label"><?= t('drawer.ownership') ?></div>
         <div class="toggle-row">
           <label class="toggle"><input type="checkbox" id="d-owned"><span class="toggle-slider"></span></label>
-          <span class="toggle-label" id="lbl-owned">Not owned</span>
+          <span class="toggle-label" id="lbl-owned"><?= t('drawer.not_owned') ?></span>
         </div>
       </div>
 
       <div class="drawer-section">
         <!-- Condition grading (assets/js/grading.js) — takes the Completeness field into its top row -->
         <div id="d-grading"></div>
-        <div class="field" id="d-completeness-field"><label>Completeness</label>
+        <div class="field" id="d-completeness-field"><label><?= t('common.col.completeness') ?></label>
           <select id="d-completeness">
-            <option value="">— N/A —</option>
+            <option value="">— <?= t('drawer.na') ?> —</option>
             <?php foreach ($compOpts as $c): ?><option><?= htmlspecialchars($c) ?></option><?php endforeach; ?>
           </select>
         </div>
         <div class="field-row">
-          <div class="field"><label>Played Status</label>
+          <div class="field"><label><?= t('drawer.played_status') ?></label>
             <select id="d-played">
-              <option value="">— N/A —</option>
+              <option value="">— <?= t('drawer.na') ?> —</option>
               <?php foreach ($playedOpts as $p): ?><option><?= htmlspecialchars($p) ?></option><?php endforeach; ?>
             </select>
           </div>
@@ -219,42 +220,42 @@ $gradeLabels = gradingConfig()['labels'];
       </div>
 
       <div class="drawer-section">
-        <div class="section-label">Pricing (PriceCharting)</div>
+        <div class="section-label"><?= t('drawer.pricing') ?></div>
         <div id="d-pc-prices-row" style="display:none;margin-bottom:8px">
           <table style="font-size:.75rem;width:100%;border-collapse:collapse">
-            <tr id="d-loose-row" style="display:none"><td style="color:var(--muted);padding:2px 0;width:60px">Loose</td><td><span id="d-loose-price-val" style="color:var(--wiiu);font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case);font-size:1rem"></span></td></tr>
-            <tr id="d-cib-row"   style="display:none"><td style="color:var(--muted);padding:2px 0">CIB</td>  <td><span id="d-cib-price-val"   style="color:var(--wiiu);font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case);font-size:1rem"></span></td></tr>
-            <tr id="d-new-row"   style="display:none"><td style="color:var(--muted);padding:2px 0">New</td>  <td><span id="d-new-price-val"   style="color:var(--wiiu);font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case);font-size:1rem"></span></td></tr>
+            <tr id="d-loose-row" style="display:none"><td style="color:var(--muted);padding:2px 0;width:60px"><?= t('common.price.loose') ?></td><td><span id="d-loose-price-val" style="color:var(--wiiu);font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case);font-size:1rem"></span></td></tr>
+            <tr id="d-cib-row"   style="display:none"><td style="color:var(--muted);padding:2px 0"><?= t('common.price.cib') ?></td>  <td><span id="d-cib-price-val"   style="color:var(--wiiu);font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case);font-size:1rem"></span></td></tr>
+            <tr id="d-new-row"   style="display:none"><td style="color:var(--muted);padding:2px 0"><?= t('common.price.new') ?></td>  <td><span id="d-new-price-val"   style="color:var(--wiiu);font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case);font-size:1rem"></span></td></tr>
           </table>
-          <a id="d-pc-link" href="#" target="_blank" style="color:var(--wiiu);font-size:.68rem;display:none">View on PriceCharting ↗</a>
+          <a id="d-pc-link" href="#" target="_blank" style="color:var(--wiiu);font-size:.68rem;display:none"><?= t('drawer.view_pc') ?> ↗</a>
         </div>
-        <div class="section-label" style="margin-top:10px;margin-bottom:6px">Use for owned value</div>
+        <div class="section-label" style="margin-top:10px;margin-bottom:6px"><?= t('drawer.value_type') ?></div>
         <div style="display:flex;gap:14px;font-size:.75rem;flex-wrap:wrap" id="d-price-type-wrap">
-          <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="d-value-type" id="d-vtype-loose" value="loose"> Loose</label>
-          <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="d-value-type" id="d-vtype-cib"   value="cib"   checked> CIB</label>
-          <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="d-value-type" id="d-vtype-new"   value="new"> New</label>
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="d-value-type" id="d-vtype-loose" value="loose"> <?= t('common.price.loose') ?></label>
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="d-value-type" id="d-vtype-cib"   value="cib"   checked> <?= t('common.price.cib') ?></label>
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="d-value-type" id="d-vtype-new"   value="new"> <?= t('common.price.new') ?></label>
         </div>
         <div class="field-row">
-          <div class="field"><label>Paid (€)</label><input type="number" id="d-price" step="0.01" min="0" placeholder="0.00"></div>
-          <div class="field"><label>Personal Price (€)</label><input type="number" id="d-chart" step="0.01" min="0" placeholder="0.00"></div>
+          <div class="field"><label><?= t('drawer.paid', ['sym' => setting('currency_symbol')]) ?></label><input type="number" id="d-price" step="0.01" min="0" placeholder="0.00"></div>
+          <div class="field"><label><?= t('drawer.personal_price', ['sym' => setting('currency_symbol')]) ?></label><input type="number" id="d-chart" step="0.01" min="0" placeholder="0.00"></div>
         </div>
         <div class="field-row">
-          <div class="field"><label>Buy Min (€)</label><input type="number" id="d-min" step="0.01" min="0" placeholder="0.00"></div>
-          <div class="field"><label>Buy Max (€)</label><input type="number" id="d-max" step="0.01" min="0" placeholder="0.00"></div>
+          <div class="field"><label><?= t('drawer.buy_min', ['sym' => setting('currency_symbol')]) ?></label><input type="number" id="d-min" step="0.01" min="0" placeholder="0.00"></div>
+          <div class="field"><label><?= t('drawer.buy_max', ['sym' => setting('currency_symbol')]) ?></label><input type="number" id="d-max" step="0.01" min="0" placeholder="0.00"></div>
         </div>
       </div>
 
       <!-- EXTERNAL LINKS -->
       <div class="drawer-section" id="d-ext-links" style="display:none">
-        <div class="section-label">Quick Search</div>
+        <div class="section-label"><?= t('drawer.quick_search') ?></div>
         <div id="d-links-list" style="display:flex;flex-direction:column;gap:5px"></div>
       </div>
 
       <!-- TAG -->
       <div class="drawer-section">
-        <div class="section-label">Tag</div>
+        <div class="section-label"><?= t('common.col.tag') ?></div>
         <select id="d-tag" style="width:100%;padding:8px 10px;font-size:.78rem">
-          <option value="">— No tag —</option>
+          <option value="">— <?= t('drawer.no_tag') ?> —</option>
           <?php foreach ($tagOpts as $t): ?>
           <option value="<?= htmlspecialchars($t) ?>"><?= htmlspecialchars($t) ?></option>
           <?php endforeach; ?>
@@ -262,46 +263,46 @@ $gradeLabels = gradingConfig()['labels'];
       </div>
 
       <div class="drawer-section">
-        <div class="section-label">Upgrade</div>
+        <div class="section-label"><?= t('common.col.upgrade') ?></div>
         <div class="toggle-row">
           <label class="toggle"><input type="checkbox" id="d-upgrade"><span class="toggle-slider"></span></label>
-          <span class="toggle-label" id="lbl-upgrade">No upgrade needed</span>
+          <span class="toggle-label" id="lbl-upgrade"><?= t('drawer.no_upgrade') ?></span>
         </div>
-        <div class="field"><label>Upgrade Reason</label><textarea id="d-upgrade-reason" placeholder="e.g. cracked case, want sealed copy..."></textarea></div>
+        <div class="field"><label><?= t('common.col.upgrade_reason') ?></label><textarea id="d-upgrade-reason" placeholder="<?= t('drawer.upgrade_ph') ?>"></textarea></div>
       </div>
 
       <div class="drawer-section">
-        <div class="section-label">Wishlist</div>
+        <div class="section-label"><?= t('common.nav.wishlist') ?></div>
         <div class="toggle-row">
           <label class="toggle"><input type="checkbox" id="d-wishlist"><span class="toggle-slider"></span></label>
-          <span class="toggle-label" id="lbl-wishlist">Not on wishlist</span>
+          <span class="toggle-label" id="lbl-wishlist"><?= t('drawer.not_wished') ?></span>
         </div>
       </div>
 
       <div class="drawer-section">
-        <div class="section-label">Notes</div>
-        <div class="field"><textarea id="d-notes" placeholder="Where bought, condition details..."></textarea></div>
+        <div class="section-label"><?= t('common.col.notes') ?></div>
+        <div class="field"><textarea id="d-notes" placeholder="<?= t('drawer.notes_ph') ?>"></textarea></div>
       </div>
 
       <div class="drawer-section">
-        <div class="section-label">Photos</div>
+        <div class="section-label"><?= t('settings.photos') ?></div>
         <div class="img-upload-area">
           <input type="file" id="d-photos" accept="image/*" multiple onchange="uploadPhotos(event)">
-          <div class="img-upload-text">Click or drag to add photos</div>
+          <div class="img-upload-text"><?= t('drawer.add_photos') ?></div>
         </div>
         <div class="img-preview-grid" id="d-photo-grid"></div>
         <div id="d-primary-wrap" style="display:none;margin-top:10px">
-          <div class="section-label" style="margin-bottom:6px">Primary Display Image</div>
+          <div class="section-label" style="margin-bottom:6px"><?= t('drawer.primary') ?></div>
           <select id="d-primary" style="font-size:.75rem;padding:6px 10px;width:100%">
-            <option value="">— First uploaded photo —</option>
+            <option value="">— <?= t('drawer.first_photo') ?> —</option>
           </select>
         </div>
       </div>
 
     </div>
     <div class="drawer-footer">
-      <button class="btn-ghost" onclick="closeDrawer()">Cancel</button>
-      <button class="btn" onclick="saveEntry()">Save</button>
+      <button class="btn-ghost" onclick="closeDrawer()"><?= t('common.cancel') ?></button>
+      <button class="btn" onclick="saveEntry()"><?= t('common.save') ?></button>
     </div>
   </div>
 </div>
@@ -311,13 +312,13 @@ $gradeLabels = gradingConfig()['labels'];
   <button class="lb-close" onclick="closeLightbox()">✕</button>
   <img id="lb-img" src="" alt="">
   <div class="lb-nav">
-    <button class="lb-btn" onclick="lbPrev(event)">← Prev</button>
+    <button class="lb-btn" onclick="lbPrev(event)">← <?= t('drawer.prev') ?></button>
     <span class="lb-label" id="lb-lbl"></span>
-    <button class="lb-btn" onclick="lbNext(event)">Next →</button>
+    <button class="lb-btn" onclick="lbNext(event)"><?= t('drawer.next') ?> →</button>
   </div>
   <div class="lb-nav" id="lb-rotate-nav" style="display:none">
-    <button class="lb-btn" onclick="lbRotate(event,-90)">↺ Rotate Left</button>
-    <button class="lb-btn" onclick="lbRotate(event,90)">↻ Rotate Right</button>
+    <button class="lb-btn" onclick="lbRotate(event,-90)">↺ <?= t('drawer.rotate_left') ?></button>
+    <button class="lb-btn" onclick="lbRotate(event,90)">↻ <?= t('drawer.rotate_right') ?></button>
   </div>
 </div>
 
@@ -331,6 +332,7 @@ const USER_ID  = <?= (int)$user['id'] ?>;
 const SYS_ID   = <?= (int)$sysId ?>;
 const SYS_NAME = <?= json_encode($curSys['name']       ?? '') ?>;
 const SYS_SHORT= <?= json_encode($curSys['short_name'] ?? '') ?>;
+const SYS_REGION = <?= json_encode($curSys ? systemRegion($curSys) : setting('default_region')) ?>;
 const SYS_COUNTS_TOTALS = <?= json_encode((bool)($curSys['count_for_totals'] ?? true)) ?>;
 window.USER_AUCTION_SITES = <?= json_encode(json_decode($user['auction_sites'] ?? '[]', true) ?: []) ?>;
 
@@ -560,32 +562,32 @@ function render() {
       ? `<span class="price-na">—</span>`
       : displayCopies.length > 1
         ? displayCopies.map(c => c.price_paid != null
-            ? `<span class="price" style="display:block;font-size:.85rem">€${parseFloat(c.price_paid).toFixed(2)}</span>`
+            ? `<span class="price" style="display:block;font-size:.85rem">${money(c.price_paid)}</span>`
             : `<span class="price-na" style="display:block">—</span>`).join('')
         : (displayCopies[0].price_paid != null
-            ? `<span class="price">€${parseFloat(displayCopies[0].price_paid).toFixed(2)}</span>`
+            ? `<span class="price">${money(displayCopies[0].price_paid)}</span>`
             : `<span class="price-na">—</span>`);
 
     // Buy range — from copy 1 only (shared reference)
     let rangeCell = '<span class="price-na">—</span>';
-    if (c1.price_min!=null && c1.price_max!=null) rangeCell=`<span class="price-range">€${parseFloat(c1.price_min).toFixed(0)}–€${parseFloat(c1.price_max).toFixed(0)}</span>`;
-    else if (c1.price_min!=null) rangeCell=`<span class="price-range">≥€${parseFloat(c1.price_min).toFixed(0)}</span>`;
-    else if (c1.price_max!=null) rangeCell=`<span class="price-range">≤€${parseFloat(c1.price_max).toFixed(0)}</span>`;
+    if (c1.price_min!=null && c1.price_max!=null) rangeCell=`<span class="price-range">${money(c1.price_min, 0)}–${money(c1.price_max, 0)}</span>`;
+    else if (c1.price_min!=null) rangeCell=`<span class="price-range">≥${money(c1.price_min, 0)}</span>`;
+    else if (c1.price_max!=null) rangeCell=`<span class="price-range">≤${money(c1.price_max, 0)}</span>`;
 
     // CIB price — PC price in blue (linked), personal in red
-    const cibTitle = g.cib_price_updated_at ? `PC CIB — last updated ${g.cib_price_updated_at.substring(0,10)}` : 'PC CIB Price';
+    const cibTitle = g.cib_price_updated_at ? tRaw('coll.pc_cib_updated', {date: fmtDate(g.cib_price_updated_at)}) : tRaw('coll.pc_cib');
     let cibParts = [];
     if (g.cib_price != null) {
-      const pcAmt = `€${parseFloat(g.cib_price).toFixed(2)}`;
+      const pcAmt = money(g.cib_price);
       cibParts.push(g.pc_link
         ? `<a href="${escAttr(g.pc_link)}" target="_blank" class="price price-chart" style="text-decoration:none" title="${escAttr(cibTitle)}">${pcAmt}</a>`
         : `<span class="price price-chart" title="${escAttr(cibTitle)}">${pcAmt}</span>`);
     } else if (g.pc_link) {
       // No price yet but we have a link — show a clickable "—" in blue
-      cibParts.push(`<a href="${escAttr(g.pc_link)}" target="_blank" style="color:var(--wiiu);text-decoration:none;font-size:.75rem" title="View on PriceCharting">PC ↗</a>`);
+      cibParts.push(`<a href="${escAttr(g.pc_link)}" target="_blank" style="color:var(--wiiu);text-decoration:none;font-size:.75rem" title="${t('drawer.view_pc')}">PC ↗</a>`);
     }
     if (c1.chart_price != null) {
-      cibParts.push(`<span class="price" style="color:var(--personal-price)" title="Personal price">€${parseFloat(c1.chart_price).toFixed(2)}</span>`);
+      cibParts.push(`<span class="price" style="color:var(--personal-price)" title="${t('coll.personal_price')}">${money(c1.chart_price)}</span>`);
     }
     const chartCell = cibParts.length ? cibParts.join(' <span style="color:var(--border2)">·</span> ') : `<span class="price-na">—</span>`;
 
@@ -616,13 +618,13 @@ function render() {
       <td data-col="copies">${copyCnt}</td>
       <td data-col="price_paid">${paidCell}</td>
       <td data-col="buy_range">${rangeCell}</td>
-      <td data-col="loose_price">${g.loose_price != null ? `<span class="price price-chart" style="color:var(--muted)" title="${escAttr(g.loose_price_updated_at?'Last updated: '+g.loose_price_updated_at.substring(0,10):'Loose Price')}">€${parseFloat(g.loose_price).toFixed(2)}</span>` : `<span class="price-na">—</span>`}</td>
+      <td data-col="loose_price">${g.loose_price != null ? `<span class="price price-chart" style="color:var(--muted)" title="${escAttr(g.loose_price_updated_at?tRaw('coll.last_updated', {date: fmtDate(g.loose_price_updated_at)}):tRaw('common.col.loose_price'))}">${money(g.loose_price)}</span>` : `<span class="price-na">—</span>`}</td>
       <td data-col="cib_price">${chartCell}</td>
-      <td data-col="new_price">${g.new_price != null ? `<span class="price price-chart" style="color:var(--green)" title="${escAttr(g.new_price_updated_at?'Last updated: '+g.new_price_updated_at.substring(0,10):'New Price')}">€${parseFloat(g.new_price).toFixed(2)}</span>` : `<span class="price-na">—</span>`}</td>
+      <td data-col="new_price">${g.new_price != null ? `<span class="price price-chart" style="color:var(--green)" title="${escAttr(g.new_price_updated_at?tRaw('coll.last_updated', {date: fmtDate(g.new_price_updated_at)}):tRaw('common.col.new_price'))}">${money(g.new_price)}</span>` : `<span class="price-na">—</span>`}</td>
       <td data-col="upgrade_reason" class="note-cell" style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.66rem;color:var(--orange);font-style:italic" title="${escAttr(upReason)}">${upReason ? esc(upReason) : '<span style=\'color:var(--border2)\'>—</span>'}</td>
       <td data-col="tag"><span style="font-size:.68rem;color:var(--wiiu)">${esc(copies.find(c=>c.tag)?.tag||'')|| '<span style=\'color:var(--border2)\'>—</span>'}</span></td>
       <td data-col="notes" class="note-cell" style="max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.66rem;color:var(--muted);font-style:italic" title="${escAttr(noteText)}">${noteCell}</td>
-      <td data-col="__edit"><button class="btn-icon" onclick="openDrawer(${g.id})">Edit</button></td>
+      <td data-col="__edit"><button class="btn-icon" onclick="openDrawer(${g.id})">${t('common.edit')}</button></td>
     `;
     tbody.appendChild(tr);
   });
@@ -638,17 +640,17 @@ function updateStats(filtered) {
   const allCopies = Object.values(entryMap).flat().filter(c=>c.owned);
 
   // Only show owned/copies counts if this system counts toward totals
-  const ownedDisplay  = SYS_COUNTS_TOTALS ? allOwned.length : '—';
+  const ownedDisplay  = SYS_COUNTS_TOTALS ? fmtNum(allOwned.length) : '—';
   const pctDisplay    = SYS_COUNTS_TOTALS ? (tot ? Math.round(allOwned.length/tot*100)+'%' : '0%') : '—';
-  const copiesDisplay = SYS_COUNTS_TOTALS ? allCopies.length : '—';
+  const copiesDisplay = SYS_COUNTS_TOTALS ? fmtNum(allCopies.length) : '—';
 
   document.getElementById('st-owned').textContent   = ownedDisplay;
   document.getElementById('st-pct').textContent     = pctDisplay;
   document.getElementById('st-copies').textContent  = copiesDisplay;
   document.getElementById('st-upgrade').textContent = allCopies.filter(c=>c.upgrade).length;
-  document.getElementById('st-spent').textContent   = '€'+Math.round(allCopies.reduce((s,c)=>s+(parseFloat(c.price_paid)||0),0));
+  document.getElementById('st-spent').textContent   = money(allCopies.reduce((s,c)=>s+(parseFloat(c.price_paid)||0),0), 0);
   document.getElementById('prog-fill').style.width  = tot?(allOwned.length/tot*100)+'%':'0%';
-  document.getElementById('prog-text').textContent  = allOwned.length+' / '+tot;
+  document.getElementById('prog-text').textContent  = fmtNum(allOwned.length)+' / '+fmtNum(tot);
 
   // CIB totals from games table
   const cibAll   = allGames.reduce((s,g)=>s+(parseFloat(g.cib_price)||0),0);
@@ -663,19 +665,19 @@ function updateStats(filtered) {
       ownedValue += price;
     });
   });
-  document.getElementById('st-cib-all').textContent   = '€'+Math.round(cibAll);
-  document.getElementById('st-cib-owned').textContent = '€'+Math.round(ownedValue);
+  document.getElementById('st-cib-all').textContent   = money(cibAll, 0);
+  document.getElementById('st-cib-owned').textContent = money(ownedValue, 0);
 
   const fCopies   = filtered.map(g=>entryMap[g.id]||[]).flat();
   const fOwned    = filtered.filter(g=>(entryMap[g.id]||[]).some(c=>c.owned));
   const fSpend    = fCopies.reduce((s,c)=>s+(parseFloat(c.price_paid)||0),0);
   const fCibAll   = filtered.reduce((s,g)=>s+(parseFloat(g.cib_price)||0),0);
   const fCibOwned = fOwned.reduce((s,g)=>s+(parseFloat(g.cib_price)||0),0);
-  document.getElementById('sum-show').textContent  = filtered.length;
-  document.getElementById('sum-tot').textContent   = allGames.length;
-  document.getElementById('sum-own').textContent   = fOwned.length;
-  document.getElementById('sum-spend').textContent = '€'+fSpend.toFixed(2);
-  document.getElementById('sum-chart').textContent = fCibAll > 0 ? '€'+fCibAll.toFixed(2) : '—';
+  document.getElementById('sum-show').textContent  = fmtNum(filtered.length);
+  document.getElementById('sum-tot').textContent   = fmtNum(allGames.length);
+  document.getElementById('sum-own').textContent   = fmtNum(fOwned.length);
+  document.getElementById('sum-spend').textContent = money(fSpend);
+  document.getElementById('sum-chart').textContent = fCibAll > 0 ? money(fCibAll) : '—';
 }
 
 // SORT
@@ -703,7 +705,7 @@ async function toggleOwned(gameId) {
     const idx = entryMap[gameId].findIndex(c=>c.copy_number==1);
     if (idx>=0) entryMap[gameId][idx] = {...entryMap[gameId][idx], ...res.entry};
     else entryMap[gameId].push(res.entry);
-    render(); toast(newOwned ? '✓ Added to collection' : 'Removed from collection');
+    render(); toast(newOwned ? '✓ '+tRaw('coll.added') : tRaw('coll.removed'));
   }
 }
 
@@ -722,7 +724,7 @@ async function toggleWishlist(gameId) {
     const idx = entryMap[gameId].findIndex(c=>c.copy_number==1);
     if (idx>=0) entryMap[gameId][idx] = {...entryMap[gameId][idx], ...res.entry};
     else entryMap[gameId].push(res.entry);
-    render(); toast(newWish ? '♥ Added to wishlist' : 'Removed from wishlist');
+    render(); toast(newWish ? '♥ '+tRaw('coll.wish_added') : tRaw('coll.wish_removed'));
   }
 }
 
@@ -741,7 +743,7 @@ async function toggleUpgrade(gameId) {
     const idx = entryMap[gameId].findIndex(c=>c.copy_number==1);
     if (idx>=0) entryMap[gameId][idx] = {...entryMap[gameId][idx], ...res.entry};
     else entryMap[gameId].push(res.entry);
-    render(); toast(newUpgrade ? '↑ Marked for upgrade' : 'Upgrade removed');
+    render(); toast(newUpgrade ? '↑ '+tRaw('coll.upgrade_on') : tRaw('coll.upgrade_off'));
   }
 }
 
@@ -750,7 +752,7 @@ function openDrawer(gameId) {
   editGameId = gameId;
   const g = allGames.find(x=>x.id==gameId); if (!g) return;
   document.getElementById('d-title').textContent  = g.title;
-  document.getElementById('d-system').textContent = SYS_NAME;
+  document.getElementById('d-system').textContent = SYS_NAME + (SYS_REGION && SYS_REGION !== 'Mixed' ? ' · ' + SYS_REGION : '');
 
   // Show CIB price from PriceCharting if available
   // Show PC prices
@@ -765,10 +767,10 @@ function openDrawer(gameId) {
       const row = document.getElementById(rowId);
       if (price != null) {
         row.style.display = '';
-        const title = updatedAt ? `Last updated: ${updatedAt.substring(0,10)}` : '';
+        const title = updatedAt ? t('coll.last_updated', {date: fmtDate(updatedAt)}) : '';
         document.getElementById(valId).innerHTML = title
-          ? `<span title="${title}" style="cursor:help;border-bottom:1px dashed var(--muted)">€${parseFloat(price).toFixed(2)}</span>`
-          : `€${parseFloat(price).toFixed(2)}`;
+          ? `<span title="${title}" style="cursor:help;border-bottom:1px dashed var(--muted)">${money(price)}</span>`
+          : money(price);
       } else { row.style.display = 'none'; }
     }
     setPriceRow('d-loose-row','d-loose-price-val', g.loose_price, g.loose_price_updated_at);
@@ -787,7 +789,7 @@ function openDrawer(gameId) {
   linksList.innerHTML = '';
   const sysShort = SYS_SHORT || '';
   const titleEnc = encodeURIComponent(g.title.replace(/['"]/g,''));
-  const region   = 'PAL';
+  const region   = SYS_REGION === 'Mixed' ? '' : SYS_REGION;
 
   // Wikipedia
   const wikiUrl = `https://wikipedia.org/w/index.php?search=${titleEnc}`;
@@ -817,20 +819,20 @@ function renderCopyTabs() {
   for (let i=1;i<=maxCopy;i++) {
     const btn=document.createElement('button');
     btn.className='copy-tab'+(i===editCopy?' active':'');
-    btn.textContent='Copy '+i;
+    btn.textContent=tRaw('drawer.copy_n', {n: i});
     const ii=i;
     btn.onclick=()=>{editCopy=ii;renderCopyTabs();loadCopyIntoForm(ii);};
     tabs.appendChild(btn);
   }
   const add=document.createElement('button');
-  add.className='copy-tab-add'; add.textContent='+ Add Copy';
+  add.className='copy-tab-add'; add.textContent='+ '+tRaw('drawer.add_copy');
   add.onclick=()=>{const next=maxCopy+1;if(!entryMap[editGameId])entryMap[editGameId]=[];editCopy=next;renderCopyTabs();loadCopyIntoForm(next);};
   tabs.appendChild(add);
 }
 
 function loadCopyIntoForm(copyNum) {
   const c=(entryMap[editGameId]||[]).find(x=>x.copy_number==copyNum)||{};
-  setTog('d-owned',   c.owned||false,   'lbl-owned',   c.owned?'In collection':'Not owned');
+  setTog('d-owned',   c.owned||false,   'lbl-owned',   tRaw(c.owned?'drawer.owned':'drawer.not_owned'));
   document.getElementById('d-completeness').value = c.completeness  ||'';
   gradeEditor.load(c, {systemId: SYS_ID});
   document.getElementById('d-played').value       = c.played_status ||'';
@@ -838,8 +840,8 @@ function loadCopyIntoForm(copyNum) {
   document.getElementById('d-chart').value        = c.chart_price  !=null?c.chart_price:'';
   document.getElementById('d-min').value          = c.price_min    !=null?c.price_min:'';
   document.getElementById('d-max').value          = c.price_max    !=null?c.price_max:'';
-  setTog('d-upgrade', c.upgrade||false, 'lbl-upgrade', c.upgrade?'Upgrade wanted':'No upgrade needed');
-  setTog('d-wishlist',c.wishlist||false,'lbl-wishlist',c.wishlist?'On wishlist':'Not on wishlist');
+  setTog('d-upgrade', c.upgrade||false, 'lbl-upgrade', tRaw(c.upgrade?'drawer.upgrade_wanted':'drawer.no_upgrade'));
+  setTog('d-wishlist',c.wishlist||false,'lbl-wishlist',tRaw(c.wishlist?'drawer.wished':'drawer.not_wished'));
   document.getElementById('d-upgrade-reason').value = c.upgrade_reason||'';
   document.getElementById('d-notes').value           = c.notes||'';
   document.getElementById('d-tag').value = c.tag||'';
@@ -878,8 +880,8 @@ async function saveEntry() {
     const idx=entryMap[editGameId].findIndex(c=>c.copy_number==editCopy);
     if (idx>=0) entryMap[editGameId][idx]={...entryMap[editGameId][idx],...res.entry};
     else entryMap[editGameId].push(res.entry);
-    render(); closeDrawer(); toast('Saved');
-  } else { toast('Error: '+res.error,true); }
+    render(); closeDrawer(); toast(tRaw('common.saved'));
+  } else { toast(tRaw('common.err_prefix', {error: res.error}),true); }
 }
 
 // PHOTOS
@@ -888,7 +890,7 @@ async function uploadPhotos(e) {
   const copies = entryMap[editGameId] || [];
   const cp = copies.find(x => x.copy_number == editCopy);
   const entryId = cp?.id;
-  if (!entryId) { toast('Save the entry first before adding photos.', true); e.target.value = ''; return; }
+  if (!entryId) { toast(tRaw('drawer.save_first'), true); e.target.value = ''; return; }
   for (const file of files) {
     const fd = new FormData();
     fd.append('entry_id', entryId);
@@ -905,12 +907,12 @@ async function uploadPhotos(e) {
         entryMap[editGameId][idx].id || null
       );
     } else {
-      toast('Upload failed: ' + (res.error || ''), true);
+      toast(tRaw('drawer.upload_failed', {error: res.error || ''}), true);
     }
   }
   e.target.value = '';
   render();
-  toast('Photo(s) added');
+  toast(tRaw('drawer.photos_added'));
 }
 
 function renderPhotoGrid(photos, primaryPhoto, entryId) {
@@ -944,18 +946,18 @@ function renderPhotoGrid(photos, primaryPhoto, entryId) {
 
   if (hasDefault || (photos && photos.length > 1)) {
     wrap.style.display = 'block';
-    sel.innerHTML = '<option value="">— First uploaded photo —</option>';
+    sel.innerHTML = `<option value="">— ${t('drawer.first_photo')} —</option>`;
     if (hasDefault) {
       const opt = document.createElement('option');
       opt.value = '__default__';
-      opt.textContent = 'Default cover image';
+      opt.textContent = tRaw('drawer.default_cover');
       opt.selected = (primaryPhoto === '__default__');
       sel.appendChild(opt);
     }
     (photos||[]).forEach((fn, i) => {
       const opt = document.createElement('option');
       opt.value = fn;
-      opt.textContent = 'My photo ' + (i + 1);
+      opt.textContent = tRaw('drawer.my_photo', {n: i + 1});
       opt.selected = (fn === primaryPhoto);
       sel.appendChild(opt);
     });
@@ -970,14 +972,14 @@ async function rotatePhoto(idx, degrees) {
   const c = copies.find(x=>x.copy_number==editCopy);
   if (!c||!c.photos) return;
   const fn = c.photos[idx].split('?')[0]; // clean filename
-  toast('Rotating...');
+  toast(tRaw('drawer.rotating'));
   const res = await apiFetch('/api/photo_rotate.php', {entry_id:c.id, filename:fn, degrees});
   if (res.ok) {
     photoTs[fn] = res.ts; // store so lightbox also picks up new version
     renderPhotoGrid(c.photos, c.primary_photo||'', c.id||null);
     render();
-    toast('Photo rotated');
-  } else { toast('Rotation failed: '+(res.error||''), true); }
+    toast(tRaw('drawer.rotated'));
+  } else { toast(tRaw('drawer.rotate_failed', {error: res.error||''}), true); }
 }
 
 async function deletePhoto(idx) {
@@ -990,7 +992,7 @@ async function deletePhoto(idx) {
     c.photos.splice(idx,1);
     if (c.primary_photo===fn) c.primary_photo='';
     renderPhotoGrid(c.photos, c.primary_photo||'', c.id||null);
-    render(); toast('Photo removed');
+    render(); toast(tRaw('drawer.photo_removed'));
   }
 }
 
@@ -1033,7 +1035,7 @@ async function lbRotate(e, degrees) {
   if (!lbContext) return;
   const fn = lbRawNames[lbIdx].split('?')[0]; // clean filename
   if (!fn) return;
-  toast('Rotating...');
+  toast(tRaw('drawer.rotating'));
   const res = await apiFetch('/api/photo_rotate.php', {entry_id: lbContext.entryId, filename: fn, degrees});
   if (res.ok) {
     // Store timestamp so future openLightbox calls use the rotated version
@@ -1050,9 +1052,9 @@ async function lbRotate(e, degrees) {
     }
     // Update table thumbnail
     render();
-    toast('Photo rotated');
+    toast(tRaw('drawer.rotated'));
   } else {
-    toast('Rotation failed', true);
+    toast(tRaw('drawer.rotate_failed', {error: res.error || ''}), true);
   }
 }
 
@@ -1083,9 +1085,9 @@ function switchSystem(id) {
 // SHOW ALL
 // HELPERS
 function setTog(inputId,val,labelId,text){document.getElementById(inputId).checked=val;document.getElementById(labelId).textContent=text;}
-document.getElementById('d-owned').addEventListener('change',function(){document.getElementById('lbl-owned').textContent=this.checked?'In collection':'Not owned';});
-document.getElementById('d-upgrade').addEventListener('change',function(){document.getElementById('lbl-upgrade').textContent=this.checked?'Upgrade wanted':'No upgrade needed';});
-document.getElementById('d-wishlist').addEventListener('change',function(){document.getElementById('lbl-wishlist').textContent=this.checked?'On wishlist':'Not on wishlist';});
+document.getElementById('d-owned').addEventListener('change',function(){document.getElementById('lbl-owned').textContent=tRaw(this.checked?'drawer.owned':'drawer.not_owned');});
+document.getElementById('d-upgrade').addEventListener('change',function(){document.getElementById('lbl-upgrade').textContent=tRaw(this.checked?'drawer.upgrade_wanted':'drawer.no_upgrade');});
+document.getElementById('d-wishlist').addEventListener('change',function(){document.getElementById('lbl-wishlist').textContent=tRaw(this.checked?'drawer.wished':'drawer.not_wished');});
 async function apiFetch(path,body){return fetch(BASE+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json());}
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function escAttr(s){return String(s).replace(/"/g,'&quot;').replace(/'/g,'&#39;');}

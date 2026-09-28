@@ -3,11 +3,11 @@ require_once __DIR__ . '/config.php';
 $user = requireAdmin();
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="<?= currentLang() ?>">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PriceCharting Import — Game Collection</title>
+<title><?= pageTitle(tRaw('common.nav.pc_import')) ?></title>
 <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/main.css?v=<?= @filemtime(__DIR__.'/assets/css/main.css') ?>">
 <?= themeHead($user) ?>
 <style>
@@ -35,56 +35,57 @@ $user = requireAdmin();
   .ok   { color:var(--green); } .warn { color:var(--orange); } .err { color:var(--red); }
 </style>
 <?= csrfScript() ?>
+<?= appScript(['pc', 'import']) ?>
 </head>
 <body>
 
 <header class="site-header">
-  <a href="<?= BASE_URL ?>/dashboard.php" class="site-logo" style="text-decoration:none">Game <span>Collection</span></a>
+  <a href="<?= BASE_URL ?>/dashboard.php" class="site-logo" style="text-decoration:none"><?= siteLogoHtml() ?></a>
   <nav class="site-nav">
-    <a href="<?= BASE_URL ?>/dashboard.php" class="nav-link">Dashboard</a>
-    <a href="<?= BASE_URL ?>/collection.php" class="nav-link">Collection</a>
-    <a href="<?= BASE_URL ?>/wishlist.php" class="nav-link">Wishlist</a>
-    <a href="<?= BASE_URL ?>/admin.php" class="nav-link">← Admin</a>
-    <a href="<?= BASE_URL ?>/settings.php" class="nav-link">Settings</a>
-    <a href="<?= BASE_URL ?>/api/logout.php" class="nav-link">Sign Out</a>
+    <a href="<?= BASE_URL ?>/dashboard.php" class="nav-link"><?= t('common.nav.dashboard') ?></a>
+    <a href="<?= BASE_URL ?>/collection.php" class="nav-link"><?= t('common.nav.collection') ?></a>
+    <a href="<?= BASE_URL ?>/wishlist.php" class="nav-link"><?= t('common.nav.wishlist') ?></a>
+    <a href="<?= BASE_URL ?>/admin.php" class="nav-link">← <?= t('common.nav.admin') ?></a>
+    <a href="<?= BASE_URL ?>/settings.php" class="nav-link"><?= t('common.nav.settings') ?></a>
+    <a href="<?= BASE_URL ?>/api/logout.php" class="nav-link"><?= t('common.nav.sign_out') ?></a>
   </nav>
 </header>
 
 <div class="pc-wrap">
-  <h1>PriceCharting Import</h1>
+  <h1><?= t('common.nav.pc_import') ?></h1>
   <p class="desc">
-    Paste your PriceCharting CSV export. Matching priority: <strong>1)</strong> by <code>data-product</code> ID &nbsp;<strong>2)</strong> by console + title &nbsp;<strong>3)</strong> import as new game.<br>
-    CIB price, link and cover art are updated if they differ from what's stored. Existing cover art is never overwritten.
+    <?= t('pc.intro') ?><br>
+    <span style="color:var(--orange)"><?= t('common.currency_note', ['symbol' => setting('currency_symbol')]) ?></span>
   </p>
 
   <div class="step">
-    <div class="step-label">Step 1</div>
-    <h3>Paste CSV</h3>
-    <textarea class="csv-input" id="csv-input" placeholder="Paste CSV including header:
+    <div class="step-label"><?= t('import.step', ['n' => 1]) ?></div>
+    <h3><?= t('pc.paste_csv') ?></h3>
+    <textarea class="csv-input" id="csv-input" placeholder="<?= t('pc.placeholder') ?>
 console,name,data-product,link,loose,cib,new,coverArt,coverArtBase64
 WiiU,007 Legends,63286,https://www.pricecharting.com/game/pal-wii-u/007-legends,17.51,24.86,40.83,63286.jpg,data:image/jpeg;base64,..."></textarea>
     <div style="display:flex;justify-content:flex-end;margin-top:10px">
-      <button class="btn" onclick="previewImport()">Preview →</button>
+      <button class="btn" onclick="previewImport()"><?= t('pc.preview') ?> →</button>
     </div>
   </div>
 
   <div id="preview-wrap">
     <div class="step">
-      <div class="step-label">Step 2</div>
-      <h3>Review & Confirm</h3>
+      <div class="step-label"><?= t('import.step', ['n' => 2]) ?></div>
+      <h3><?= t('import.review') ?></h3>
       <div class="summary-chips" id="summary-chips"></div>
       <table class="preview-table">
         <thead>
           <tr>
-            <th>Art</th><th>Console</th><th>CSV Name</th><th>Matched / Action</th>
-            <th>Loose</th><th>CIB</th><th>New</th><th>Last Updated</th><th>Art</th><th>Status</th>
+            <th><?= t('pc.col_art') ?></th><th><?= t('pc.col_console') ?></th><th><?= t('pc.col_csv_name') ?></th><th><?= t('pc.col_matched') ?></th>
+            <th><?= t('common.price.loose') ?></th><th><?= t('common.price.cib') ?></th><th><?= t('common.price.new') ?></th><th><?= t('pc.col_updated') ?></th><th><?= t('pc.col_art') ?></th><th><?= t('import.col_status') ?></th>
           </tr>
         </thead>
         <tbody id="preview-body"></tbody>
       </table>
       <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px">
-        <button class="btn-ghost" onclick="reset()">← Start Over</button>
-        <button class="btn" id="btn-confirm" onclick="confirmImport()">Import</button>
+        <button class="btn-ghost" onclick="reset()">← <?= t('import.start_over') ?></button>
+        <button class="btn" id="btn-confirm" onclick="confirmImport()"><?= t('pc.import') ?></button>
       </div>
     </div>
   </div>
@@ -107,7 +108,7 @@ function parseCSV(text) {
   header.forEach((h,i) => idx[h.trim()] = i);
   const required = ['console','name','data-product','link','cib','coverArtBase64'];
   for (const r of required) {
-    if (idx[r] === undefined) { toast(`Missing CSV column: ${r}`, true); return []; }
+    if (idx[r] === undefined) { toast(tRaw('pc.err_column', {column: r}), true); return []; }
   }
   const rows = [];
   for (let i=1;i<lines.length;i++) {
@@ -140,16 +141,16 @@ function parseCSVLine(line) {
 
 async function previewImport() {
   const csv = document.getElementById('csv-input').value.trim();
-  if (!csv) { toast('Paste CSV first.', true); return; }
+  if (!csv) { toast(tRaw('pc.err_no_csv'), true); return; }
   parsedRows = parseCSV(csv);
-  if (!parsedRows.length) { toast('No valid rows found.', true); return; }
+  if (!parsedRows.length) { toast(tRaw('pc.err_no_rows'), true); return; }
 
   const res = await fetch(`${BASE}/api/pc_preview.php`, {
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({rows: parsedRows.map(r=>({console:r.console,pc_id:r.pc_id,name:r.name,cib:r.cib,hasArt:!!r.artBase64}))})
   }).then(r=>r.json());
 
-  if (!res.ok) { toast('Preview failed: '+res.error, true); return; }
+  if (!res.ok) { toast(tRaw('import.err_preview', {error: res.error}), true); return; }
   previewData = res.items;
   renderPreview();
 }
@@ -172,34 +173,33 @@ function renderPreview() {
 
     if (item.status === 'match') {
       cntMatch++;
-      const mt = item.match_type==='pc_id'?'by ID':'by title';
-      statusTag  = `<span class="tag-match">✓ Match (${mt})</span>`;
+      statusTag  = `<span class="tag-match">✓ ${t(item.match_type==='pc_id' ? 'pc.match_id' : 'pc.match_title')}</span>`;
       matchCell  = esc(item.game_title);
-      lastUpd    = item.last_updated ? item.last_updated.substring(0,10) : '—';
-      artTag     = item.art_action==='set' ? `<span class="tag-update">Will set</span>` :
-                   item.art_action==='skip'? `<span class="tag-skip">Keep existing</span>` :
-                                             `<span class="tag-skip">No art</span>`;
+      lastUpd    = item.last_updated ? fmtDate(item.last_updated) : '—';
+      artTag     = item.art_action==='set' ? `<span class="tag-update">${t('pc.art_set')}</span>` :
+                   item.art_action==='skip'? `<span class="tag-skip">${t('pc.art_keep')}</span>` :
+                                             `<span class="tag-skip">${t('pc.art_none')}</span>`;
       if (item.art_action==='set') cntArtSet++;
       if (item.art_action==='skip') cntArtSkip++;
       if (item.cib_changed) cntPriceUpdate++;
     } else if (item.status === 'new') {
       if (item.system_ok) {
         cntNew++;
-        statusTag = `<span class="tag-new">+ New game</span>`;
-        matchCell = '<span style="color:var(--muted)">Will be created</span>';
-        artTag    = row.artBase64 ? `<span class="tag-update">Will set</span>` : '<span class="tag-skip">No art</span>';
+        statusTag = `<span class="tag-new">+ ${t('pc.new_game')}</span>`;
+        matchCell = `<span style="color:var(--muted)">${t('pc.will_create')}</span>`;
+        artTag    = row.artBase64 ? `<span class="tag-update">${t('pc.art_set')}</span>` : `<span class="tag-skip">${t('pc.art_none')}</span>`;
       } else {
         cntNoSys++;
-        statusTag = `<span class="tag-nosy">✗ Unknown system: ${esc(row.console)}</span>`;
-        matchCell = '<span style="color:var(--red)">System not found</span>';
+        statusTag = `<span class="tag-nosy">✗ ${t('pc.unknown_system', {console: row.console})}</span>`;
+        matchCell = `<span style="color:var(--red)">${t('pc.system_not_found')}</span>`;
         artTag = '—';
       }
     }
 
     // Price cells — always show from CSV
-    looseCell = row.loose != null ? `<span style="color:var(--muted)">€${row.loose.toFixed(2)}</span>` : '—';
-    cibCell   = row.cib   != null ? `<span style="color:var(--wiiu)${item.cib_changed?' ;font-weight:bold':''}">€${row.cib.toFixed(2)}${item.cib_changed?' ↑':''}</span>` : '—';
-    newCell   = row.new   != null ? `<span style="color:var(--green)">€${row.new.toFixed(2)}</span>` : '—';
+    looseCell = row.loose != null ? `<span style="color:var(--muted)">${money(row.loose)}</span>` : '—';
+    cibCell   = row.cib   != null ? `<span style="color:var(--wiiu)${item.cib_changed?' ;font-weight:bold':''}">${money(row.cib)}${item.cib_changed?' ↑':''}</span>` : '—';
+    newCell   = row.new   != null ? `<span style="color:var(--green)">${money(row.new)}</span>` : '—';
 
     tr.innerHTML = `
       <td>${thumb}</td>
@@ -217,16 +217,16 @@ function renderPreview() {
   });
 
   document.getElementById('summary-chips').innerHTML = `
-    <span class="s-chip tag-match">${cntMatch} matched</span>
-    <span class="s-chip tag-new">${cntNew} new games</span>
-    ${cntNoSys ? `<span class="s-chip tag-nosy">${cntNoSys} unknown system</span>` : ''}
-    <span class="s-chip tag-update">${cntPriceUpdate} prices updating</span>
-    <span class="s-chip tag-update">${cntArtSet} art to set</span>
-    ${cntArtSkip ? `<span class="s-chip tag-skip">${cntArtSkip} art kept</span>` : ''}
+    <span class="s-chip tag-match">${t('pc.sum_matched', {n: cntMatch})}</span>
+    <span class="s-chip tag-new">${t('pc.sum_new', {n: cntNew})}</span>
+    ${cntNoSys ? `<span class="s-chip tag-nosy">${t('pc.sum_nosys', {n: cntNoSys})}</span>` : ''}
+    <span class="s-chip tag-update">${t('pc.sum_prices', {n: cntPriceUpdate})}</span>
+    <span class="s-chip tag-update">${t('pc.sum_art_set', {n: cntArtSet})}</span>
+    ${cntArtSkip ? `<span class="s-chip tag-skip">${t('pc.sum_art_kept', {n: cntArtSkip})}</span>` : ''}
   `;
 
   const total = cntMatch + cntNew;
-  document.getElementById('btn-confirm').textContent = `Import / Update ${total} Games`;
+  document.getElementById('btn-confirm').textContent = tnRaw('pc.import_n', total);
   document.getElementById('btn-confirm').disabled = total === 0;
   document.getElementById('preview-wrap').style.display='block';
   document.getElementById('preview-wrap').scrollIntoView({behavior:'smooth',block:'start'});
@@ -240,7 +240,7 @@ async function confirmImport() {
 
   for (let i=0; i<parsedRows.length; i+=BATCH) {
     const batch = parsedRows.slice(i, i+BATCH);
-    btn.textContent = `Importing... ${Math.min(i+BATCH,parsedRows.length)}/${parsedRows.length}`;
+    btn.textContent = tRaw('pc.importing', {done: Math.min(i+BATCH,parsedRows.length), total: parsedRows.length});
     const res = await fetch(`${BASE}/api/pc_import.php`, {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({rows: batch})
@@ -252,14 +252,14 @@ async function confirmImport() {
   const box = document.getElementById('result-box');
   box.classList.add('show');
   box.innerHTML = `
-    <div class="ok">✓ Done</div>
-    ${imported ? `<div class="ok">• ${imported} new game${imported!==1?'s':''} added to database</div>` : ''}
-    ${updated  ? `<div class="ok">• ${updated} game${updated!==1?'s':''} updated (CIB price / link / art)</div>` : ''}
-    ${skippedArt ? `<div class="warn">• ${skippedArt} cover art${skippedArt!==1?'s':''} skipped (existing art kept)</div>` : ''}
-    ${errors   ? `<div class="err">• ${errors} error${errors!==1?'s':''}</div>` : ''}
+    <div class="ok">✓ ${t('pc.done')}</div>
+    ${imported ? `<div class="ok">• ${tn('pc.res_added', imported)}</div>` : ''}
+    ${updated  ? `<div class="ok">• ${tn('pc.res_updated', updated)}</div>` : ''}
+    ${skippedArt ? `<div class="warn">• ${tn('pc.res_art_skipped', skippedArt)}</div>` : ''}
+    ${errors   ? `<div class="err">• ${tn('pc.res_errors', errors)}</div>` : ''}
   `;
   document.getElementById('preview-wrap').style.display='none';
-  toast('Import complete!');
+  toast(tRaw('import.done_toast'));
 }
 
 function reset() {

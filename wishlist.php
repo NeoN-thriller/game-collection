@@ -12,7 +12,7 @@ if ($shareToken) {
     if (!$viewUser) {
         $currentUser = auth();
         if (!$currentUser) { header('Location: '.BASE_URL.'/index.php'); exit; }
-        die('<p style="font:1rem DM Mono,monospace;color:#c94f3a;padding:40px">This wishlist is not public or does not exist.</p>');
+        die('<p style="font:1rem monospace;color:#c94f3a;padding:40px">'.t('wish.not_public').'</p>');
     }
     $isPublicView = true;
     $user     = $viewUser;
@@ -32,7 +32,7 @@ $st = db()->prepare("
            g.cib_price, g.cib_price_updated_at, g.pc_link,
            g.loose_price, g.loose_price_updated_at,
            g.new_price, g.new_price_updated_at,
-           s.name AS system_name, s.short_name, s.id AS system_id
+           s.name AS system_name, s.short_name, s.id AS system_id, s.region AS system_region
     FROM collection_entries ce
     JOIN games g   ON g.id  = ce.game_id
     JOIN systems s ON s.id  = g.system_id
@@ -62,6 +62,7 @@ foreach ($entries as $e) {
         'system_id'              => (int)$e['system_id'],
         'system_name'            => $e['system_name'],
         'short_name'             => $e['short_name'],
+        'region'                 => systemRegion(['region' => $e['system_region']]),
         'copies'                 => [],
     ];
 }
@@ -127,11 +128,11 @@ foreach ($entries as $e) {
 }
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="<?= currentLang() ?>">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><?= $isPublicView ? htmlspecialchars($user['username'])."'s Wishlist" : 'Wishlist' ?> — Game Collection</title>
+<title><?= pageTitle($isPublicView ? tRaw('wish.users_wishlist', ['user' => $user['username']]) : tRaw('common.nav.wishlist')) ?></title>
 <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/main.css?v=<?= @filemtime(__DIR__.'/assets/css/main.css') ?>">
 <?= themeHead($user) ?>
 <style>
@@ -147,31 +148,32 @@ foreach ($entries as $e) {
   .d-empty { font-size:.7rem; color:var(--muted); font-style:italic; }
 </style>
 <?= csrfScript() ?>
+<?= appScript(['coll', 'drawer', 'grading', 'wish']) ?>
 </head>
 <body>
 
 <header class="site-header">
-  <a href="<?= BASE_URL ?>/collection.php" class="site-logo" style="text-decoration:none">Game <span>Collection</span></a>
+  <a href="<?= BASE_URL ?>/collection.php" class="site-logo" style="text-decoration:none"><?= siteLogoHtml() ?></a>
   <div class="hstats">
-    <div class="hstat"><div class="hstat-val blue" id="hs-wish"><?= count($entries) ?></div><div class="hstat-label">Wishlisted</div></div>
-    <div class="hstat"><div class="hstat-val"><?= count($bySystem) ?></div><div class="hstat-label">Systems</div></div>
+    <div class="hstat"><div class="hstat-val blue" id="hs-wish"><?= count($entries) ?></div><div class="hstat-label"><?= t('dashboard.wishlisted') ?></div></div>
+    <div class="hstat"><div class="hstat-val"><?= count($bySystem) ?></div><div class="hstat-label"><?= t('dashboard.systems') ?></div></div>
     <?php if ($isPublicView): ?>
-    <div class="hstat"><div class="hstat-val" style="font-size:1rem;color:var(--muted)"><?= htmlspecialchars($user['username']) ?></div><div class="hstat-label">Wishlist</div></div>
+    <div class="hstat"><div class="hstat-val" style="font-size:1rem;color:var(--muted)"><?= htmlspecialchars($user['username']) ?></div><div class="hstat-label"><?= t('common.nav.wishlist') ?></div></div>
     <?php endif; ?>
   </div>
   <nav class="site-nav">
     <?php if ($isPublicView && $loggedIn): ?>
       <span class="nav-user">👤 <?= htmlspecialchars($loggedIn['username']) ?></span>
-      <a href="<?= BASE_URL ?>/dashboard.php" class="nav-link">Dashboard</a>
-      <a href="<?= BASE_URL ?>/collection.php" class="nav-link">Collection</a>
-      <a href="<?= BASE_URL ?>/wishlist.php" class="nav-link">My Wishlist</a>
+      <a href="<?= BASE_URL ?>/dashboard.php" class="nav-link"><?= t('common.nav.dashboard') ?></a>
+      <a href="<?= BASE_URL ?>/collection.php" class="nav-link"><?= t('common.nav.collection') ?></a>
+      <a href="<?= BASE_URL ?>/wishlist.php" class="nav-link"><?= t('wish.my_wishlist') ?></a>
     <?php elseif (!$isPublicView): ?>
       <span class="nav-user">👤 <?= htmlspecialchars($user['username']) ?></span>
-      <a href="<?= BASE_URL ?>/dashboard.php" class="nav-link">Dashboard</a>
-      <a href="<?= BASE_URL ?>/collection.php" class="nav-link">Collection</a>
-      <?php if (isAdmin()): ?><a href="<?= BASE_URL ?>/admin.php" class="nav-link">Admin</a><?php endif; ?>
-      <a href="<?= BASE_URL ?>/settings.php" class="nav-link">Settings</a>
-      <a href="<?= BASE_URL ?>/api/logout.php" class="nav-link">Sign Out</a>
+      <a href="<?= BASE_URL ?>/dashboard.php" class="nav-link"><?= t('common.nav.dashboard') ?></a>
+      <a href="<?= BASE_URL ?>/collection.php" class="nav-link"><?= t('common.nav.collection') ?></a>
+      <?php if (isAdmin()): ?><a href="<?= BASE_URL ?>/admin.php" class="nav-link"><?= t('common.nav.admin') ?></a><?php endif; ?>
+      <a href="<?= BASE_URL ?>/settings.php" class="nav-link"><?= t('common.nav.settings') ?></a>
+      <a href="<?= BASE_URL ?>/api/logout.php" class="nav-link"><?= t('common.nav.sign_out') ?></a>
     <?php endif; ?>
   </nav>
 </header>
@@ -180,11 +182,11 @@ foreach ($entries as $e) {
 <div class="toolbar">
   <div class="search-wrap">
     <span class="search-icon">⌕</span>
-    <input type="text" id="tb-search" placeholder="Search wishlist...">
+    <input type="text" id="tb-search" placeholder="<?= t('wish.search') ?>">
   </div>
   <?php if ($tagOpts): ?>
   <select id="tb-tag" onchange="filterTable()">
-    <option value="">All Tags</option>
+    <option value=""><?= t('coll.all_tags') ?></option>
     <?php foreach ($tagOpts as $t): ?>
     <option value="<?= htmlspecialchars(strtolower($t)) ?>"><?= htmlspecialchars($t) ?></option>
     <?php endforeach; ?>
@@ -193,13 +195,13 @@ foreach ($entries as $e) {
   <input type="hidden" id="tb-tag" value="">
   <?php endif; ?>
   <div class="filter-btn-group">
-    <button class="filter-btn" id="fbtn-own-all" onclick="setWLOwned('')">All</button>
-    <button class="filter-btn" id="fbtn-own-yes" onclick="setWLOwned('1')">✓ Owned</button>
-    <button class="filter-btn" id="fbtn-own-no"  onclick="setWLOwned('0')">✗ Owned</button>
+    <button class="filter-btn" id="fbtn-own-all" onclick="setWLOwned('')"><?= t('coll.f_all') ?></button>
+    <button class="filter-btn" id="fbtn-own-yes" onclick="setWLOwned('1')">✓ <?= t('dashboard.owned') ?></button>
+    <button class="filter-btn" id="fbtn-own-no"  onclick="setWLOwned('0')">✗ <?= t('dashboard.owned') ?></button>
   </div>
   <div class="filter-btn-group">
-    <button class="filter-btn" id="fbtn-upg-all" onclick="setWLUpgrade('')">↑ All</button>
-    <button class="filter-btn" id="fbtn-upg-yes" onclick="setWLUpgrade('1')">↑ Yes</button>
+    <button class="filter-btn" id="fbtn-upg-all" onclick="setWLUpgrade('')">↑ <?= t('coll.f_all') ?></button>
+    <button class="filter-btn" id="fbtn-upg-yes" onclick="setWLUpgrade('1')">↑ <?= t('coll.f_yes') ?></button>
   </div>
   <input type="hidden" id="tb-owned" value="">
   <input type="hidden" id="tb-upgrade" value="">
@@ -209,8 +211,8 @@ foreach ($entries as $e) {
 <?php if ($bySystem): ?>
 <div style="background:var(--surface2);border-bottom:1px solid var(--border);padding:8px 32px">
   <div class="sys-toggle-wrap">
-    <button class="sys-toggle-btn utility" onclick="selectAllSystems()">All</button>
-    <button class="sys-toggle-btn utility" onclick="selectNoSystems()">None</button>
+    <button class="sys-toggle-btn utility" onclick="selectAllSystems()"><?= t('coll.f_all') ?></button>
+    <button class="sys-toggle-btn utility" onclick="selectNoSystems()"><?= t('wish.none') ?></button>
     <?php foreach ($bySystem as $sid => $s): ?>
     <button class="sys-toggle-btn active" data-sysid="<?= (int)$s['sys_id'] ?>" onclick="toggleSystem(this)"><?= htmlspecialchars($s['short']) ?> <span style="opacity:.5;font-size:.55rem">(<?= $s['count'] ?>)</span></button>
     <?php endforeach; ?>
@@ -223,34 +225,34 @@ foreach ($entries as $e) {
   <table id="wish-table">
     <thead>
       <tr>
-        <th data-col="img" style="width:36px">IMG</th>
-        <th data-col="owned" style="width:28px;text-align:center">OWN</th>
+        <th data-col="img" style="width:36px"><?= t('coll.th_img') ?></th>
+        <th data-col="owned" style="width:28px;text-align:center"><?= t('coll.th_own') ?></th>
         <th data-col="upgrade" style="width:28px;text-align:center">↑</th>
-        <th data-col="system" onclick="sortWish('system')" style="cursor:pointer">System ↕</th>
-        <th data-col="title" onclick="sortWish('title')" style="cursor:pointer">Title ↕</th>
-        <th data-col="upgrade_reason">Upgrade Reason</th>
-        <th data-col="quality" onclick="sortWish('quality')" style="cursor:pointer">Condition ↕</th>
-        <th data-col="completeness">Completeness</th>
-        <th data-col="price_paid" onclick="sortWish('price_paid')" style="cursor:pointer">Paid ↕</th>
-        <th data-col="buy_range">Buy Range</th>
-        <th data-col="loose_price" onclick="sortWish('loose_price')" style="cursor:pointer">Loose ↕</th>
-        <th data-col="cib_price" onclick="sortWish('cib_price')" style="cursor:pointer">CIB Price ↕</th>
-        <th data-col="new_price" onclick="sortWish('new_price')" style="cursor:pointer">New ↕</th>
-        <th data-col="tag" onclick="sortWish('tag')" style="cursor:pointer">Tag ↕</th>
-        <th data-col="notes">Notes</th>
+        <th data-col="system" onclick="sortWish('system')" style="cursor:pointer"><?= t('common.col.system') ?> ↕</th>
+        <th data-col="title" onclick="sortWish('title')" style="cursor:pointer"><?= t('common.col.title') ?> ↕</th>
+        <th data-col="upgrade_reason"><?= t('common.col.upgrade_reason') ?></th>
+        <th data-col="quality" onclick="sortWish('quality')" style="cursor:pointer"><?= t('common.col.quality') ?> ↕</th>
+        <th data-col="completeness"><?= t('common.col.completeness') ?></th>
+        <th data-col="price_paid" onclick="sortWish('price_paid')" style="cursor:pointer"><?= t('common.col.price_paid') ?> ↕</th>
+        <th data-col="buy_range"><?= t('common.col.buy_range') ?></th>
+        <th data-col="loose_price" onclick="sortWish('loose_price')" style="cursor:pointer"><?= t('common.price.loose') ?> ↕</th>
+        <th data-col="cib_price" onclick="sortWish('cib_price')" style="cursor:pointer"><?= t('common.col.cib_price') ?> ↕</th>
+        <th data-col="new_price" onclick="sortWish('new_price')" style="cursor:pointer"><?= t('common.price.new') ?> ↕</th>
+        <th data-col="tag" onclick="sortWish('tag')" style="cursor:pointer"><?= t('common.col.tag') ?> ↕</th>
+        <th data-col="notes"><?= t('common.col.notes') ?></th>
         <th data-col="__edit"></th>
       </tr>
     </thead>
     <tbody id="tbody"></tbody>
   </table>
   <div class="empty-state" id="empty-state" style="display:<?= empty($entries) ? 'block' : 'none' ?>">
-    <p>WISHLIST IS EMPTY</p>
-    <p>Mark games as wishlisted from the collection page using the ♥ button.</p>
+    <p><?= t('wish.empty') ?></p>
+    <p><?= t('wish.empty_hint') ?></p>
   </div>
 </div>
 
 <div class="summary-bar">
-  Showing <strong id="sum-show"><?= count($entries) ?></strong> of <strong id="sum-tot"><?= count($entries) ?></strong> wishlisted games
+  <?= t('coll.sum_showing') ?> <strong id="sum-show"><?= count($entries) ?></strong> <?= t('coll.sum_of') ?> <strong id="sum-tot"><?= count($entries) ?></strong> <?= t('wish.wishlisted_games') ?>
 </div>
 
 <!-- DETAIL / EDIT DRAWER -->
@@ -270,31 +272,31 @@ foreach ($entries as $e) {
       </div>
 
       <div class="drawer-section">
-        <div class="section-label">Copies</div>
+        <div class="section-label"><?= t('common.col.copies') ?></div>
         <div class="copy-tabs" id="copy-tabs"></div>
       </div>
 
       <div class="drawer-section">
-        <div class="section-label">Ownership</div>
+        <div class="section-label"><?= t('drawer.ownership') ?></div>
         <div class="toggle-row">
           <label class="toggle"><input type="checkbox" id="d-owned"><span class="toggle-slider"></span></label>
-          <span class="toggle-label" id="lbl-owned">Not owned</span>
+          <span class="toggle-label" id="lbl-owned"><?= t('drawer.not_owned') ?></span>
         </div>
       </div>
 
       <div class="drawer-section">
         <!-- Condition grading (assets/js/grading.js) — takes the Completeness field into its top row -->
         <div id="d-grading"></div>
-        <div class="field" id="d-completeness-field"><label>Completeness</label>
+        <div class="field" id="d-completeness-field"><label><?= t('common.col.completeness') ?></label>
           <select id="d-completeness">
-            <option value="">— N/A —</option>
+            <option value="">— <?= t('drawer.na') ?> —</option>
             <?php foreach ($compOpts as $c): ?><option><?= htmlspecialchars($c) ?></option><?php endforeach; ?>
           </select>
         </div>
         <div class="field-row">
-          <div class="field"><label>Played Status</label>
+          <div class="field"><label><?= t('drawer.played_status') ?></label>
             <select id="d-played">
-              <option value="">— N/A —</option>
+              <option value="">— <?= t('drawer.na') ?> —</option>
               <?php foreach ($playedOpts as $p): ?><option><?= htmlspecialchars($p) ?></option><?php endforeach; ?>
             </select>
           </div>
@@ -302,42 +304,42 @@ foreach ($entries as $e) {
       </div>
 
       <div class="drawer-section">
-        <div class="section-label">Pricing (PriceCharting)</div>
+        <div class="section-label"><?= t('drawer.pricing') ?></div>
         <div id="d-pc-prices-row" style="display:none;margin-bottom:8px">
           <table style="font-size:.75rem;width:100%;border-collapse:collapse">
-            <tr id="d-loose-row" style="display:none"><td style="color:var(--muted);padding:2px 0;width:60px">Loose</td><td><span id="d-loose-price-val" style="color:var(--wiiu);font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case);font-size:1rem"></span></td></tr>
-            <tr id="d-cib-row"   style="display:none"><td style="color:var(--muted);padding:2px 0">CIB</td>  <td><span id="d-cib-price-val"   style="color:var(--wiiu);font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case);font-size:1rem"></span></td></tr>
-            <tr id="d-new-row"   style="display:none"><td style="color:var(--muted);padding:2px 0">New</td>  <td><span id="d-new-price-val"   style="color:var(--wiiu);font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case);font-size:1rem"></span></td></tr>
+            <tr id="d-loose-row" style="display:none"><td style="color:var(--muted);padding:2px 0;width:60px"><?= t('common.price.loose') ?></td><td><span id="d-loose-price-val" style="color:var(--wiiu);font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case);font-size:1rem"></span></td></tr>
+            <tr id="d-cib-row"   style="display:none"><td style="color:var(--muted);padding:2px 0"><?= t('common.price.cib') ?></td>  <td><span id="d-cib-price-val"   style="color:var(--wiiu);font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case);font-size:1rem"></span></td></tr>
+            <tr id="d-new-row"   style="display:none"><td style="color:var(--muted);padding:2px 0"><?= t('common.price.new') ?></td>  <td><span id="d-new-price-val"   style="color:var(--wiiu);font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case);font-size:1rem"></span></td></tr>
           </table>
-          <a id="d-pc-link" href="#" target="_blank" style="color:var(--wiiu);font-size:.68rem;display:none">View on PriceCharting ↗</a>
+          <a id="d-pc-link" href="#" target="_blank" style="color:var(--wiiu);font-size:.68rem;display:none"><?= t('drawer.view_pc') ?> ↗</a>
         </div>
-        <div class="section-label" style="margin-top:10px;margin-bottom:6px">Use for owned value</div>
+        <div class="section-label" style="margin-top:10px;margin-bottom:6px"><?= t('drawer.value_type') ?></div>
         <div style="display:flex;gap:14px;font-size:.75rem;flex-wrap:wrap" id="d-price-type-wrap">
-          <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="d-value-type" id="d-vtype-loose" value="loose"> Loose</label>
-          <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="d-value-type" id="d-vtype-cib"   value="cib"   checked> CIB</label>
-          <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="d-value-type" id="d-vtype-new"   value="new"> New</label>
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="d-value-type" id="d-vtype-loose" value="loose"> <?= t('common.price.loose') ?></label>
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="d-value-type" id="d-vtype-cib"   value="cib"   checked> <?= t('common.price.cib') ?></label>
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="d-value-type" id="d-vtype-new"   value="new"> <?= t('common.price.new') ?></label>
         </div>
         <div class="field-row">
-          <div class="field"><label>Paid (€)</label><input type="number" id="d-price" step="0.01" min="0" placeholder="0.00"></div>
-          <div class="field"><label>Personal Price (€)</label><input type="number" id="d-chart" step="0.01" min="0" placeholder="0.00"></div>
+          <div class="field"><label><?= t('drawer.paid', ['sym' => setting('currency_symbol')]) ?></label><input type="number" id="d-price" step="0.01" min="0" placeholder="0.00"></div>
+          <div class="field"><label><?= t('drawer.personal_price', ['sym' => setting('currency_symbol')]) ?></label><input type="number" id="d-chart" step="0.01" min="0" placeholder="0.00"></div>
         </div>
         <div class="field-row">
-          <div class="field"><label>Buy Min (€)</label><input type="number" id="d-min" step="0.01" min="0" placeholder="0.00"></div>
-          <div class="field"><label>Buy Max (€)</label><input type="number" id="d-max" step="0.01" min="0" placeholder="0.00"></div>
+          <div class="field"><label><?= t('drawer.buy_min', ['sym' => setting('currency_symbol')]) ?></label><input type="number" id="d-min" step="0.01" min="0" placeholder="0.00"></div>
+          <div class="field"><label><?= t('drawer.buy_max', ['sym' => setting('currency_symbol')]) ?></label><input type="number" id="d-max" step="0.01" min="0" placeholder="0.00"></div>
         </div>
       </div>
 
       <!-- EXTERNAL LINKS -->
       <div class="drawer-section" id="d-ext-links" style="display:none">
-        <div class="section-label">Quick Search</div>
+        <div class="section-label"><?= t('drawer.quick_search') ?></div>
         <div id="d-links-list" style="display:flex;flex-direction:column;gap:5px"></div>
       </div>
 
       <!-- TAG -->
       <div class="drawer-section">
-        <div class="section-label">Tag</div>
+        <div class="section-label"><?= t('common.col.tag') ?></div>
         <select id="d-tag" style="width:100%;padding:8px 10px;font-size:.78rem">
-          <option value="">— No tag —</option>
+          <option value="">— <?= t('drawer.no_tag') ?> —</option>
           <?php foreach ($tagOpts as $t): ?>
           <option value="<?= htmlspecialchars($t) ?>"><?= htmlspecialchars($t) ?></option>
           <?php endforeach; ?>
@@ -345,41 +347,41 @@ foreach ($entries as $e) {
       </div>
 
       <div class="drawer-section">
-        <div class="section-label">Upgrade</div>
+        <div class="section-label"><?= t('common.col.upgrade') ?></div>
         <div class="toggle-row">
           <label class="toggle"><input type="checkbox" id="d-upgrade"><span class="toggle-slider"></span></label>
-          <span class="toggle-label" id="lbl-upgrade">No upgrade needed</span>
+          <span class="toggle-label" id="lbl-upgrade"><?= t('drawer.no_upgrade') ?></span>
         </div>
-        <div class="field"><label>Upgrade Reason</label><textarea id="d-upgrade-reason" placeholder="e.g. cracked case, want sealed copy..."></textarea></div>
+        <div class="field"><label><?= t('common.col.upgrade_reason') ?></label><textarea id="d-upgrade-reason" placeholder="<?= t('drawer.upgrade_ph') ?>"></textarea></div>
       </div>
 
       <div class="drawer-section">
-        <div class="section-label">Wishlist</div>
+        <div class="section-label"><?= t('common.nav.wishlist') ?></div>
         <div class="toggle-row">
           <label class="toggle"><input type="checkbox" id="d-wishlist"><span class="toggle-slider"></span></label>
-          <span class="toggle-label" id="lbl-wishlist">Not on wishlist</span>
+          <span class="toggle-label" id="lbl-wishlist"><?= t('drawer.not_wished') ?></span>
         </div>
       </div>
 
       <div class="drawer-section">
-        <div class="section-label">Notes</div>
-        <div class="field"><textarea id="d-notes" placeholder="Where bought, condition details..."></textarea></div>
+        <div class="section-label"><?= t('common.col.notes') ?></div>
+        <div class="field"><textarea id="d-notes" placeholder="<?= t('drawer.notes_ph') ?>"></textarea></div>
       </div>
 
       <div class="drawer-section">
-        <div class="section-label">Photos</div>
+        <div class="section-label"><?= t('settings.photos') ?></div>
         <?php if ($canEdit): ?>
         <div class="img-upload-area">
           <input type="file" id="d-photos" accept="image/*" multiple onchange="uploadPhotos(event)">
-          <div class="img-upload-text">Click or drag to add photos</div>
+          <div class="img-upload-text"><?= t('drawer.add_photos') ?></div>
         </div>
         <?php endif; ?>
-        <div class="d-empty" id="d-no-photos" style="display:none">No photos for this copy.</div>
+        <div class="d-empty" id="d-no-photos" style="display:none"><?= t('wish.no_photos') ?></div>
         <div class="img-preview-grid" id="d-photo-grid"></div>
         <div id="d-primary-wrap" style="display:none;margin-top:10px">
-          <div class="section-label" style="margin-bottom:6px">Primary Display Image</div>
+          <div class="section-label" style="margin-bottom:6px"><?= t('drawer.primary') ?></div>
           <select id="d-primary" style="font-size:.75rem;padding:6px 10px;width:100%">
-            <option value="">— First uploaded photo —</option>
+            <option value="">— <?= t('drawer.first_photo') ?> —</option>
           </select>
         </div>
       </div>
@@ -387,11 +389,11 @@ foreach ($entries as $e) {
     </div>
     <div class="drawer-footer">
       <?php if ($canEdit): ?>
-      <a class="btn-ghost" id="d-goto" href="#" style="text-decoration:none;margin-right:auto">Collection →</a>
-      <button class="btn-ghost" onclick="closeDrawer()">Cancel</button>
-      <button class="btn" onclick="saveEntry()">Save</button>
+      <a class="btn-ghost" id="d-goto" href="#" style="text-decoration:none;margin-right:auto"><?= t('common.nav.collection') ?> →</a>
+      <button class="btn-ghost" onclick="closeDrawer()"><?= t('common.cancel') ?></button>
+      <button class="btn" onclick="saveEntry()"><?= t('common.save') ?></button>
       <?php else: ?>
-      <button class="btn-ghost" onclick="closeDrawer()">Close</button>
+      <button class="btn-ghost" onclick="closeDrawer()"><?= t('common.close') ?></button>
       <?php endif; ?>
     </div>
   </div>
@@ -402,14 +404,14 @@ foreach ($entries as $e) {
   <button class="lb-close" onclick="closeLightbox()">✕</button>
   <img id="lb-img" src="" alt="">
   <div class="lb-nav">
-    <button class="lb-btn" onclick="lbPrev(event)">← Prev</button>
+    <button class="lb-btn" onclick="lbPrev(event)">← <?= t('drawer.prev') ?></button>
     <span class="lb-label" id="lb-lbl"></span>
-    <button class="lb-btn" onclick="lbNext(event)">Next →</button>
+    <button class="lb-btn" onclick="lbNext(event)"><?= t('drawer.next') ?> →</button>
   </div>
   <?php if ($canEdit): ?>
   <div class="lb-nav" id="lb-rotate-nav" style="display:none">
-    <button class="lb-btn" onclick="lbRotate(event,-90)">↺ Rotate Left</button>
-    <button class="lb-btn" onclick="lbRotate(event,90)">↻ Rotate Right</button>
+    <button class="lb-btn" onclick="lbRotate(event,-90)">↺ <?= t('drawer.rotate_left') ?></button>
+    <button class="lb-btn" onclick="lbRotate(event,90)">↻ <?= t('drawer.rotate_right') ?></button>
   </div>
   <?php endif; ?>
 </div>
@@ -441,7 +443,6 @@ const gradeEditor = new GradingUI.Editor({
 
 // ── HELPERS ──
 function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
-function money(v, dec=2){return Number(v).toLocaleString('en-US',{minimumFractionDigits:dec,maximumFractionDigits:dec});}
 function isSet(v){return v !== null && v !== undefined && v !== '';}
 async function apiFetch(path,body){return fetch(BASE+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json());}
 function toast(msg,err=false){const t=document.getElementById('toast');t.textContent=msg;t.style.borderColor=err?'var(--red)':'var(--accent2)';t.style.color=err?'var(--red)':'var(--accent)';t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
@@ -467,32 +468,32 @@ function buildRow(entryId, gameId) {
     ? `<img class="img-thumb" src="${esc(imgSrc)}" alt="" onclick="openRowImage(${gameId},${entryId})">`
     : `<div class="img-placeholder" style="cursor:pointer" onclick="openDrawer(${gameId},${entryId})">—</div>`;
 
-  const paidCell = isSet(e.price_paid) ? `<span class="price">€${money(e.price_paid)}</span>` : '<span class="price-na">—</span>';
+  const paidCell = isSet(e.price_paid) ? `<span class="price">${money(e.price_paid)}</span>` : '<span class="price-na">—</span>';
 
   let rangeCell = '<span class="price-na">—</span>';
-  if (isSet(e.price_min) && isSet(e.price_max)) rangeCell = `<span class="price-range">€${money(e.price_min,0)}–€${money(e.price_max,0)}</span>`;
-  else if (isSet(e.price_min)) rangeCell = `<span class="price-range">≥€${money(e.price_min,0)}</span>`;
-  else if (isSet(e.price_max)) rangeCell = `<span class="price-range">≤€${money(e.price_max,0)}</span>`;
+  if (isSet(e.price_min) && isSet(e.price_max)) rangeCell = `<span class="price-range">${money(e.price_min,0)}–${money(e.price_max,0)}</span>`;
+  else if (isSet(e.price_min)) rangeCell = `<span class="price-range">≥${money(e.price_min,0)}</span>`;
+  else if (isSet(e.price_max)) rangeCell = `<span class="price-range">≤${money(e.price_max,0)}</span>`;
 
   // Dual CIB price: PC in blue (linked), personal in red
   const cibParts = [];
   if (isSet(g.cib_price)) {
-    const cibTitle = g.cib_price_updated_at ? 'PC CIB — last updated '+g.cib_price_updated_at.substring(0,10) : 'PC CIB Price';
-    const amt = '€'+money(g.cib_price);
+    const cibTitle = g.cib_price_updated_at ? tRaw('coll.pc_cib_updated', {date: fmtDate(g.cib_price_updated_at)}) : tRaw('coll.pc_cib');
+    const amt = money(g.cib_price);
     cibParts.push(g.pc_link
       ? `<a href="${esc(g.pc_link)}" target="_blank" class="price price-chart" style="text-decoration:none" title="${esc(cibTitle)}">${amt}</a>`
       : `<span class="price price-chart" title="${esc(cibTitle)}">${amt}</span>`);
   } else if (g.pc_link) {
-    cibParts.push(`<a href="${esc(g.pc_link)}" target="_blank" style="color:var(--wiiu);text-decoration:none;font-size:.75rem" title="View on PriceCharting">PC ↗</a>`);
+    cibParts.push(`<a href="${esc(g.pc_link)}" target="_blank" style="color:var(--wiiu);text-decoration:none;font-size:.75rem" title="${t('drawer.view_pc')}">PC ↗</a>`);
   }
-  if (isSet(e.chart_price)) cibParts.push(`<span class="price" style="color:var(--personal-price)" title="Personal price">€${money(e.chart_price)}</span>`);
+  if (isSet(e.chart_price)) cibParts.push(`<span class="price" style="color:var(--personal-price)" title="${t('coll.personal_price')}">${money(e.chart_price)}</span>`);
   const cibCell = cibParts.length ? cibParts.join(' <span style="color:var(--border2)">·</span> ') : '<span class="price-na">—</span>';
 
   const looseCell = isSet(g.loose_price)
-    ? `<span class="price price-chart" style="color:var(--muted)" title="${esc(g.loose_price_updated_at?'Last updated: '+g.loose_price_updated_at.substring(0,10):'Loose Price')}">€${money(g.loose_price)}</span>`
+    ? `<span class="price price-chart" style="color:var(--muted)" title="${esc(g.loose_price_updated_at?tRaw('coll.last_updated', {date: fmtDate(g.loose_price_updated_at)}):tRaw('common.col.loose_price'))}">${money(g.loose_price)}</span>`
     : '<span class="price-na">—</span>';
   const newCell = isSet(g.new_price)
-    ? `<span class="price price-chart" style="color:var(--green)" title="${esc(g.new_price_updated_at?'Last updated: '+g.new_price_updated_at.substring(0,10):'New Price')}">€${money(g.new_price)}</span>`
+    ? `<span class="price price-chart" style="color:var(--green)" title="${esc(g.new_price_updated_at?tRaw('coll.last_updated', {date: fmtDate(g.new_price_updated_at)}):tRaw('common.col.new_price'))}">${money(g.new_price)}</span>`
     : '<span class="price-na">—</span>';
 
   const upReason = e.upgrade && e.upgrade_reason ? e.upgrade_reason : '';
@@ -502,8 +503,8 @@ function buildRow(entryId, gameId) {
   const ownedHandler   = CAN_EDIT ? `onclick="wlToggleOwned(this,${entryId},${gameId})" style="cursor:pointer"` : '';
   const upgradeHandler = CAN_EDIT ? `onclick="wlToggleUpgrade(this,${entryId},${gameId})" style="cursor:pointer"` : '';
   const actionCell = CAN_EDIT
-    ? `<a href="${BASE}/collection.php?s=${g.system_id}" class="btn-icon" style="text-decoration:none">Go →</a>`
-    : `<button class="btn-icon" onclick="openDrawer(${gameId},${entryId})">View</button>`;
+    ? `<a href="${BASE}/collection.php?s=${g.system_id}" class="btn-icon" style="text-decoration:none">${t('wish.go')} →</a>`
+    : `<button class="btn-icon" onclick="openDrawer(${gameId},${entryId})">${t('wish.view')}</button>`;
 
   const tr = document.createElement('tr');
   Object.assign(tr.dataset, {
@@ -526,7 +527,7 @@ function buildRow(entryId, gameId) {
     <td data-col="owned" style="text-align:center"><div class="owned-check ${e.owned?'checked':''}" ${ownedHandler}>${e.owned?'✓':''}</div></td>
     <td data-col="upgrade" style="text-align:center"><div class="upgrade-check ${e.upgrade?'checked':''}" ${upgradeHandler}>${e.upgrade?'↑':''}</div></td>
     <td data-col="system"><span class="sys-badge">${esc(g.short_name)}</span></td>
-    <td data-col="title" class="td-title" onclick="openDrawer(${gameId},${entryId})" title="Show details">${esc(g.title)}</td>
+    <td data-col="title" class="td-title" onclick="openDrawer(${gameId},${entryId})" title="${t('wish.show_details')}">${esc(g.title)}</td>
     <td data-col="upgrade_reason" style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.68rem;color:var(--orange);font-style:italic" title="${esc(e.upgrade_reason||'')}">${upReason ? esc(upReason) : '<span style="color:var(--border2)">—</span>'}</td>
     <td data-col="quality">${GradingUI.cellHtml([e])}</td>
     <td data-col="completeness" style="font-size:.7rem;color:var(--text2)">${esc(e.completeness||'—')}</td>
@@ -576,13 +577,13 @@ function refreshGameRows(gameId) {
   applyWishCols();
   filterTable();
   updateCounts();
-  if (removed) toast('Removed from wishlist');
+  if (removed) toast(tRaw('coll.wish_removed'));
 }
 
 function updateCounts() {
   const total = document.querySelectorAll('#tbody tr').length;
-  document.getElementById('hs-wish').textContent = total;
-  document.getElementById('sum-tot').textContent = total;
+  document.getElementById('hs-wish').textContent = fmtNum(total);
+  document.getElementById('sum-tot').textContent = fmtNum(total);
   document.getElementById('empty-state').style.display = total ? 'none' : 'block';
 }
 
@@ -671,7 +672,7 @@ async function wlToggleOwned(el, entryId, gameId) {
   const c = findCopy(gameId, x => x.id == entryId); if (!c) return;
   const res = await apiFetch('/api/entry_save.php', togglePayload(c, 'owned', c.owned ? 0 : 1));
   if (res.ok) { mergeSavedEntry(gameId, res.entry); refreshGameRows(gameId); }
-  else toast('Error: '+(res.error||''), true);
+  else toast(tRaw('common.err_prefix', {error: res.error||''}), true);
 }
 
 async function wlToggleUpgrade(el, entryId, gameId) {
@@ -679,7 +680,7 @@ async function wlToggleUpgrade(el, entryId, gameId) {
   const c = findCopy(gameId, x => x.id == entryId); if (!c) return;
   const res = await apiFetch('/api/entry_save.php', togglePayload(c, 'upgrade', c.upgrade ? 0 : 1));
   if (res.ok) { mergeSavedEntry(gameId, res.entry); refreshGameRows(gameId); }
-  else toast('Error: '+(res.error||''), true);
+  else toast(tRaw('common.err_prefix', {error: res.error||''}), true);
 }
 
 // ── SYSTEM FILTER ──
@@ -721,7 +722,7 @@ function filterTable() {
     tr.style.display = show ? '' : 'none';
     if (show) showing++;
   });
-  document.getElementById('sum-show').textContent = showing;
+  document.getElementById('sum-show').textContent = fmtNum(showing);
 }
 
 // ── SORTING ──
@@ -778,10 +779,10 @@ function openDrawer(gameId, entryId=null) {
       const row = document.getElementById(rowId);
       if (isSet(price)) {
         row.style.display = '';
-        const title = updatedAt ? `Last updated: ${updatedAt.substring(0,10)}` : '';
+        const title = updatedAt ? tRaw('coll.last_updated', {date: fmtDate(updatedAt)}) : '';
         document.getElementById(valId).innerHTML = title
-          ? `<span title="${esc(title)}" style="cursor:help;border-bottom:1px dashed var(--muted)">€${money(price)}</span>`
-          : `€${money(price)}`;
+          ? `<span title="${esc(title)}" style="cursor:help;border-bottom:1px dashed var(--muted)">${money(price)}</span>`
+          : money(price);
       } else row.style.display = 'none';
     };
     setPriceRow('d-loose-row','d-loose-price-val', g.loose_price, g.loose_price_updated_at);
@@ -800,7 +801,7 @@ function openDrawer(gameId, entryId=null) {
     const url = site.url_template
       .replace('{system}', encodeURIComponent((g.short_name||'').toLowerCase()))
       .replace('{title}',  titleEnc)
-      .replace('{region}', 'PAL');
+      .replace('{region}', g.region === 'Mixed' ? '' : (g.region || ''));
     links += `<a href="${esc(url)}" target="_blank" style="font-size:.75rem;color:var(--text2);text-decoration:none">🛒 ${esc(site.label)}: ${esc(g.title)}</a>`;
   });
   linksList.innerHTML = links;
@@ -832,13 +833,13 @@ function renderCopyTabs() {
     if (!CAN_EDIT && !c) continue; // read-only: only copies that exist
     const btn = document.createElement('button');
     btn.className = 'copy-tab' + (i === editCopy ? ' active' : '');
-    btn.textContent = 'Copy ' + i + (c?.owned ? ' ✓' : '') + (c?.wishlist ? ' ♥' : '');
+    btn.textContent = tRaw('drawer.copy_n', {n: i}) + (c?.owned ? ' ✓' : '') + (c?.wishlist ? ' ♥' : '');
     btn.onclick = () => { editCopy = i; renderCopyTabs(); loadCopyIntoForm(i); setReadOnly(!CAN_EDIT); };
     tabs.appendChild(btn);
   }
   if (CAN_EDIT) {
     const add = document.createElement('button');
-    add.className = 'copy-tab-add'; add.textContent = '+ Add Copy';
+    add.className = 'copy-tab-add'; add.textContent = '+ ' + tRaw('drawer.add_copy');
     add.onclick = () => { editCopy = maxCopy + 1; renderCopyTabs(); loadCopyIntoForm(editCopy); };
     tabs.appendChild(add);
   }
@@ -857,7 +858,7 @@ function setTog(inputId,val,labelId,text){document.getElementById(inputId).check
 
 function loadCopyIntoForm(copyNum) {
   const c = findCopy(editGameId, x => x.copy_number == copyNum) || {};
-  setTog('d-owned',   c.owned,   'lbl-owned',   c.owned?'In collection':'Not owned');
+  setTog('d-owned',   c.owned,   'lbl-owned',   tRaw(c.owned?'drawer.owned':'drawer.not_owned'));
   setSelect('d-completeness', c.completeness);
   gradeEditor.load(c, {systemId: GAMES[editGameId]?.system_id});
   setSelect('d-played',       c.played_status);
@@ -866,8 +867,8 @@ function loadCopyIntoForm(copyNum) {
   document.getElementById('d-chart').value = isSet(c.chart_price) ? c.chart_price : '';
   document.getElementById('d-min').value   = isSet(c.price_min)   ? c.price_min   : '';
   document.getElementById('d-max').value   = isSet(c.price_max)   ? c.price_max   : '';
-  setTog('d-upgrade', c.upgrade, 'lbl-upgrade', c.upgrade?'Upgrade wanted':'No upgrade needed');
-  setTog('d-wishlist',c.wishlist,'lbl-wishlist',c.wishlist?'On wishlist':'Not on wishlist');
+  setTog('d-upgrade', c.upgrade, 'lbl-upgrade', tRaw(c.upgrade?'drawer.upgrade_wanted':'drawer.no_upgrade'));
+  setTog('d-wishlist',c.wishlist,'lbl-wishlist',tRaw(c.wishlist?'drawer.wished':'drawer.not_wished'));
   document.getElementById('d-upgrade-reason').value = c.upgrade_reason || '';
   document.getElementById('d-notes').value          = c.notes || '';
   const vtype = c.value_price_type || 'cib';
@@ -905,8 +906,8 @@ async function saveEntry() {
     mergeSavedEntry(gameId, res.entry);
     closeDrawer();
     refreshGameRows(gameId);
-    toast('Saved');
-  } else toast('Error: '+(res.error||''), true);
+    toast(tRaw('common.saved'));
+  } else toast(tRaw('common.err_prefix', {error: res.error||''}), true);
 }
 
 // ── PHOTOS ──
@@ -914,7 +915,7 @@ async function uploadPhotos(e) {
   if (!CAN_EDIT) return;
   const files = Array.from(e.target.files);
   const c = findCopy(editGameId, x => x.copy_number == editCopy);
-  if (!c?.id) { toast('Save the entry first before adding photos.', true); e.target.value = ''; return; }
+  if (!c?.id) { toast(tRaw('drawer.save_first'), true); e.target.value = ''; return; }
   for (const file of files) {
     const fd = new FormData();
     fd.append('entry_id', c.id);
@@ -924,11 +925,11 @@ async function uploadPhotos(e) {
       if (!c.photos) c.photos = [];
       c.photos.push(res.filename);
       renderPhotoGrid(c.photos, c.primary_photo || '', c.id);
-    } else toast('Upload failed: ' + (res.error || ''), true);
+    } else toast(tRaw('drawer.upload_failed', {error: res.error || ''}), true);
   }
   e.target.value = '';
   refreshGameRows(editGameId);
-  toast('Photo(s) added');
+  toast(tRaw('drawer.photos_added'));
 }
 
 function renderPhotoGrid(photos, primaryPhoto, entryId) {
@@ -964,22 +965,22 @@ function renderPhotoGrid(photos, primaryPhoto, entryId) {
   const hasDefault = g && g.default_image;
   if (hasDefault || (photos && photos.length > 1)) {
     wrap.style.display = 'block';
-    sel.innerHTML = '<option value="">— First uploaded photo —</option>';
+    sel.innerHTML = `<option value="">— ${t('drawer.first_photo')} —</option>`;
     if (hasDefault) {
       const opt = document.createElement('option');
-      opt.value = '__default__'; opt.textContent = 'Default cover image';
+      opt.value = '__default__'; opt.textContent = tRaw('drawer.default_cover');
       opt.selected = (primaryPhoto === '__default__');
       sel.appendChild(opt);
     }
     (photos||[]).forEach((fn, i) => {
       const opt = document.createElement('option');
-      opt.value = fn; opt.textContent = 'My photo ' + (i + 1);
+      opt.value = fn; opt.textContent = tRaw('drawer.my_photo', {n: i + 1});
       opt.selected = (fn === primaryPhoto);
       sel.appendChild(opt);
     });
   } else {
     wrap.style.display = 'none';
-    sel.innerHTML = '<option value="">— First uploaded photo —</option>';
+    sel.innerHTML = `<option value="">— ${t('drawer.first_photo')} —</option>`;
     sel.value = '';
   }
   sel.disabled = !CAN_EDIT;
@@ -990,14 +991,14 @@ async function rotatePhoto(idx, degrees) {
   const c = findCopy(editGameId, x => x.copy_number == editCopy);
   if (!c || !c.photos) return;
   const fn = c.photos[idx].split('?')[0];
-  toast('Rotating...');
+  toast(tRaw('drawer.rotating'));
   const res = await apiFetch('/api/photo_rotate.php', {entry_id:c.id, filename:fn, degrees});
   if (res.ok) {
     photoTs[fn] = res.ts;
     renderPhotoGrid(c.photos, c.primary_photo||'', c.id);
     refreshGameRows(editGameId);
-    toast('Photo rotated');
-  } else toast('Rotation failed: '+(res.error||''), true);
+    toast(tRaw('drawer.rotated'));
+  } else toast(tRaw('drawer.rotate_failed', {error: res.error||''}), true);
 }
 
 async function deletePhoto(idx) {
@@ -1011,8 +1012,8 @@ async function deletePhoto(idx) {
     if (c.primary_photo === fn) c.primary_photo = '';
     renderPhotoGrid(c.photos, c.primary_photo||'', c.id);
     refreshGameRows(editGameId);
-    toast('Photo removed');
-  } else toast('Delete failed: '+(res.error||''), true);
+    toast(tRaw('drawer.photo_removed'));
+  } else toast(tRaw('wish.delete_failed', {error: res.error||''}), true);
 }
 
 // ── LIGHTBOX ──
@@ -1058,7 +1059,7 @@ async function lbRotate(e, degrees) {
   e.stopPropagation();
   if (!CAN_EDIT || !lbContext) return;
   const fn = lbRawNames[lbIdx]; if (!fn) return;
-  toast('Rotating...');
+  toast(tRaw('drawer.rotating'));
   const res = await apiFetch('/api/photo_rotate.php', {entry_id: lbContext.entryId, filename: fn, degrees});
   if (res.ok) {
     photoTs[fn] = res.ts;
@@ -1073,14 +1074,14 @@ async function lbRotate(e, degrees) {
       }
       refreshGameRows(gid);
     }
-    toast('Photo rotated');
-  } else toast('Rotation failed', true);
+    toast(tRaw('drawer.rotated'));
+  } else toast(tRaw('drawer.rotate_failed', {error: res.error || ''}), true);
 }
 
 // ── DRAWER TOGGLE LABELS ──
-document.getElementById('d-owned').addEventListener('change',function(){document.getElementById('lbl-owned').textContent=this.checked?'In collection':'Not owned';});
-document.getElementById('d-upgrade').addEventListener('change',function(){document.getElementById('lbl-upgrade').textContent=this.checked?'Upgrade wanted':'No upgrade needed';});
-document.getElementById('d-wishlist').addEventListener('change',function(){document.getElementById('lbl-wishlist').textContent=this.checked?'On wishlist':'Not on wishlist';});
+document.getElementById('d-owned').addEventListener('change',function(){document.getElementById('lbl-owned').textContent=tRaw(this.checked?'drawer.owned':'drawer.not_owned');});
+document.getElementById('d-upgrade').addEventListener('change',function(){document.getElementById('lbl-upgrade').textContent=tRaw(this.checked?'drawer.upgrade_wanted':'drawer.no_upgrade');});
+document.getElementById('d-wishlist').addEventListener('change',function(){document.getElementById('lbl-wishlist').textContent=tRaw(this.checked?'drawer.wished':'drawer.not_wished');});
 
 document.addEventListener('keydown', e => {
   const lbOpen = document.getElementById('lightbox').classList.contains('open');

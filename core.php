@@ -229,9 +229,9 @@ function clearFailures(array $keys): void {
 }
 
 function lockMessage(int $secs): string {
-    $t = $secs >= 86400 ? ceil($secs/86400).' day(s)'
-       : ($secs >= 3600 ? ceil($secs/3600).' hour(s)' : ceil($secs/60).' minute(s)');
-    return "Too many failed attempts. Try again in $t.";
+    $t = $secs >= 86400 ? tRaw('common.n_days', ['n' => ceil($secs/86400)])
+       : ($secs >= 3600 ? tRaw('common.n_hours', ['n' => ceil($secs/3600)]) : tRaw('common.n_minutes', ['n' => ceil($secs/60)]));
+    return tRaw('auth.locked', ['time' => $t]);
 }
 
 // ── Photo backups ───────────────────────
@@ -326,7 +326,7 @@ function siteTheme(): string {
     static $slug = null;
     if ($slug === null) {
         $themes = availableThemes();
-        try { $s = appSetting('default_theme'); } catch (PDOException) { $s = null; }
+        $s = setting('default_theme');
         $slug = ($s !== null && isset($themes[$s])) ? $s
               : (isset($themes[DEFAULT_THEME]) ? DEFAULT_THEME : (string)array_key_first($themes));
     }
@@ -389,19 +389,21 @@ function themeCardHtml(array $t, string $group, bool $checked, string $onchange,
          . '<input type="radio" name="'.$h($group).'" value="'.$h($t['slug']).'"'.($checked ? ' checked' : '').' onchange="'.$h($onchange).'(this.value)">'
          . '<span class="theme-card-head"><span class="theme-name">'.$h($t['name']).'</span>'.themeSwatchesHtml($t).'</span>'
          . ($t['about'] ? '<span class="theme-about">'.$h($t['about']).'</span>' : '')
-         . '<span class="theme-card-foot"><span class="theme-tag">'.$t['scheme'].'</span>'
-         . ($t['slug'] === siteTheme() ? '<span class="theme-default">★ Site default</span>' : '')
+         . '<span class="theme-card-foot"><span class="theme-tag">'.t('common.scheme_'.$t['scheme']).'</span>'
+         . ($t['slug'] === siteTheme() ? '<span class="theme-default">★ '.t('common.site_default').'</span>' : '')
          . '</span>'
          . ($notes ? '<span class="theme-note">'.implode('<br>', array_map($h, $notes)).'</span>' : '')
          . '</label>';
 }
 
-// Condition grading (labels, templates, profiles, scoring)
+// Site settings + formatting, languages, condition grading
+require_once __DIR__ . '/site.php';
+require_once __DIR__ . '/i18n.php';
 require_once __DIR__ . '/grading.php';
 
 // Every state-changing request to /api/* must carry a valid CSRF token
 // (X-CSRF-Token header added by csrfScript(), or a 'csrf' form field).
 if (basename(dirname($_SERVER['SCRIPT_FILENAME'] ?? '')) === 'api'
     && ($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET' && !csrfValid()) {
-    jsonOut(['ok'=>false, 'error'=>'Security token expired — please reload the page.'], 403);
+    jsonOut(['ok'=>false, 'error'=>tRaw('common.err_csrf')], 403);
 }

@@ -116,6 +116,14 @@ const Core = {
   },
 };
 
+// English completeness names for the auto-suggest (always tried after the current language's)
+const SUGGEST_EN = {
+  'grading.suggest_cib':       ['cib', 'complete in box', 'complete', 'boxed'],
+  'grading.suggest_no_manual': ['no manual', 'boxed, no manual'],
+  'grading.suggest_no_box':    ['no box', 'game + manual'],
+  'grading.suggest_loose':     ['loose', 'disc / cart only', 'cart only', 'disc only', 'game only'],
+};
+
 // ── SMALL UI HELPERS ─────────────────────
 function rgba(hex, a) {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
@@ -156,7 +164,7 @@ function cellHtml(copies, opts = {}) {
     }
     if (e.label) {
       const hint = single && opts.switchLink && G.mode !== 'simple' && c.game_id
-        ? `<div class="gr-mini">Simple grade · <a href="#" class="gr-to-points" data-game="${esc(c.game_id)}" data-copy="${esc(c.copy_number)}">switch to points</a></div>` : '';
+        ? `<div class="gr-mini">${t('grading.simple_grade')} · <a href="#" class="gr-to-points" data-game="${esc(c.game_id)}" data-copy="${esc(c.copy_number)}">${t('grading.switch_to_points')}</a></div>` : '';
       return `<div class="gr-cell">${badge(e.label)}${hint}</div>`;
     }
     return '<div class="gr-cell"><span class="qbadge q-na">—</span></div>';
@@ -181,11 +189,11 @@ function hoverCardHtml(copy) {
   hits.sort((a, b) => b.lost - a.lost);
   const missing = (copy.grading || []).filter(p => p.pc && !(p.qty > 0)).map(p => (Core.component(p.pc) || {}).label).filter(Boolean);
   return `
-    <div class="gr-hc-head"><span>Score breakdown</span><span class="gr-hc-score" style="color:${esc(e.label ? e.label.color : 'var(--text2)')}">${e.score} / 100</span></div>
-    <div class="gr-hc-rows">${rows || '<span class="gr-hc-foot">Nothing included.</span>'}</div>
+    <div class="gr-hc-head"><span>${t('grading.breakdown')}</span><span class="gr-hc-score" style="color:${esc(e.label ? e.label.color : 'var(--text2)')}">${e.score} / 100</span></div>
+    <div class="gr-hc-rows">${rows || `<span class="gr-hc-foot">${t('grading.nothing_included')}</span>`}</div>
     ${hits.length || missing.length ? `<div class="gr-hc-foot">
-      ${hits.length ? 'Biggest hits: ' + hits.slice(0, 3).map(h => `${esc(h.txt)} (−${h.lost})`).join(', ') : 'No defects logged.'}
-      ${missing.length ? `<br><span>Not included: ${esc(missing.join(', '))}</span>` : ''}</div>` : ''}`;
+      ${hits.length ? t('grading.biggest_hits') + ' ' + hits.slice(0, 3).map(h => `${esc(h.txt)} (−${h.lost})`).join(', ') : t('grading.no_defects')}
+      ${missing.length ? `<br><span>${t('grading.not_included', {parts: missing.join(', ')})}</span>` : ''}</div>` : ''}`;
 }
 
 document.addEventListener('mouseover', e => {
@@ -225,7 +233,7 @@ class GradingEditor {
     this.compSelect = opts.compSelect || null;
     this.root.classList.add('gr-editor');
     this.root.innerHTML = `
-      <div class="gr-head"><div class="section-label">Condition</div><div class="gr-switch" role="group" aria-label="Grading method"></div></div>
+      <div class="gr-head"><div class="section-label">${t('common.col.quality')}</div><div class="gr-switch" role="group" aria-label="${t('grading.method')}"></div></div>
       <div class="field-row gr-top"><div class="gr-left"></div><div class="gr-comp"></div></div>
       <div class="gr-body"></div>
       <div class="gr-foot"></div>`;
@@ -318,17 +326,19 @@ class GradingEditor {
     if (!this.compSelect || this.compTouched || !this.parts) return;
     const has = re => this.parts.some(p => { if (!(p.qty > 0)) return false; const s = Core.partSpec(p); return s && re.test(s.tpl.name); });
     const media = has(/cart|disc|umd|console/i), box = has(/box|case/i), manual = has(/manual/i);
+    // Candidate option names per situation: the language's own list, then the English one
+    const names = key => tRaw(key).toLowerCase().split('|').concat(key in SUGGEST_EN ? SUGGEST_EN[key] : []).map(s => s.trim()).filter(Boolean);
     let cands = null;
-    if (media && box && manual) cands = ['cib', 'complete in box', 'complete', 'boxed'];
-    else if (media && box)      cands = ['no manual', 'boxed, no manual'];
-    else if (media && manual)   cands = ['no box', 'game + manual'];
-    else if (media)             cands = ['loose', 'disc / cart only', 'cart only', 'disc only', 'game only'];
+    if (media && box && manual) cands = names('grading.suggest_cib');
+    else if (media && box)      cands = names('grading.suggest_no_manual');
+    else if (media && manual)   cands = names('grading.suggest_no_box');
+    else if (media)             cands = names('grading.suggest_loose');
     if (!cands) return;
     const opts = [...this.compSelect.options].filter(o => o.value);
     for (const c of cands) {
       const o = opts.find(x => x.value.trim().toLowerCase() === c);
       if (!o) continue;
-      if (this.compSelect.value !== o.value) { this.compSelect.value = o.value; this.suggestMsg = `Completeness set to “${o.value}” from what's included — change it if needed.`; }
+      if (this.compSelect.value !== o.value) { this.compSelect.value = o.value; this.suggestMsg = tRaw('grading.suggest_msg', {value: o.value}); }
       return;
     }
   }
@@ -356,28 +366,28 @@ class GradingEditor {
     this.renderBody();
     const foot = this.$('.gr-foot');
     foot.innerHTML = !this.readOnly && this.mode === 'both'
-      ? `Your default for new copies: <b>${G.default === 'points' ? 'Points' : 'Simple'}</b> · change in <a href="${esc(G.base || '')}/settings.php">Settings</a>` : '';
+      ? `${t('grading.your_default')} <b>${t(G.default === 'points' ? 'grading.points' : 'grading.simple')}</b> · <a href="${esc(G.base || '')}/settings.php">${t('grading.change_in_settings')}</a>` : '';
   }
 
   renderSwitch() {
     const sw = this.$('.gr-switch');
     if (this.readOnly || this.mode !== 'both') { sw.innerHTML = ''; return; }
     sw.innerHTML = ['simple', 'points'].map(m =>
-      `<button type="button" data-act="method" data-m="${m}" aria-pressed="${this.view === m}" class="${this.view === m ? 'on' : ''}">${m === 'simple' ? 'Simple' : 'Points'}</button>`).join('');
+      `<button type="button" data-act="method" data-m="${m}" aria-pressed="${this.view === m}" class="${this.view === m ? 'on' : ''}">${t(m === 'simple' ? 'grading.simple' : 'grading.points')}</button>`).join('');
   }
 
   renderLeft() {
     const left = this.$('.gr-left');
     const dis = this.readOnly ? ' disabled' : '';
     if (this.view === 'simple') {
-      left.innerHTML = `<div class="field"><label>Quality</label><select data-gr="label"${dis}>
-        <option value="">— N/A —</option>
+      left.innerHTML = `<div class="field"><label>${t('grading.quality')}</label><select data-gr="label"${dis}>
+        <option value="">— ${t('grading.na')} —</option>
         ${G.labels.map(l => `<option value="${l.id}"${String(l.id) === this.labelId ? ' selected' : ''}>${esc(l.name)}</option>`).join('')}
       </select></div>`;
     } else {
-      left.innerHTML = `<div class="field"><label>Format profile</label><select data-gr="profile"${dis}>
+      left.innerHTML = `<div class="field"><label>${t('grading.profile')}</label><select data-gr="profile"${dis}>
         ${G.profiles.map(p => `<option value="${p.id}"${p.id == this.profileId ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}
-        ${G.profiles.length ? '' : '<option value="">No profiles yet</option>'}
+        ${G.profiles.length ? '' : `<option value="">${t('grading.no_profiles')}</option>`}
       </select></div>`;
     }
   }
@@ -395,18 +405,18 @@ class GradingEditor {
     if (this.copy.grade_score === null || this.copy.grade_score === undefined || !this.copy.grading) return '';
     if (this.readOnly) return '';
     if (this.mode === 'simple' && this.copy.grade_method === 'points') {
-      return `<div class="gr-note">This copy was graded with points: <b>${e.score}</b> · ${badge(e.label)}. Picking a label here switches it to a simple grade — the point score is kept.</div>`;
+      return `<div class="gr-note">${t('grading.note_was_points', {score: e.score}).replace('{badge}', badge(e.label))}</div>`;
     }
-    return `<div class="gr-note">This copy's point score (<b>${e.score}</b> · ${badge(e.label)}) is kept${this.mode === 'both' ? ' — switch to Points to see it' : ''}.</div>`;
+    return `<div class="gr-note">${t(this.mode === 'both' ? 'grading.note_kept_both' : 'grading.note_kept', {score: e.score}).replace('{badge}', badge(e.label))}</div>`;
   }
 
   startPanel() {
-    if (this.readOnly) return '<div class="gr-note">Not graded with points.</div>';
+    if (this.readOnly) return `<div class="gr-note">${t('grading.not_points')}</div>`;
     const cur = Core.label(this.copy.grade_label_id);
     return `<div class="gr-start">
-      <p>Every part starts at <b>100</b>. Only log what's wrong.</p>
-      ${cur ? `<p class="gr-muted">Current simple grade: ${badge(cur)} (kept).</p>` : ''}
-      <button type="button" class="btn btn-sm" data-act="start"${G.profiles.length ? '' : ' disabled'}>Start point grading</button>
+      <p>${t('grading.start_intro')}</p>
+      ${cur ? `<p class="gr-muted">${t('grading.current_simple').replace('{badge}', badge(cur))}</p>` : ''}
+      <button type="button" class="btn btn-sm" data-act="start"${G.profiles.length ? '' : ' disabled'}>${t('grading.start')}</button>
     </div>`;
   }
 
@@ -415,7 +425,7 @@ class GradingEditor {
     return `<div class="gr-card">
       <div class="gr-card-main">
         <span class="gr-big" style="color:${esc(label ? label.color : 'var(--muted)')}">${r.score !== null ? r.score : '—'}</span><span class="gr-of">/100</span>
-        ${r.score !== null ? badge(label) : '<span class="gr-muted">Nothing included yet</span>'}
+        ${r.score !== null ? badge(label) : `<span class="gr-muted">${t('grading.nothing_yet')}</span>`}
       </div>
       <div class="gr-card-bars">${r.units.map(u => `
         <div class="gr-card-row"><span title="${esc(u.name)}">${esc(u.name)}</span>${bar(u.s, scoreColor(u.s))}<b style="color:${esc(scoreColor(u.s))}">${u.s}</b></div>`).join('')}
@@ -431,30 +441,30 @@ class GradingEditor {
       if (!s) return '';
       if (this.readOnly && !(p.qty > 0)) return '';
       return `<div class="gr-part ${p.qty > 0 ? 'on' : 'off'}">
-        <span class="gr-part-name" title="${esc(s.label)}">${esc(s.label)}${s.own ? ' <em class="gr-own">own</em>' : ''}</span>
+        <span class="gr-part-name" title="${esc(s.label)}">${esc(s.label)}${s.own ? ` <em class="gr-own">${t('grading.own')}</em>` : ''}</span>
         <span class="gr-step">
-          <button type="button" data-act="qty" data-pi="${pi}" data-d="-1" aria-label="Fewer ${esc(s.label)}"${dis}>−</button>
+          <button type="button" data-act="qty" data-pi="${pi}" data-d="-1" aria-label="${t('grading.fewer', {name: s.label})}"${dis}>−</button>
           <b>${p.qty}</b>
-          <button type="button" data-act="qty" data-pi="${pi}" data-d="1" aria-label="More ${esc(s.label)}"${dis}>+</button>
+          <button type="button" data-act="qty" data-pi="${pi}" data-d="1" aria-label="${t('grading.more', {name: s.label})}"${dis}>+</button>
         </span>
-        ${s.own && !this.readOnly ? `<button type="button" class="gr-x" data-act="rm-own" data-pi="${pi}" aria-label="Remove ${esc(s.label)}">✕</button>` : ''}
+        ${s.own && !this.readOnly ? `<button type="button" class="gr-x" data-act="rm-own" data-pi="${pi}" aria-label="${t('grading.remove', {name: s.label})}">✕</button>` : ''}
       </div>`;
     }).join('');
     let add = '';
     if (!this.readOnly) {
       add = this.adding ? `
         <div class="gr-addform">
-          <div class="field"><label>Name</label><input type="text" data-gr="add-name" maxlength="100" value="${esc(this.adding.name)}" placeholder="e.g. Nintendo Magazine flyer"></div>
+          <div class="field"><label>${t('grading.name')}</label><input type="text" data-gr="add-name" maxlength="100" value="${esc(this.adding.name)}" placeholder="${t('grading.add_name_ph')}"></div>
           <div class="field-row">
-            <div class="field"><label>Grade it as</label><select data-gr="add-tpl">${Object.values(G.templates).map(t =>
+            <div class="field"><label>${t('grading.grade_as')}</label><select data-gr="add-tpl">${Object.values(G.templates).map(t =>
               `<option value="${t.id}"${t.id == this.adding.tpl ? ' selected' : ''}>${esc(t.name)}</option>`).join('')}</select></div>
-            <div class="field"><label>Weight %</label><input type="number" data-gr="add-w" min="1" max="100" value="${esc(this.adding.w)}"></div>
+            <div class="field"><label>${t('grading.weight')}</label><input type="number" data-gr="add-w" min="1" max="100" value="${esc(this.adding.w)}"></div>
           </div>
-          <div class="gr-addform-btns"><button type="button" class="btn-ghost" data-act="add-cancel">Cancel</button><button type="button" class="btn btn-sm" data-act="add-ok">Add</button></div>
+          <div class="gr-addform-btns"><button type="button" class="btn-ghost" data-act="add-cancel">${t('common.cancel')}</button><button type="button" class="btn btn-sm" data-act="add-ok">${t('common.add')}</button></div>
         </div>`
-        : `<button type="button" class="gr-add" data-act="add-open">+ Add something else</button>`;
+        : `<button type="button" class="gr-add" data-act="add-open">+ ${t('grading.add_other')}</button>`;
     }
-    return `<div class="gr-sub">What's included <span>0 = missing · 2+ = graded separately</span></div>
+    return `<div class="gr-sub">${t('grading.included')} <span>${t('grading.included_hint')}</span></div>
       <div class="gr-parts">${rows}</div>${add}`;
   }
 
@@ -464,7 +474,7 @@ class GradingEditor {
       const key = u.pi + '.' + u.ui, open = this.openKey === key;
       return `<div class="gr-unit${open ? ' open' : ''}">
         <button type="button" class="gr-unit-head" data-act="toggle" data-key="${key}" aria-expanded="${open}">
-          <span class="gr-unit-name">${esc(u.name)}${u.own ? ' <em class="gr-own">own</em>' : ''}</span>
+          <span class="gr-unit-name">${esc(u.name)}${u.own ? ` <em class="gr-own">${t('grading.own')}</em>` : ''}</span>
           <span class="gr-unit-w">${Math.round(u.share)}%</span>
           ${bar(u.s, scoreColor(u.s))}
           <b style="color:${esc(scoreColor(u.s))}">${u.s}</b>
@@ -473,9 +483,9 @@ class GradingEditor {
         ${open ? this.unitBody(u) : ''}
       </div>`;
     }).join('');
-    return `<div class="gr-sub">Grading <span>Starts at 100. Only log what's wrong.</span></div>
+    return `<div class="gr-sub">${t('grading.grading')} <span>${t('grading.grading_hint')}</span></div>
       <div class="gr-units">${rows}</div>
-      ${this.readOnly ? '' : '<div class="gr-tools"><button type="button" class="btn-ghost" data-act="clear">Clear defects</button></div>'}`;
+      ${this.readOnly ? '' : `<div class="gr-tools"><button type="button" class="btn-ghost" data-act="clear">${t('grading.clear')}</button></div>`}`;
   }
 
   unitBody(u) {
@@ -498,19 +508,19 @@ class GradingEditor {
           return `<button type="button" data-act="level" data-key="${key}" data-ci="${ci}" data-gi="${gi}" data-def="${def ? def.id : 0}" aria-pressed="${!!on}" class="${on ? 'on' : ''}"${dis}>${text}</button>`;
         };
         return `<div class="gr-level"><span class="gr-def-name">${esc(g.name)}</span>
-          <div class="gr-seg" role="group" aria-label="${esc(g.name)}">${opt(null, 'None')}${g.defs.map(def => opt(def, `${esc(def.name)} −${def.penalty}`)).join('')}</div></div>`;
+          <div class="gr-seg" role="group" aria-label="${esc(g.name)}">${opt(null, t('grading.none'))}${g.defs.map(def => opt(def, `${esc(def.name)} −${def.penalty}`)).join('')}</div></div>`;
       }).join('');
       const defRows = cat.defects.filter(def => def.kind !== 'level').map(def => {
         const n = parseInt(d[def.id] || 0, 10), ded = Core.deduction(def, n);
-        const pen = def.kind === 'once' ? `−${def.penalty} once` : def.kind === 'max' ? `−${def.penalty} per step, max ${def.max_count}` : `−${def.penalty} each`;
+        const pen = def.kind === 'once' ? t('grading.pen_once', {n: def.penalty}) : def.kind === 'max' ? t('grading.pen_max', {n: def.penalty, max: def.max_count}) : t('grading.pen_each', {n: def.penalty});
         const cap = def.kind === 'once' ? 1 : def.kind === 'max' ? (def.max_count || 1) : 99;
         return `<div class="gr-def${n > 0 ? ' hit' : ''}">
           <span class="gr-def-name">${esc(def.name)} <small>${pen}</small></span>
           <span class="gr-ded">${ded ? '−' + ded : ''}</span>
           <span class="gr-step">
-            <button type="button" data-act="def" data-key="${key}" data-def="${def.id}" data-d="-1" aria-label="Less ${esc(def.name)}"${n <= 0 ? ' disabled' : dis}>−</button>
+            <button type="button" data-act="def" data-key="${key}" data-def="${def.id}" data-d="-1" aria-label="${t('grading.fewer', {name: def.name})}"${n <= 0 ? ' disabled' : dis}>−</button>
             <b>${n}</b>
-            <button type="button" data-act="def" data-key="${key}" data-def="${def.id}" data-d="1" aria-label="More ${esc(def.name)}"${n >= cap ? ' disabled' : dis}>+</button>
+            <button type="button" data-act="def" data-key="${key}" data-def="${def.id}" data-d="1" aria-label="${t('grading.more', {name: def.name})}"${n >= cap ? ' disabled' : dis}>+</button>
           </span>
         </div>`;
       }).join('');
@@ -540,7 +550,7 @@ class GradingEditor {
       const p = this.parts[+b.dataset.pi], next = Math.max(0, Math.min(G.max_qty, p.qty + (+b.dataset.d)));
       if (next < p.qty && this.hasDefects(p.units.slice(next))) {
         const s = Core.partSpec(p);
-        if (!confirm(`Remove ${s ? s.label : 'this part'} #${p.qty}? Its logged defects will be deleted.`)) return;
+        if (!confirm(tRaw('grading.confirm_remove_unit', {name: s ? s.label : tRaw('grading.this_part'), n: p.qty}))) return;
       }
       p.qty = next; this.fitUnits(p);
       this.touched.parts = true;
@@ -549,7 +559,7 @@ class GradingEditor {
     }
     if (act === 'rm-own') {
       const p = this.parts[+b.dataset.pi];
-      if (this.hasDefects(p.units) && !confirm(`Remove “${p.name}” and its logged defects?`)) return;
+      if (this.hasDefects(p.units) && !confirm(tRaw('grading.confirm_remove_own', {name: p.name}))) return;
       this.parts.splice(+b.dataset.pi, 1);
       this.openKey = null; this.touched.parts = true;
       this.suggestCompleteness();
@@ -596,7 +606,7 @@ class GradingEditor {
     }
     if (act === 'clear') {
       if (!this.parts.some(p => this.hasDefects(p.units))) return;
-      if (!confirm('Clear all logged defects on this copy? Every part goes back to 100.')) return;
+      if (!confirm(tRaw('grading.confirm_clear'))) return;
       this.parts.forEach(p => p.units.forEach(u => { u.d = {}; }));
       this.touched.parts = true;
       return this.renderBody();
@@ -612,7 +622,7 @@ class GradingEditor {
       if (this.parts) {
         const res = this.arrange(pid, this.parts, true);
         const lost = res.dropped.filter(p => this.hasDefects(p.units)).map(p => (Core.component(p.pc) || {}).label).filter(Boolean);
-        if (lost.length && !confirm(`The new profile has no place for: ${lost.join(', ')}. Their logged defects will be dropped. Continue?`)) {
+        if (lost.length && !confirm(tRaw('grading.confirm_profile', {parts: lost.join(', ')}))) {
           t.value = this.profileId; return;
         }
         this.parts = res.parts;

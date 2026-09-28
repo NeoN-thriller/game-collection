@@ -3,17 +3,17 @@ require_once __DIR__ . '/../config.php';
 $user = requireAuth();
 
 if (!class_exists('ZipArchive')) {
-    jsonOut(['ok'=>false,'error'=>'The PHP zip extension is not installed on this server'], 500);
+    jsonOut(['ok'=>false,'error'=>tRaw('api.no_zip')], 500);
 }
 
 $body     = json_decode(file_get_contents('php://input'), true) ?? [];
 $systemId = (int)($body['system_id'] ?? 0);
-if (!$systemId) jsonOut(['ok'=>false,'error'=>'Missing system_id'], 400);
+if (!$systemId) jsonOut(['ok'=>false,'error'=>tRaw('api.missing_system')], 400);
 
 $st = db()->prepare("SELECT id, name, short_name FROM systems WHERE id=? AND active=1");
 $st->execute([$systemId]);
 $system = $st->fetch();
-if (!$system) jsonOut(['ok'=>false,'error'=>'System not found'], 404);
+if (!$system) jsonOut(['ok'=>false,'error'=>tRaw('api.system_not_found')], 404);
 
 // All of this user's photos for the system, with the game title for the zip folder
 $photosSt = db()->prepare("
@@ -26,7 +26,7 @@ $photosSt = db()->prepare("
 ");
 $photosSt->execute([$user['id'], $systemId]);
 $photos = $photosSt->fetchAll();
-if (!$photos) jsonOut(['ok'=>false,'error'=>'No photos found for this system'], 404);
+if (!$photos) jsonOut(['ok'=>false,'error'=>tRaw('api.no_photos')], 404);
 
 purgeExpiredBackups();
 
@@ -36,7 +36,7 @@ $existing = db()->prepare("SELECT filename, status, created_at > NOW() - INTERVA
 $existing->execute([$user['id'], $systemId]);
 if ($old = $existing->fetch()) {
     if ($old['status'] === 'generating' && $old['recent']) {
-        jsonOut(['ok'=>false,'error'=>'A backup for this system is already being generated'], 409);
+        jsonOut(['ok'=>false,'error'=>tRaw('api.backup_busy')], 409);
     }
     @unlink(backupFilePath($user['id'], $old['filename']));
     db()->prepare("DELETE FROM user_backups WHERE user_id=? AND system_id=?")->execute([$user['id'], $systemId]);
@@ -56,7 +56,7 @@ try {
     ")->execute([$user['id'], $systemId, $token, $filename]);
 } catch (PDOException $e) {
     // Unique key hit: a parallel request for the same system got there first
-    jsonOut(['ok'=>false,'error'=>'A backup for this system is already being generated'], 409);
+    jsonOut(['ok'=>false,'error'=>tRaw('api.backup_busy')], 409);
 }
 
 // Building can take a while: release the session lock so the user's other tabs keep working

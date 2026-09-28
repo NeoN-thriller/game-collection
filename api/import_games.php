@@ -6,11 +6,11 @@ $body     = json_decode(file_get_contents('php://input'), true);
 $systemId = (int)($body['system_id'] ?? 0);
 $titles   = $body['titles'] ?? [];
 
-if (!$systemId || empty($titles)) jsonOut(['ok'=>false,'error'=>'Missing system or titles'], 400);
+if (!$systemId || empty($titles)) jsonOut(['ok'=>false,'error'=>tRaw('api.missing_titles')], 400);
 
 $chk = db()->prepare("SELECT id FROM systems WHERE id=? AND active=1");
 $chk->execute([$systemId]);
-if (!$chk->fetch()) jsonOut(['ok'=>false,'error'=>'System not found'], 404);
+if (!$chk->fetch()) jsonOut(['ok'=>false,'error'=>tRaw('api.system_not_found')], 404);
 
 // Fetch all existing titles (lowercase) for duplicate check
 $st = db()->prepare("SELECT LOWER(title) AS t FROM games WHERE system_id=?");

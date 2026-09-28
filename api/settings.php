@@ -31,13 +31,25 @@ switch ($action) {
         jsonOut(['ok'=>true]);
         break;
 
+    case 'save_language':
+        $lang = (string)($body['language'] ?? '');
+        if (!isset(availableLanguages()[$lang])) jsonOut(['ok'=>false,'error'=>tRaw('settings.err_unknown_lang')]);
+        try {
+            // Choosing the site default stores "no choice", so the user follows it if the admin changes it
+            db()->prepare("UPDATE users SET language=? WHERE id=?")->execute([$lang === siteLanguage() ? null : $lang, $user['id']]);
+        } catch (PDOException) {
+            jsonOut(['ok'=>false,'error'=>tRaw('settings.err_migration', ['file' => 'migrations/2026-10_languages_settings.sql'])]);
+        }
+        jsonOut(['ok'=>true]);
+        break;
+
     case 'save_theme':
         $theme = (string)($body['theme'] ?? '');
-        if ($theme !== '' && !isset(availableThemes()[$theme])) jsonOut(['ok'=>false,'error'=>'Unknown theme']);
+        if ($theme !== '' && !isset(availableThemes()[$theme])) jsonOut(['ok'=>false,'error'=>tRaw('settings.err_unknown_theme')]);
         try {
             db()->prepare("UPDATE users SET theme=? WHERE id=?")->execute([$theme === '' ? null : $theme, $user['id']]);
         } catch (PDOException) {
-            jsonOut(['ok'=>false,'error'=>'Database update needed: run migrations/2026-09_themes.sql.']);
+            jsonOut(['ok'=>false,'error'=>tRaw('settings.err_migration', ['file' => 'migrations/2026-09_themes.sql'])]);
         }
         jsonOut(['ok'=>true]);
         break;
@@ -67,14 +79,14 @@ switch ($action) {
         $cur  = $body['current_password'] ?? '';
         $new  = $body['new_password']     ?? '';
         $conf = $body['confirm_password'] ?? '';
-        if (!$cur || !$new || !$conf) jsonOut(['ok'=>false,'error'=>'All fields required']);
-        if ($new !== $conf) jsonOut(['ok'=>false,'error'=>'Passwords do not match']);
-        if (strlen($new) < MIN_PASSWORD_LENGTH) jsonOut(['ok'=>false,'error'=>'Password must be at least '.MIN_PASSWORD_LENGTH.' characters']);
+        if (!$cur || !$new || !$conf) jsonOut(['ok'=>false,'error'=>tRaw('settings.err_fields')]);
+        if ($new !== $conf) jsonOut(['ok'=>false,'error'=>tRaw('common.err_password_match')]);
+        if (strlen($new) < MIN_PASSWORD_LENGTH) jsonOut(['ok'=>false,'error'=>tRaw('common.err_password_length', ['n' => MIN_PASSWORD_LENGTH])]);
         $pwKeys = ['pw:'.$user['id']];
         if ($locked = lockRemaining($pwKeys)) jsonOut(['ok'=>false,'error'=>lockMessage($locked)]);
         if (!password_verify($cur, $user['password'])) {
             recordFailure($pwKeys);
-            jsonOut(['ok'=>false,'error'=>'Current password is incorrect']);
+            jsonOut(['ok'=>false,'error'=>tRaw('settings.err_current_pw')]);
         }
         clearFailures($pwKeys);
         setPassword($user['id'], $new);
@@ -82,5 +94,5 @@ switch ($action) {
         break;
 
     default:
-        jsonOut(['ok'=>false,'error'=>'Unknown action'], 400);
+        jsonOut(['ok'=>false,'error'=>tRaw('common.err_unknown_action')], 400);
 }

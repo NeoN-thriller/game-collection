@@ -4,7 +4,7 @@ $user = requireAuth();
 
 $body = json_decode(file_get_contents('php://input'), true);
 $data = $body['data'] ?? null;
-if (!$data || empty($data['entries'])) jsonOut(['ok'=>false,'error'=>'Invalid import data'], 400);
+if (!$data || empty($data['entries'])) jsonOut(['ok'=>false,'error'=>tRaw('api.invalid_import')], 400);
 
 $cfg = gradingConfig(); // loads (and on first run seeds) grading data before the transaction starts
 $labelIdByName = [];
