@@ -153,7 +153,7 @@ $lockouts = db()->query("SELECT *, locked_until > NOW() AS is_locked FROM login_
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Admin — Game Collection</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/main.css">
+<link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/main.css?v=<?= @filemtime(__DIR__.'/assets/css/main.css') ?>">
 <?= csrfScript() ?>
 </head>
 <body>

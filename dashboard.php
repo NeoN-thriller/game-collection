@@ -96,7 +96,7 @@ $totalOwnedVal= array_sum(array_column($statsRaw,   'owned_value'));
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dashboard — Game Collection</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/main.css">
+<link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/main.css?v=<?= @filemtime(__DIR__.'/assets/css/main.css') ?>">
 <style>
   .dash-wrap { padding:28px 32px 60px; }
   .dash-title { font-family:'Bebas Neue',sans-serif; font-size:2.2rem; color:var(--accent); letter-spacing:.06em; margin-bottom:6px; }

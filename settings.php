@@ -113,7 +113,7 @@ $backupSystems = $backupSysSt->fetchAll();
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Settings — Game Collection</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/main.css">
+<link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/main.css?v=<?= @filemtime(__DIR__.'/assets/css/main.css') ?>">
 <style>
   .settings-wrap { max-width:640px; margin:36px auto; padding:0 20px 60px; }
   .settings-section { margin-bottom:40px; }

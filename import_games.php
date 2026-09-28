@@ -11,7 +11,7 @@ $systems = db()->query("SELECT * FROM systems WHERE active=1 ORDER BY sort_order
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Import Games — Game Collection</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/main.css">
+<link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/main.css?v=<?= @filemtime(__DIR__.'/assets/css/main.css') ?>">
 <style>
   .import-wrap { max-width:700px; margin:36px auto; padding:0 20px 60px; }
   .import-wrap h1 { font-family:'Bebas Neue',sans-serif; font-size:2rem; color:var(--accent); letter-spacing:.06em; margin-bottom:6px; }

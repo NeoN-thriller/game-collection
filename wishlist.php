@@ -133,7 +133,7 @@ foreach ($entries as $e) {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><?= $isPublicView ? htmlspecialchars($user['username'])."'s Wishlist" : 'Wishlist' ?> — Game Collection</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/main.css">
+<link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/main.css?v=<?= @filemtime(__DIR__.'/assets/css/main.css') ?>">
 <style>
   .sys-badge { display:inline-block; padding:2px 8px; font-size:.6rem; letter-spacing:.1em; text-transform:uppercase; background:rgba(0,154,199,.1); color:var(--wiiu); border:1px solid rgba(0,154,199,.3); white-space:nowrap; }
   .wish-filters { display:flex; gap:8px; flex-wrap:wrap; align-items:center; padding:10px 32px; background:var(--surface2); border-bottom:1px solid var(--border); }
