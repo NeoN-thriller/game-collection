@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════
-   ADMIN — condition grading editors (admin.php)
+   ADMIN — condition grading editors (settings.php?s=grading-system)
    Grade labels · Format profiles · Component templates · Export / import
    Talks to api/grading_admin.php. Needs window.GA_BASE.
    ═══════════════════════════════════════════ */

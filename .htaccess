@@ -10,6 +10,9 @@ Options -Indexes
     </IfModule>
 </FilesMatch>
 
+# settings/ holds the partials of settings.php: never served directly
+RedirectMatch 403 ^(.*/)?settings/
+
 # Security headers
 <IfModule mod_headers.c>
     Header set X-Content-Type-Options "nosniff"

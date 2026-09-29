@@ -49,7 +49,8 @@ Built with plain PHP, MySQL and vanilla JavaScript. No frameworks, no build step
 ### Backup & restore
 - Export your entire collection (entries, condition grades and option lists) as JSON, and import it again later (merges with existing data). Photos are backed up separately as per-system zips.
 
-### Admin panel
+### Admin settings
+Admins see an extra **Site** group in **Settings** (General, Languages & Themes, Grading System, Catalogue, Users & Invites).
 - Generate and revoke **invite codes** (registration is invite-only).
 - Manage **users** — activate / deactivate accounts and reset passwords.
 - View and clear **login lockouts**.
@@ -123,13 +124,13 @@ Built with plain PHP, MySQL and vanilla JavaScript. No frameworks, no build step
    mysql -u game_user -p game_collection < migrations/2026-09_point_grading.sql
    ```
 
-4. Open any page. On first load the app seeds the default grading data from `assets/grading-defaults.json`, gives each system a default format profile based on its name, and converts the old Mint / Good / Fair / Poor values to grade labels. Systems it can't match are listed under **Admin → Format Profiles**.
+4. Open any page. On first load the app seeds the default grading data from `assets/grading-defaults.json`, gives each system a default format profile based on its name, and converts the old Mint / Good / Fair / Poor values to grade labels. Systems it can't match are listed under **Settings → Grading System → Format Profiles**.
 
 ---
 
 ## Usage
 
-1. **Admin:** add systems (e.g. *PAL Nintendo 64*, short name *N64*), then fill their game lists by pasting titles or importing a PriceCharting CSV.
+1. **Settings → Catalogue** (admin): add systems (e.g. *PAL Nintendo 64*, short name *N64*), then fill their game lists by pasting titles or importing a PriceCharting CSV.
 2. **Users:** open **Collection**, pick a system, and tick off what you own. Click a game to open the edit drawer and add details and photos.
 3. **Settings:** choose your condition grading method, visible systems and their order, table columns, auction sites, tags, completeness and played options, and wishlist sharing. You can also export or import a backup and change your password here.
 4. **Dashboard:** see your progress and value at a glance.
@@ -159,8 +160,9 @@ The `console` value must match a system's **short name** (case-insensitive). Row
 ├── dashboard.php        Overview and per-system completion cards
 ├── collection.php       Main collection table and edit drawer
 ├── wishlist.php         Wishlist (private, or public via share token)
-├── settings.php         Per-user settings, backup/restore, password
-├── admin.php            Admin panel
+├── settings.php         Settings control panel: user and admin sections (settings.php?s=<section>)
+├── settings/            Its section registry, POST handlers and one partial per section (not web-accessible)
+├── admin.php            Redirects old admin links to settings.php
 ├── import_games.php     Bulk-import game titles for a system
 ├── pc_import.php        PriceCharting CSV import
 ├── config.sample.php    Template for config.php (the installer writes config.php for you)
@@ -173,7 +175,7 @@ The `console` value must match a system's **short name** (case-insensitive). Row
 ├── api/                 JSON endpoints used by the front end
 ├── assets/css/main.css  Stylesheet (the default theme's variables)
 ├── assets/themes/       Theme files
-├── assets/js/           grading.js (drawer editor + scoring), grading-admin.js (admin editors)
+├── assets/js/           settings.js / admin.js (settings page), grading.js (drawer editor + scoring), grading-admin.js (grading editors)
 ├── assets/systems.json  Systems the installer offers (per maker; edit to add more)
 ├── assets/grading-defaults.json  Default grading system (labels, templates, profiles, system matching)
 └── uploads/             User photos, default images, backups

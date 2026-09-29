@@ -42,7 +42,7 @@ $systems = db()->query("SELECT * FROM systems WHERE active=1 ORDER BY sort_order
   <nav class="site-nav">
     <a href="<?= BASE_URL ?>/dashboard.php" class="nav-link"><?= t('common.nav.dashboard') ?></a>
     <a href="<?= BASE_URL ?>/collection.php" class="nav-link">← <?= t('common.nav.collection') ?></a>
-    <a href="<?= BASE_URL ?>/admin.php" class="nav-link"><?= t('common.nav.admin') ?></a>
+    <a href="<?= BASE_URL ?>/settings.php?s=catalogue" class="nav-link">← <?= t('common.nav.settings') ?></a>
     <a href="<?= BASE_URL ?>/api/logout.php" class="nav-link"><?= t('common.nav.sign_out') ?></a>
   </nav>
 </header>

@@ -58,7 +58,7 @@
 }
 
 /* Soft, raised panels instead of hard outlines */
-.admin-section, .modal, .gr-card, .drawer { box-shadow:0 2px 10px rgba(0,0,0,.06); }
+.cp-card, .modal, .gr-card, .drawer { box-shadow:0 2px 10px rgba(0,0,0,.06); }
 .progress-fill { background:linear-gradient(90deg,var(--accent),var(--accent3)); }
 .progress-label strong { color:var(--accent2); }
 

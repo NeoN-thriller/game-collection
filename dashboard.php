@@ -206,9 +206,6 @@ $totalOwnedVal= array_sum(array_column($statsRaw,   'owned_value'));
     <span class="nav-user">👤 <?= htmlspecialchars($user['username']) ?></span>
     <a href="<?= BASE_URL ?>/wishlist.php" class="nav-link"><?= t('common.nav.wishlist') ?></a>
     <a href="<?= BASE_URL ?>/collection.php" class="nav-link"><?= t('common.nav.collection') ?></a>
-    <?php if (isAdmin()): ?>
-    <a href="<?= BASE_URL ?>/admin.php" class="nav-link"><?= t('common.nav.admin') ?></a>
-    <?php endif; ?>
     <a href="<?= BASE_URL ?>/settings.php" class="nav-link"><?= t('common.nav.settings') ?></a>
     <a href="<?= BASE_URL ?>/api/logout.php" class="nav-link"><?= t('common.nav.sign_out') ?></a>
   </nav>

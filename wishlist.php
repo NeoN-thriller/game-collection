@@ -171,7 +171,6 @@ foreach ($entries as $e) {
       <span class="nav-user">👤 <?= htmlspecialchars($user['username']) ?></span>
       <a href="<?= BASE_URL ?>/dashboard.php" class="nav-link"><?= t('common.nav.dashboard') ?></a>
       <a href="<?= BASE_URL ?>/collection.php" class="nav-link"><?= t('common.nav.collection') ?></a>
-      <?php if (isAdmin()): ?><a href="<?= BASE_URL ?>/admin.php" class="nav-link"><?= t('common.nav.admin') ?></a><?php endif; ?>
       <a href="<?= BASE_URL ?>/settings.php" class="nav-link"><?= t('common.nav.settings') ?></a>
       <a href="<?= BASE_URL ?>/api/logout.php" class="nav-link"><?= t('common.nav.sign_out') ?></a>
     <?php endif; ?>
