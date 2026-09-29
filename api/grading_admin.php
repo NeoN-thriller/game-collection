@@ -1,6 +1,6 @@
 <?php
 // Admin: grade labels, format profiles, component templates, and export / import of the grading system.
-require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../boot.php';
 $admin = requireAuth();
 if ($admin['role'] !== 'admin') jsonOut(['ok'=>false,'error'=>tRaw('gapi.admins_only')], 403);
 

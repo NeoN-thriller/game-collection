@@ -21,7 +21,13 @@ const SITE_DEFAULTS = [
     'img_max_width'     => '1200',
     'img_max_height'    => '1200',
     'img_quality'       => '80',
+    'timezone'          => '',            // '' = the server's own timezone
+    'default_value_type'=> 'cib',         // loose | cib | new: price used for "owned value" on new copies
+    'defaults_completeness' => '',        // one per line, for new users; '' = the language's default list
+    'defaults_played'   => '',            // idem
 ];
+
+const VALUE_TYPES    = ['loose', 'cib', 'new'];
 
 const REGIONS        = ['PAL', 'NTSC-U', 'NTSC-J', 'Mixed'];
 const DATE_FORMATS   = ['DD-MMM-YYYY', 'D MMM YYYY', 'DD-MM-YYYY', 'DD/MM/YYYY', 'MM/DD/YYYY', 'YYYY-MM-DD'];
@@ -116,6 +122,41 @@ function fmtDate(int|string|null $when, bool $withTime = false): string {
     return $withTime ? $out.' '.date('H:i', $ts) : $out;
 }
 
+// ── Timezone ─────────────────────────────
+
+/** Applies the site timezone to PHP and to this request's MySQL session, so both agree on "now". */
+function applyTimezone(): void {
+    $tz = setting('timezone');
+    if ($tz === '' || !in_array($tz, timezone_identifiers_list(), true)) return;
+    date_default_timezone_set($tz);
+    try { db()->exec("SET time_zone = '".date('P')."'"); } catch (PDOException) {}
+}
+
+// ── Defaults for new users ───────────────
+
+/** Starting completeness options for a new user: the admin's list, else the language's default list. */
+function defaultCompletenessOptions(): array {
+    return defaultOptionList('defaults_completeness', 'defaults.completeness');
+}
+
+function defaultPlayedOptions(): array {
+    return defaultOptionList('defaults_played', 'defaults.played');
+}
+
+function defaultOptionList(string $setting, string $langKey): array {
+    $raw  = setting($setting);
+    $list = $raw !== '' ? preg_split('/\R/', $raw) : explode('|', tRaw($langKey));
+    return array_values(array_unique(array_filter(array_map(fn($s) => mb_substr(trim($s), 0, 100), $list), 'strlen')));
+}
+
+/** Gives a new user their starting completeness and played options. */
+function seedUserOptions(int $userId): void {
+    $ins = db()->prepare("INSERT INTO user_completeness_options (user_id, label, sort_order) VALUES (?,?,?)");
+    foreach (defaultCompletenessOptions() as $i => $label) $ins->execute([$userId, $label, $i]);
+    $ins = db()->prepare("INSERT INTO user_played_options (user_id, label, sort_order) VALUES (?,?,?)");
+    foreach (defaultPlayedOptions() as $i => $label) $ins->execute([$userId, $label, $i]);
+}
+
 // ── Regions ──────────────────────────────
 
 /** Region of a system (its own), else the site default. "Mixed" means none. */
@@ -176,5 +217,6 @@ function formatClientConfig(): array {
         'date'   => setting('date_format'),
         'months' => explode(' ', tRaw('date.months_short')),
         'region' => setting('default_region'),
+        'valueType' => in_array(setting('default_value_type'), VALUE_TYPES, true) ? setting('default_value_type') : 'cib',
     ];
 }

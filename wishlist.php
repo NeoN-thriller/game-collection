@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/boot.php';
 
 // Support public wishlist viewing via ?token= (random token)
 $shareToken   = $_GET['token'] ?? '';
@@ -871,7 +871,7 @@ function loadCopyIntoForm(copyNum) {
   setTog('d-wishlist',c.wishlist,'lbl-wishlist',tRaw(c.wishlist?'drawer.wished':'drawer.not_wished'));
   document.getElementById('d-upgrade-reason').value = c.upgrade_reason || '';
   document.getElementById('d-notes').value          = c.notes || '';
-  const vtype = c.value_price_type || 'cib';
+  const vtype = c.value_price_type || FMT.valueType;
   document.querySelectorAll('input[name="d-value-type"]').forEach(r => r.checked = r.value === vtype);
   renderPhotoGrid(c.photos || [], c.primary_photo || '', c.id || null);
 }
@@ -896,7 +896,7 @@ async function saveEntry() {
     upgrade_reason:   document.getElementById('d-upgrade-reason').value,
     notes:            document.getElementById('d-notes').value,
     tag:              document.getElementById('d-tag').value,
-    value_price_type: document.querySelector('input[name="d-value-type"]:checked')?.value || 'cib',
+    value_price_type: document.querySelector('input[name="d-value-type"]:checked')?.value || FMT.valueType,
     primary_photo:    document.getElementById('d-primary').value||null,
   };
   const grading = gradeEditor.getPayload();

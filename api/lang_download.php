@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../boot.php';
 requireAdmin();
 
 // Downloads one language file as-is (the code is whitelisted, never used as a raw path)

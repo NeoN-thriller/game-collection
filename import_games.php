@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/boot.php';
 $user = requireAdmin();
 
 $systems = db()->query("SELECT * FROM systems WHERE active=1 ORDER BY sort_order")->fetchAll();

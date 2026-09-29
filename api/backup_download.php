@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../boot.php';
 $user  = requireAuth();
 $token = $_GET['token'] ?? '';
 if (!is_string($token) || !preg_match('/^[a-f0-9]{32}$/', $token)) { http_response_code(400); exit(tRaw('api.invalid_token')); }

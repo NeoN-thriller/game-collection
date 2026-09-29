@@ -77,7 +77,7 @@ Built with plain PHP, MySQL and vanilla JavaScript. No frameworks, no build step
 | Component | Version / notes |
 |---|---|
 | PHP | **8.1 or newer** (uses `never`, `mixed` and union return types) |
-| PHP extensions | `pdo_mysql`, `gd` (image resizing — with WebP support if you upload WebP), `exif` (optional, auto-rotates phone photos), `json` |
+| PHP extensions | `pdo_mysql`, `mbstring`, `fileinfo`, `gd` (image resizing — with WebP support if you upload WebP), `json`; optional: `exif` (auto-rotates phone photos), `zip` (photo backups) |
 | Database | MySQL 8+ or MariaDB 10.5+ |
 | Web server | IIS (a `web.config` is included) or Apache / nginx |
 
@@ -87,67 +87,31 @@ Built with plain PHP, MySQL and vanilla JavaScript. No frameworks, no build step
 
 1. **Copy the files** to your web root (or a subfolder such as `/games`).
 
-2. **Create a MySQL database** and a user with full rights on it, using the `utf8mb4` character set.
+2. **Make these folders writable** by the web server user (on IIS usually `IUSR` / `IIS_IUSRS`, or the app pool identity):
+   - `uploads/` (and its subfolders)
+   - `lang/`, to upload language files later (optional)
+   - the site folder itself, so the installer can write `config.php` (optional: otherwise it shows the file for you to save)
 
-3. **Import the schema** into the new database:
-
-   ```bash
-   mysql -u game_user -p game_collection < schema.sql
-   ```
-
-   (Or import `schema.sql` with phpMyAdmin, Adminer or HeidiSQL.)
-
-   > ⚠️ `schema.sql` **drops and recreates every table**. Only run it on an empty database, never on a live install.
-
-4. **Edit `config.php`:**
-
-   ```php
-   define('BASE_URL',   'https://games.example.com'); // no trailing slash; include the subfolder if you use one
-   define('DB_HOST',    'localhost');
-   define('DB_NAME',    'game_collection');
-   define('DB_USER',    'game_user');
-   define('DB_PASS',    'a-strong-password');
-   define('SESSION_NAME', 'gcollect_session');       // make this unique per site
-   ```
-
-   Upload limits (8 MB per image; JPEG / PNG / GIF / WebP) can be changed in the same file. Everything below the "DO NOT EDIT" line lives in `core.php`, so `config.php` doesn't need to change when you update the app.
-
-5. **Make the upload folders writable** by the web server user (on IIS, usually `IIS_IUSRS`):
-
-   ```
-   uploads/
-   uploads/users/
-   uploads/defaults/
-   ```
-
-   `lang/` must also be writable if you want to upload language files from the admin page.
-
-6. **Protect the uploads folder.**
-   - **IIS:** make sure PHP cannot run inside `uploads/` (remove the PHP handler for that folder, or add a `web.config` there).
+3. **Protect the uploads folder.**
+   - **IIS:** the included `uploads/web.config` stops PHP from running there.
    - **Apache:** rename `uploads/htaccess.yxy` to `uploads/.htaccess`. It disables directory listing and blocks `.php` files.
 
-7. **Create the first admin account** (see below), then sign in at `index.php`.
+4. **Open `install.php`** in the browser (e.g. `https://games.example.com/install.php`; any page sends you there while there is no `config.php`). The wizard:
+   - checks the server (PHP version, extensions, writable folders),
+   - asks for the database (MySQL 8+ / MariaDB 10.5+; an empty database, or it creates one),
+   - asks for the site name, base URL, HTTPS, timezone and photo sizes,
+   - asks for the region, currency and number / date format,
+   - lets you tick the systems you collect (Nintendo, Sony, Sega, Microsoft, Atari),
+   - sets the defaults for new users (grading method, completeness and played options, price tier) and the site theme,
+   - creates your admin account and, if you like, three invite codes.
 
-### Creating the first admin
+   Nothing is written until the last step. Then it creates the tables, saves everything, writes `config.php` and locks itself (`installed.lock`). Delete `install.php` afterwards if you like.
 
-Registration requires an invite code, and invite codes can only be made by an admin, so the first account has to be created directly in the database.
+   **Run it right after uploading**: until it has run, anyone who opens `install.php` could set the site up.
 
-Generate a password hash:
+**Without the wizard:** create the database, import `schema.sql` (it drops and recreates every table, so only on an empty database), copy `config.sample.php` to `config.php` and fill it in, and create the first admin directly in the `users` table (`role` = `admin`, `password` = a bcrypt hash made with `password_hash()`).
 
-```bash
-php -r "echo password_hash('your-long-password', PASSWORD_BCRYPT, ['cost'=>12]), PHP_EOL;"
-```
-
-Then insert the user:
-
-```sql
-INSERT INTO users (username, password, role, status, wishlist_token)
-VALUES ('admin', '<hash from above>', 'admin', 'active', SUBSTRING(SHA2(RAND(), 256), 1, 24));
-```
-
-After you sign in:
-- Add your completeness and played-status options under **Settings** (these are only seeded automatically for users who register with an invite code).
-- Use the **Admin** panel to add systems, fill the game lists, and generate invite codes for other users.
+`config.php` is not in git (`config.sample.php` is), so updating the app never overwrites it.
 
 ### Upgrading an existing install
 
@@ -189,6 +153,8 @@ The `console` value must match a system's **short name** (case-insensitive). Row
 ```
 ├── schema.sql           Database schema (fresh installs only)
 ├── migrations/          Schema updates for existing installs
+├── install.php          Setup wizard (locks itself after installing)
+├── boot.php             Loaded first by every page: sends you to install.php while there is no config.php
 ├── index.php            Sign in / register (invite code)
 ├── dashboard.php        Overview and per-system completion cards
 ├── collection.php       Main collection table and edit drawer
@@ -197,7 +163,7 @@ The `console` value must match a system's **short name** (case-insensitive). Row
 ├── admin.php            Admin panel
 ├── import_games.php     Bulk-import game titles for a system
 ├── pc_import.php        PriceCharting CSV import
-├── config.php           Site configuration (edit this)
+├── config.sample.php    Template for config.php (the installer writes config.php for you)
 ├── core.php             Sessions, DB, auth, CSRF, throttling (don't edit)
 ├── grading.php          Condition grading: labels, profiles, templates, scoring, export/import
 ├── site.php             Site settings, money / number / date formatting, site name
@@ -208,6 +174,7 @@ The `console` value must match a system's **short name** (case-insensitive). Row
 ├── assets/css/main.css  Stylesheet (the default theme's variables)
 ├── assets/themes/       Theme files
 ├── assets/js/           grading.js (drawer editor + scoring), grading-admin.js (admin editors)
+├── assets/systems.json  Systems the installer offers (per maker; edit to add more)
 ├── assets/grading-defaults.json  Default grading system (labels, templates, profiles, system matching)
 └── uploads/             User photos, default images, backups
 ```

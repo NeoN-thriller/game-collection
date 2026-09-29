@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../boot.php';
 requireAdmin();
 
 // Stored in app_settings (img_max_width / img_max_height / img_quality)

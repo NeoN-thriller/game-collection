@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../boot.php';
 $user = requireAuth();
 
 // Data-only export: photos are backed up separately as per-system zips (Settings → Image Backups)

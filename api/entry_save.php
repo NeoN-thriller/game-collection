@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../boot.php';
 $user = requireAuth();
 
 $body = json_decode(file_get_contents('php://input'), true);
@@ -39,6 +39,8 @@ try {
     $entryId = $find->fetchColumn();
 
     if (!$entryId) {
+        // New copies use the site's default price tier for "owned value" unless the request says otherwise
+        $fields += ['value_price_type' => in_array(setting('default_value_type'), VALUE_TYPES, true) ? setting('default_value_type') : 'cib'];
         $cols = array_merge(['user_id','game_id','copy_number'], array_keys($fields));
         $vals = array_merge([$user['id'], $gameId, $copyNum], array_values($fields));
         $pdo->prepare("INSERT INTO collection_entries (".implode(',', $cols).") VALUES (".implode(',', array_fill(0, count($cols), '?')).")")

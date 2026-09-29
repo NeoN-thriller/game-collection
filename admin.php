@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/boot.php';
 $admin = requireAdmin();
 
 $msg    = '';
@@ -138,6 +138,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $colors = json_decode($raw('site_name_colors'), true);
         $colors = is_array($colors) ? array_values(array_map(fn($c) => in_array($c, LOGO_COLORS, true) ? $c : 'header-logo', array_slice($colors, 0, 20))) : [];
         $pick = fn(string $k, array $allowed) => in_array($in($k), $allowed, true) ? $in($k) : SITE_DEFAULTS[$k];
+        // One option per line, trimmed, no duplicates, max 30 options of 100 characters
+        $lines = fn(string $k) => implode("\n", array_slice(array_values(array_unique(array_filter(
+                     array_map(fn($s) => mb_substr(trim($s), 0, 100), preg_split('/\R/', $raw($k))), 'strlen'))), 0, 30));
         if ($errs) { $msg = implode(' ', $errs); $msgErr = true; }
         else {
             foreach ([
@@ -153,6 +156,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'date_format'       => $pick('date_format', DATE_FORMATS),
                 'default_language'  => $pick('default_language', array_keys(availableLanguages())),
                 'default_grading'   => $pick('default_grading', ['simple', 'points', 'both']),
+                'default_value_type'=> $pick('default_value_type', VALUE_TYPES),
+                'timezone'          => $pick('timezone', timezone_identifiers_list()),
+                'defaults_completeness' => $lines('defaults_completeness'),
+                'defaults_played'   => $lines('defaults_played'),
             ] as $k => $v) setSetting($k, $v);
             $msg = tRaw('admin.site.saved');
         }
@@ -332,13 +339,35 @@ try {
           <select name="default_language">
             <?php foreach (availableLanguages() as $l): ?><option value="<?= htmlspecialchars($l['code']) ?>" <?= siteLanguage() === $l['code'] ? 'selected' : '' ?>><?= htmlspecialchars($l['name']) ?></option><?php endforeach; ?>
           </select></div>
-        <div class="field" style="width:200px"><label><?= t('admin.site.grading') ?></label>
-          <select name="default_grading">
-            <?php foreach (['simple', 'points', 'both'] as $g): ?><option value="<?= $g ?>" <?= setting('default_grading') === $g ? 'selected' : '' ?>><?= t('grading.mode_'.$g) ?></option><?php endforeach; ?>
+        <div class="field" style="width:240px"><label><?= t('admin.site.timezone') ?></label>
+          <select name="timezone">
+            <option value=""><?= t('admin.site.tz_server', ['tz' => ini_get('date.timezone') ?: 'UTC']) ?></option>
+            <?php foreach (timezone_identifiers_list() as $tz): ?><option value="<?= htmlspecialchars($tz) ?>" <?= setting('timezone') === $tz ? 'selected' : '' ?>><?= htmlspecialchars($tz) ?></option><?php endforeach; ?>
           </select></div>
       </div>
       <div class="sf-preview"><?= t('admin.site.preview') ?>: <b id="sf-date-preview"></b></div>
       <p class="ga-desc" style="margin:8px 0 0"><?= t('admin.site.region_note') ?></p>
+    </div>
+
+    <div class="sf-group">
+      <div class="sf-head"><?= t('admin.site.new_users_head') ?></div>
+      <div class="sf-row">
+        <div class="field" style="width:220px"><label><?= t('admin.site.grading') ?></label>
+          <select name="default_grading">
+            <?php foreach (['simple', 'points', 'both'] as $g): ?><option value="<?= $g ?>" <?= setting('default_grading') === $g ? 'selected' : '' ?>><?= t('grading.mode_'.$g) ?></option><?php endforeach; ?>
+          </select></div>
+        <div class="field" style="width:220px"><label><?= t('admin.site.value_type') ?></label>
+          <select name="default_value_type">
+            <?php foreach (VALUE_TYPES as $v): ?><option value="<?= $v ?>" <?= setting('default_value_type') === $v ? 'selected' : '' ?>><?= t('common.price.'.$v) ?></option><?php endforeach; ?>
+          </select></div>
+      </div>
+      <div class="sf-row">
+        <div class="field" style="flex:1;min-width:220px"><label><?= t('settings.comp') ?></label>
+          <textarea name="defaults_completeness" rows="9"><?= htmlspecialchars(implode("\n", defaultCompletenessOptions())) ?></textarea></div>
+        <div class="field" style="flex:1;min-width:220px"><label><?= t('settings.played') ?></label>
+          <textarea name="defaults_played" rows="9"><?= htmlspecialchars(implode("\n", defaultPlayedOptions())) ?></textarea></div>
+      </div>
+      <p class="ga-desc" style="margin:0"><?= t('admin.site.new_users_note') ?></p>
     </div>
 
     <div style="display:flex;justify-content:flex-end"><button class="btn btn-sm" type="submit"><?= t('admin.site.save') ?></button></div>

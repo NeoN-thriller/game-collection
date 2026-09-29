@@ -1,6 +1,6 @@
 <?php
 // photo_delete.php
-require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../boot.php';
 $user = requireAuth();
 $body = json_decode(file_get_contents('php://input'), true);
 $entryId  = (int)($body['entry_id'] ?? 0);

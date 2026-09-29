@@ -1,6 +1,8 @@
 <?php
 // ─────────────────────────────────────────
-//  CONFIGURATION — edit these values
+//  CONFIGURATION
+//  The easiest way: open install.php in the browser, it writes config.php for you.
+//  By hand: copy this file to config.php and fill in the values.
 // ─────────────────────────────────────────
 
 define('BASE_URL',   'https://games.example.com');   // No trailing slash. Change to /games if needed

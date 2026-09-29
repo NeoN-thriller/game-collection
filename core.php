@@ -37,7 +37,7 @@ session_start();
 function db(): PDO {
     static $pdo = null;
     if ($pdo === null) {
-        $dsn = "mysql:host=".DB_HOST.";dbname=".DB_NAME.";charset=".DB_CHARSET;
+        $dsn = "mysql:host=".DB_HOST.(defined('DB_PORT') ? ";port=".DB_PORT : "").";dbname=".DB_NAME.";charset=".DB_CHARSET;
         $pdo = new PDO($dsn, DB_USER, DB_PASS, [
             PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
@@ -400,6 +400,8 @@ function themeCardHtml(array $t, string $group, bool $checked, string $onchange,
 require_once __DIR__ . '/site.php';
 require_once __DIR__ . '/i18n.php';
 require_once __DIR__ . '/grading.php';
+
+applyTimezone();
 
 // Every state-changing request to /api/* must carry a valid CSRF token
 // (X-CSRF-Token header added by csrfScript(), or a 'csrf' form field).

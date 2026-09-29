@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/boot.php';
 $user = requireAuth();
 
 // Load systems visible to this user, respecting user-defined order
@@ -658,7 +658,7 @@ function updateStats(filtered) {
   let ownedValue = 0;
   allGames.forEach(g => {
     (entryMap[g.id]||[]).filter(c=>c.owned).forEach(c => {
-      const ptype = c.value_price_type || 'cib';
+      const ptype = c.value_price_type || FMT.valueType;
       const price = ptype === 'loose' ? parseFloat(g.loose_price)||0
                   : ptype === 'new'   ? parseFloat(g.new_price)||0
                   : parseFloat(g.cib_price)||0;
@@ -845,7 +845,7 @@ function loadCopyIntoForm(copyNum) {
   document.getElementById('d-upgrade-reason').value = c.upgrade_reason||'';
   document.getElementById('d-notes').value           = c.notes||'';
   document.getElementById('d-tag').value = c.tag||'';
-  const vtype = c.value_price_type || 'cib';
+  const vtype = c.value_price_type || FMT.valueType;
   document.querySelectorAll('input[name="d-value-type"]').forEach(r => r.checked = r.value === vtype);
   renderPhotoGrid(c.photos||[], c.primary_photo||'', c.id||null);
 }
@@ -869,7 +869,7 @@ async function saveEntry() {
     upgrade_reason: document.getElementById('d-upgrade-reason').value,
     notes:          document.getElementById('d-notes').value,
     tag:            document.getElementById('d-tag').value,
-    value_price_type: document.querySelector('input[name="d-value-type"]:checked')?.value || 'cib',
+    value_price_type: document.querySelector('input[name="d-value-type"]:checked')?.value || FMT.valueType,
     primary_photo:  document.getElementById('d-primary').value||null,
   };
   const grading = gradeEditor.getPayload();

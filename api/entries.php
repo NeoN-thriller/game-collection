@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../boot.php';
 $user   = requireAuth();
 $sysId  = (int)($_GET['system_id'] ?? 0);
 $gameId = (int)($_GET['game_id']   ?? 0);

@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../boot.php';
 
 // Logout must be a POST with a CSRF token (checked in config.php) so other sites can't log users out.
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {

@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/boot.php';
 if (auth()) { header('Location: '.BASE_URL.'/dashboard.php'); exit; }
 
 $error = '';
@@ -85,14 +85,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $uid = $pdo->lastInsertId();
                         $pdo->prepare("UPDATE invite_codes SET used_by=?, used_at=NOW() WHERE id=?")
                             ->execute([$uid, $invite['id']]);
-                        // Seed default completeness options (in the site language; users can rename them)
-                        $defaults = array_map('trim', explode('|', tRaw('defaults.completeness')));
-                        $ins = $pdo->prepare("INSERT INTO user_completeness_options (user_id, label, sort_order) VALUES (?,?,?)");
-                        foreach ($defaults as $i => $label) $ins->execute([$uid, $label, $i]);
-                        // Seed default played options
-                        $played = array_map('trim', explode('|', tRaw('defaults.played')));
-                        $ins2 = $pdo->prepare("INSERT INTO user_played_options (user_id, label, sort_order) VALUES (?,?,?)");
-                        foreach ($played as $i => $label) $ins2->execute([$uid, $label, $i]);
+                        // Starting completeness / played options (admin's lists, else the site language's; users can edit them)
+                        seedUserOptions((int)$uid);
                         $pdo->commit();
                         startUserSession(['id'=>$uid, 'password'=>$hash]);
                         header('Location: '.BASE_URL.'/dashboard.php'); exit;

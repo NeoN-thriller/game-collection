@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../boot.php';
 requireAuth();
 $sysId = (int)($_GET['system_id'] ?? 0);
 $st = db()->prepare("

@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../boot.php';
 $user = requireAuth();
 
 $entryId = (int)($_POST['entry_id'] ?? 0);
