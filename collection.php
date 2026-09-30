@@ -57,7 +57,7 @@ if ($trackVariants) {
 <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/main.css?v=<?= @filemtime(__DIR__.'/assets/css/main.css') ?>">
 <?= themeHead($user) ?>
 <?= csrfScript() ?>
-<?= appScript(['coll', 'drawer', 'grading', 'ed']) ?>
+<?= appScript(['coll', 'drawer', 'grading', 'ed', 'cr']) ?>
 </head>
 <body>
 
@@ -326,6 +326,9 @@ if ($trackVariants) {
         </div>
       </div>
 
+      <!-- Share condition report (assets/js/share-drawer.js) -->
+      <div class="drawer-section" id="d-share" hidden></div>
+
     </div>
     <div class="drawer-footer">
       <button class="btn-ghost" onclick="closeDrawer()"><?= t('common.cancel') ?></button>
@@ -334,26 +337,15 @@ if ($trackVariants) {
   </div>
 </div>
 
-<!-- LIGHTBOX -->
-<div class="lightbox" id="lightbox" onclick="closeLightbox()">
-  <button class="lb-close" onclick="closeLightbox()">✕</button>
-  <img id="lb-img" src="" alt="">
-  <div class="lb-nav">
-    <button class="lb-btn" onclick="lbPrev(event)">← <?= t('drawer.prev') ?></button>
-    <span class="lb-label" id="lb-lbl"></span>
-    <button class="lb-btn" onclick="lbNext(event)"><?= t('drawer.next') ?> →</button>
-  </div>
-  <div class="lb-nav" id="lb-rotate-nav" style="display:none">
-    <button class="lb-btn" onclick="lbRotate(event,-90)">↺ <?= t('drawer.rotate_left') ?></button>
-    <button class="lb-btn" onclick="lbRotate(event,90)">↻ <?= t('drawer.rotate_right') ?></button>
-  </div>
-</div>
-
 <div class="toast" id="toast"></div>
 
 <script>window.GRADING = <?= gradingClientJson($user) ?>;</script>
 <script src="<?= BASE_URL ?>/assets/js/grading.js?v=<?= @filemtime(__DIR__.'/assets/js/grading.js') ?>"></script>
 <script src="<?= BASE_URL ?>/assets/js/editions-drawer.js?v=<?= @filemtime(__DIR__.'/assets/js/editions-drawer.js') ?>"></script>
+<script src="<?= BASE_URL ?>/assets/js/lightbox.js?v=<?= @filemtime(__DIR__.'/assets/js/lightbox.js') ?>"></script>
+<script src="<?= BASE_URL ?>/assets/js/vendor/qrcode.js?v=<?= @filemtime(__DIR__.'/assets/js/vendor/qrcode.js') ?>"></script>
+<script src="<?= BASE_URL ?>/assets/js/labels.js?v=<?= @filemtime(__DIR__.'/assets/js/labels.js') ?>"></script>
+<script src="<?= BASE_URL ?>/assets/js/share-drawer.js?v=<?= @filemtime(__DIR__.'/assets/js/share-drawer.js') ?>"></script>
 <script>
 const BASE     = <?= json_encode(BASE_URL) ?>;
 const USER_ID  = <?= (int)$user['id'] ?>;
@@ -374,10 +366,6 @@ let sortKey   = 'title';
 let sortDir   = 1;
 let editGameId= null;
 let editCopy  = 1;
-let lbImages  = [];
-let lbRawNames= [];
-let lbContext  = null;
-let lbIdx     = 0;
 let photoTs   = {}; // filename -> latest timestamp after rotation
 const gradeEditor = new GradingUI.Editor({
   root:       document.getElementById('d-grading'),
@@ -1065,6 +1053,7 @@ function loadCopyIntoForm(copyNum) {
     onOpen: id => openDrawer(id),
     onWish: id => toggleWishlist(id),
   });
+  ShareDrawer.load({ entryId: c.id || null, owned: !!c.owned, canEdit: true });
 }
 
 function closeDrawer() { document.getElementById('drawer-backdrop').classList.remove('open'); editGameId=null; }
@@ -1140,7 +1129,9 @@ async function uploadPhotos(e) {
   toast(tRaw('drawer.photos_added'));
 }
 
+let drawerPhotos = [];   // photos in the drawer grid (for the lightbox)
 function renderPhotoGrid(photos, primaryPhoto, entryId) {
+  drawerPhotos = photos || [];
   const grid = document.getElementById('d-photo-grid');
   grid.innerHTML = '';
   (photos||[]).forEach((fn, i) => {
@@ -1153,7 +1144,7 @@ function renderPhotoGrid(photos, primaryPhoto, entryId) {
     const src = `${BASE}/uploads/users/${cleanFn}${ts ? '?t='+ts : '?t='+Date.now()}`;
     div.innerHTML = `
       <img src="${escAttr(src)}"
-           onclick="openLightboxArr(${JSON.stringify(photos)},${i},${eid})"
+           onclick="openLightboxArr(drawerPhotos,${i},${eid})"
            style="${isPrimary ? 'border-color:var(--accent2)' : ''}">
       <div style="display:flex;gap:2px;margin-top:2px">
         <button class="img-del-btn" style="position:static;width:auto;padding:0 5px;font-size:.65rem" onclick="rotatePhoto(${i},-90)">↺</button>
@@ -1223,64 +1214,42 @@ async function deletePhoto(idx) {
 
 // LIGHTBOX
 
+function lbPhotoSrc(fn) {
+  const ts = photoTs[fn];
+  return `${BASE}/uploads/users/${fn}${ts ? '?t='+ts : ''}`;
+}
+
+/** All photos of a game's copies, each rotatable on its own copy. */
 function openLightboxGame(gameId) {
-  const copies = (entryMap[gameId]||[]);
-  const photos = copies.map(c=>c.photos||[]).flat();
-  if (!photos.length) return;
-  // Find entry that has these photos
-  const c = copies.find(c=>c.photos&&c.photos.length);
-  lbContext = c ? {entryId: c.id, photos: c.photos} : null;
-  openLightboxArr(photos, 0);
+  const list = [];
+  (entryMap[gameId]||[]).forEach(c => (c.photos||[]).forEach(fn => list.push({ fn: fn.split('?')[0], entryId: c.id })));
+  openPhotoList(list, 0);
 }
 
 function openLightboxArr(photos, startIdx, entryId=null) {
-  // Build URLs using cached timestamps so rotated images show correctly
-  lbRawNames = photos.map(fn => fn.split('?')[0]); // always clean filenames
-  lbImages   = lbRawNames.map(fn => {
-    const ts = photoTs[fn];
-    return `${BASE}/uploads/users/${fn}${ts ? '?t='+ts : ''}`;
+  openPhotoList((photos||[]).map(fn => ({ fn: fn.split('?')[0], entryId })), startIdx);
+}
+
+/** Opens the shared lightbox (assets/js/lightbox.js) with rotate buttons for photos of a saved copy. */
+function openPhotoList(list, start) {
+  if (!list.length) return;
+  Lightbox.open(list.map(p => ({ src: lbPhotoSrc(p.fn) })), start, {
+    onRotate: list.some(p => p.entryId) ? async (i, degrees) => {
+      const p = list[i];
+      if (!p.entryId) return null;
+      toast(tRaw('drawer.rotating'));
+      const res = await apiFetch('/api/photo_rotate.php', {entry_id: p.entryId, filename: p.fn, degrees});
+      if (!res.ok) { toast(tRaw('drawer.rotate_failed', {error: res.error||''}), true); return null; }
+      photoTs[p.fn] = res.ts; // so the table and the drawer show the rotated version too
+      if (editGameId) {
+        const c = (entryMap[editGameId]||[]).find(x => x.id == p.entryId);
+        if (c) renderPhotoGrid(c.photos, c.primary_photo || '', c.id || null);
+      }
+      render();
+      toast(tRaw('drawer.rotated'));
+      return `${BASE}/uploads/users/${p.fn}?t=${res.ts}`;
+    } : null,
   });
-  lbIdx = startIdx;
-  if (entryId) lbContext = {entryId, photos};
-  document.getElementById('lb-rotate-nav').style.display = entryId || lbContext ? 'flex' : 'none';
-  showLbImg();
-  document.getElementById('lightbox').classList.add('open');
-}
-
-function showLbImg(){
-  document.getElementById('lb-img').src = lbImages[lbIdx];
-  document.getElementById('lb-lbl').textContent=(lbIdx+1)+' / '+lbImages.length;
-}
-function lbPrev(e){e.stopPropagation();lbIdx=(lbIdx-1+lbImages.length)%lbImages.length;showLbImg();}
-function lbNext(e){e.stopPropagation();lbIdx=(lbIdx+1)%lbImages.length;showLbImg();}
-function closeLightbox(){document.getElementById('lightbox').classList.remove('open');}
-
-async function lbRotate(e, degrees) {
-  e.stopPropagation();
-  if (!lbContext) return;
-  const fn = lbRawNames[lbIdx].split('?')[0]; // clean filename
-  if (!fn) return;
-  toast(tRaw('drawer.rotating'));
-  const res = await apiFetch('/api/photo_rotate.php', {entry_id: lbContext.entryId, filename: fn, degrees});
-  if (res.ok) {
-    // Store timestamp so future openLightbox calls use the rotated version
-    photoTs[fn] = res.ts;
-    const newSrc = `${BASE}/uploads/users/${fn}?t=${res.ts}`;
-    lbImages[lbIdx]   = newSrc;
-    lbRawNames[lbIdx] = fn;
-    document.getElementById('lb-img').src = newSrc;
-    // Also update photo grid thumbnails if drawer is open
-    if (editGameId) {
-      const copies = entryMap[editGameId] || [];
-      const c = copies.find(x => x.id == lbContext.entryId);
-      if (c) renderPhotoGrid(c.photos, c.primary_photo || '', c.id || null);
-    }
-    // Update table thumbnail
-    render();
-    toast(tRaw('drawer.rotated'));
-  } else {
-    toast(tRaw('drawer.rotate_failed', {error: res.error || ''}), true);
-  }
 }
 
 
@@ -1349,13 +1318,8 @@ setOwned('owned'); setWishlist(''); setUpgrade('');
   document.getElementById(id)?.addEventListener('input',render);
   document.getElementById(id)?.addEventListener('change',render);
 });
-document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){if(document.getElementById('lightbox').classList.contains('open'))closeLightbox();else closeDrawer();}
-  if(document.getElementById('lightbox').classList.contains('open')){
-    if(e.key==='ArrowLeft')lbPrev({stopPropagation:()=>{}});
-    if(e.key==='ArrowRight')lbNext({stopPropagation:()=>{}});
-  }
-});
+// Escape closes the drawer (the lightbox handles its own keys while it is open)
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeDrawer(); });
 
 init();
 </script>

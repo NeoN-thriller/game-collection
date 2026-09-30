@@ -23,6 +23,7 @@ return [
     'appearance'     => ['group' => 'you',        'admin' => false,   'prefixes' => ['settings']],
     'sharing'        => ['group' => 'you',        'admin' => false,   'prefixes' => ['settings']],
     'grading'        => ['group' => 'collection', 'admin' => false,   'prefixes' => ['settings']],
+    'labels'         => ['group' => 'collection', 'admin' => false,   'prefixes' => ['settings', 'lbl'], 'scripts' => ['vendor/qrcode.js', 'labels.js', 'labels-editor.js'], 'badge' => 'settings.badge_new'],
     'options'        => ['group' => 'collection', 'admin' => false,   'prefixes' => ['settings']],
     'editions'       => ['group' => 'collection', 'admin' => false,   'prefixes' => ['settings', 'ed'], 'badge' => 'settings.badge_new'],
     'tags'           => ['group' => 'collection', 'admin' => false,   'prefixes' => ['settings']],
@@ -32,6 +33,7 @@ return [
     'general'        => ['group' => 'site',       'admin' => true,    'prefixes' => []],
     'site-appearance'=> ['group' => 'site',       'admin' => true,    'prefixes' => []],
     'grading-system' => ['group' => 'site',       'admin' => true,    'prefixes' => ['grading', 'ga'], 'scripts' => ['grading-admin.js']],
+    'label-sizes'    => ['group' => 'site',       'admin' => true,    'prefixes' => ['lbl'], 'scripts' => ['labels-editor.js']],
     'catalogue'      => ['group' => 'site',       'admin' => true,    'prefixes' => ['pc', 'import', 'ed'], 'scripts' => ['editions-admin.js']],
     'users'          => ['group' => 'site',       'admin' => true,    'prefixes' => []],
 ];

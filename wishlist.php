@@ -190,7 +190,7 @@ foreach ($entries as $e) {
   .d-empty { font-size:.7rem; color:var(--muted); font-style:italic; }
 </style>
 <?= csrfScript() ?>
-<?= appScript(['coll', 'drawer', 'grading', 'wish', 'ed']) ?>
+<?= appScript(['coll', 'drawer', 'grading', 'wish', 'ed', 'cr']) ?>
 </head>
 <body>
 
@@ -435,6 +435,9 @@ foreach ($entries as $e) {
         </div>
       </div>
 
+      <!-- Share condition report (assets/js/share-drawer.js) -->
+      <div class="drawer-section" id="d-share" hidden></div>
+
     </div>
     <div class="drawer-footer">
       <?php if ($canEdit): ?>
@@ -448,28 +451,15 @@ foreach ($entries as $e) {
   </div>
 </div>
 
-<!-- LIGHTBOX -->
-<div class="lightbox" id="lightbox" onclick="closeLightbox()">
-  <button class="lb-close" onclick="closeLightbox()">✕</button>
-  <img id="lb-img" src="" alt="">
-  <div class="lb-nav">
-    <button class="lb-btn" onclick="lbPrev(event)">← <?= t('drawer.prev') ?></button>
-    <span class="lb-label" id="lb-lbl"></span>
-    <button class="lb-btn" onclick="lbNext(event)"><?= t('drawer.next') ?> →</button>
-  </div>
-  <?php if ($canEdit): ?>
-  <div class="lb-nav" id="lb-rotate-nav" style="display:none">
-    <button class="lb-btn" onclick="lbRotate(event,-90)">↺ <?= t('drawer.rotate_left') ?></button>
-    <button class="lb-btn" onclick="lbRotate(event,90)">↻ <?= t('drawer.rotate_right') ?></button>
-  </div>
-  <?php endif; ?>
-</div>
-
 <div class="toast" id="toast"></div>
 
 <script>window.GRADING = <?= gradingClientJson($canEdit ? $user : null) ?>;</script>
 <script src="<?= BASE_URL ?>/assets/js/grading.js?v=<?= @filemtime(__DIR__.'/assets/js/grading.js') ?>"></script>
 <script src="<?= BASE_URL ?>/assets/js/editions-drawer.js?v=<?= @filemtime(__DIR__.'/assets/js/editions-drawer.js') ?>"></script>
+<script src="<?= BASE_URL ?>/assets/js/lightbox.js?v=<?= @filemtime(__DIR__.'/assets/js/lightbox.js') ?>"></script>
+<script src="<?= BASE_URL ?>/assets/js/vendor/qrcode.js?v=<?= @filemtime(__DIR__.'/assets/js/vendor/qrcode.js') ?>"></script>
+<script src="<?= BASE_URL ?>/assets/js/labels.js?v=<?= @filemtime(__DIR__.'/assets/js/labels.js') ?>"></script>
+<script src="<?= BASE_URL ?>/assets/js/share-drawer.js?v=<?= @filemtime(__DIR__.'/assets/js/share-drawer.js') ?>"></script>
 <script>
 const BASE     = <?= json_encode(BASE_URL) ?>;
 const CAN_EDIT = <?= json_encode($canEdit) ?>;
@@ -484,10 +474,6 @@ let reloadOnClose = false;   // another edition was put on / taken off the wishl
 
 let editGameId = null;
 let editCopy   = 1;
-let lbImages   = [];
-let lbRawNames = [];
-let lbContext  = null;
-let lbIdx      = 0;
 let photoTs    = {}; // filename -> latest timestamp after rotation
 const gradeEditor = new GradingUI.Editor({
   root:       document.getElementById('d-grading'),
@@ -998,6 +984,7 @@ function loadCopyIntoForm(copyNum) {
       toast(m.wished ? '♥ '+tRaw('coll.wish_added') : tRaw('coll.wish_removed'));
     } : null,
   });
+  ShareDrawer.load({ entryId: c.id || null, owned: !!c.owned, canEdit: CAN_EDIT });
 }
 
 function closeDrawer() {
@@ -1163,54 +1150,31 @@ function openRowImage(gameId, entryId) {
 
 function openCoverLightbox() {
   const g = GAMES[editGameId]; if (!g?.default_image) return;
-  lbRawNames = [null];
-  lbImages   = [`${BASE}/uploads/defaults/${g.default_image}`];
-  lbIdx = 0; lbContext = null;
-  const rn = document.getElementById('lb-rotate-nav'); if (rn) rn.style.display = 'none';
-  showLbImg();
-  document.getElementById('lightbox').classList.add('open');
+  Lightbox.open([{ src: `${BASE}/uploads/defaults/${g.default_image}` }], 0);
 }
 
+/** Opens the shared lightbox (assets/js/lightbox.js); photos of the owner's copy can be rotated. */
 function openLightboxArr(photos, startIdx, entryId=null) {
-  lbRawNames = photos.map(fn => fn.split('?')[0]);
-  lbImages   = lbRawNames.map(fn => photoUrl(fn));
-  lbIdx      = startIdx;
-  lbContext  = entryId ? {entryId} : null;
-  const rn = document.getElementById('lb-rotate-nav');
-  if (rn) rn.style.display = (CAN_EDIT && lbContext) ? 'flex' : 'none';
-  showLbImg();
-  document.getElementById('lightbox').classList.add('open');
-}
-
-function showLbImg(){
-  document.getElementById('lb-img').src = lbImages[lbIdx];
-  document.getElementById('lb-lbl').textContent = (lbIdx+1)+' / '+lbImages.length;
-}
-function lbPrev(e){e.stopPropagation();lbIdx=(lbIdx-1+lbImages.length)%lbImages.length;showLbImg();}
-function lbNext(e){e.stopPropagation();lbIdx=(lbIdx+1)%lbImages.length;showLbImg();}
-function closeLightbox(){document.getElementById('lightbox').classList.remove('open');}
-
-async function lbRotate(e, degrees) {
-  e.stopPropagation();
-  if (!CAN_EDIT || !lbContext) return;
-  const fn = lbRawNames[lbIdx]; if (!fn) return;
-  toast(tRaw('drawer.rotating'));
-  const res = await apiFetch('/api/photo_rotate.php', {entry_id: lbContext.entryId, filename: fn, degrees});
-  if (res.ok) {
-    photoTs[fn] = res.ts;
-    lbImages[lbIdx] = photoUrl(fn);
-    document.getElementById('lb-img').src = lbImages[lbIdx];
-    // Refresh drawer grid + table row for the game that owns this entry
-    const gid = Object.keys(GAMES).find(id => GAMES[id].copies.some(c => c.id == lbContext.entryId));
-    if (gid) {
-      if (editGameId == gid) {
-        const c = findCopy(gid, x => x.copy_number == editCopy);
-        if (c) renderPhotoGrid(c.photos, c.primary_photo||'', c.id);
+  const names = (photos||[]).map(fn => fn.split('?')[0]);
+  Lightbox.open(names.map(fn => ({ src: photoUrl(fn) })), startIdx, {
+    onRotate: CAN_EDIT && entryId ? async (i, degrees) => {
+      toast(tRaw('drawer.rotating'));
+      const res = await apiFetch('/api/photo_rotate.php', {entry_id: entryId, filename: names[i], degrees});
+      if (!res.ok) { toast(tRaw('drawer.rotate_failed', {error: res.error || ''}), true); return null; }
+      photoTs[names[i]] = res.ts;
+      // Refresh drawer grid + table row for the game that owns this entry
+      const gid = Object.keys(GAMES).find(id => GAMES[id].copies.some(c => c.id == entryId));
+      if (gid) {
+        if (editGameId == gid) {
+          const c = findCopy(gid, x => x.copy_number == editCopy);
+          if (c) renderPhotoGrid(c.photos, c.primary_photo||'', c.id);
+        }
+        refreshGameRows(gid);
       }
-      refreshGameRows(gid);
-    }
-    toast(tRaw('drawer.rotated'));
-  } else toast(tRaw('drawer.rotate_failed', {error: res.error || ''}), true);
+      toast(tRaw('drawer.rotated'));
+      return photoUrl(names[i]);
+    } : null,
+  });
 }
 
 // ── DRAWER TOGGLE LABELS ──
@@ -1218,14 +1182,8 @@ document.getElementById('d-owned').addEventListener('change',function(){document
 document.getElementById('d-upgrade').addEventListener('change',function(){document.getElementById('lbl-upgrade').textContent=tRaw(this.checked?'drawer.upgrade_wanted':'drawer.no_upgrade');});
 document.getElementById('d-wishlist').addEventListener('change',function(){document.getElementById('lbl-wishlist').textContent=tRaw(this.checked?'drawer.wished':'drawer.not_wished');});
 
-document.addEventListener('keydown', e => {
-  const lbOpen = document.getElementById('lightbox').classList.contains('open');
-  if (e.key === 'Escape') { if (lbOpen) closeLightbox(); else closeDrawer(); }
-  if (lbOpen) {
-    if (e.key === 'ArrowLeft')  lbPrev({stopPropagation:()=>{}});
-    if (e.key === 'ArrowRight') lbNext({stopPropagation:()=>{}});
-  }
-});
+// Escape closes the drawer (the lightbox handles its own keys while it is open)
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
 
 // ── INIT ──
 renderAllRows();
