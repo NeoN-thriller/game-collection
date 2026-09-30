@@ -70,7 +70,7 @@ $jsVer    = fn(string $f) => BASE_URL.'/assets/js/'.$f.'?v='.@filemtime(__DIR__.
     <p class="cp-group"><?= t('settings.group.'.$group) ?></p>
     <?php foreach ($slugs as $slug): ?>
     <a href="<?= BASE_URL ?>/settings.php?s=<?= $slug ?>" class="cp-link<?= $slug === $s ? ' active' : '' ?>"<?= $slug === $s ? ' aria-current="page"' : '' ?>>
-      <?= t($navKey($slug)) ?><?php if ($sections[$slug]['admin']): ?> <span class="cp-badge"><?= t('settings.admin_badge') ?></span><?php endif; ?>
+      <?= t($navKey($slug)) ?><?php if ($sections[$slug]['admin']): ?> <span class="cp-badge"><?= t('settings.admin_badge') ?></span><?php elseif (!empty($sections[$slug]['badge'])): ?> <span class="cp-badge"><?= t($sections[$slug]['badge']) ?></span><?php endif; ?>
     </a>
     <?php endforeach; ?>
     <?php endforeach; ?>

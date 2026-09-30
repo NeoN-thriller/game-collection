@@ -35,7 +35,7 @@ $user = requireAdmin();
   .ok   { color:var(--green); } .warn { color:var(--orange); } .err { color:var(--red); }
 </style>
 <?= csrfScript() ?>
-<?= appScript(['pc', 'import']) ?>
+<?= appScript(['pc', 'import', 'ed']) ?>
 </head>
 <body>
 
@@ -237,6 +237,7 @@ async function confirmImport() {
   btn.disabled = true;
   const BATCH = 20;
   let imported=0, updated=0, skippedArt=0, errors=0;
+  const sysIds = [];
 
   for (let i=0; i<parsedRows.length; i+=BATCH) {
     const batch = parsedRows.slice(i, i+BATCH);
@@ -245,7 +246,7 @@ async function confirmImport() {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({rows: batch})
     }).then(r=>r.json());
-    if (res.ok) { imported+=res.imported||0; updated+=res.updated||0; skippedArt+=res.skipped_art||0; errors+=res.errors||0; }
+    if (res.ok) { imported+=res.imported||0; updated+=res.updated||0; skippedArt+=res.skipped_art||0; errors+=res.errors||0; sysIds.push(...(res.system_ids||[])); }
     else errors++;
   }
 
@@ -260,6 +261,7 @@ async function confirmImport() {
   `;
   document.getElementById('preview-wrap').style.display='none';
   toast(tRaw('import.done_toast'));
+  edImportNotice(box, sysIds);
 }
 
 function reset() {
@@ -271,5 +273,6 @@ function reset() {
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function toast(msg,err=false){const t=document.getElementById('toast');t.textContent=msg;t.style.borderColor=err?'var(--red)':'var(--accent2)';t.style.color=err?'var(--red)':'var(--accent)';t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
 </script>
+<script src="<?= BASE_URL ?>/assets/js/editions-admin.js?v=<?= @filemtime(__DIR__.'/assets/js/editions-admin.js') ?>"></script>
 </body>
 </html>

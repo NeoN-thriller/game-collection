@@ -23,6 +23,31 @@ switch ($action) {
         jsonOut(['ok'=>true]);
         break;
 
+    case 'save_editions':
+        $mode = ($body['mode'] ?? '') === 'every' ? 'every' : 'one';
+        $wish = ($body['wishlist'] ?? '') === 'exact' ? 'exact' : 'any';
+        try {
+            db()->prepare("UPDATE users SET edition_mode=?, edition_wishlist=? WHERE id=?")->execute([$mode, $wish, $user['id']]);
+        } catch (PDOException) {
+            jsonOut(['ok'=>false,'error'=>tRaw('settings.err_migration', ['file' => 'migrations/2026-10_editions.sql'])]);
+        }
+        jsonOut(['ok'=>true]);
+        break;
+
+    case 'save_variants':
+        // Turning tracking off only hides the variant field; stored values on copies are kept
+        $labels = array_values(array_unique(array_filter(array_map(fn($l) => mb_substr(trim((string)$l), 0, 100), $body['labels'] ?? []), fn($l)=>$l!=='')));
+        try {
+            db()->prepare("UPDATE users SET track_variants=? WHERE id=?")->execute([!empty($body['track']) ? 1 : 0, $user['id']]);
+            db()->prepare("DELETE FROM user_variant_options WHERE user_id=?")->execute([$user['id']]);
+            $ins = db()->prepare("INSERT INTO user_variant_options (user_id,label,sort_order) VALUES(?,?,?)");
+            foreach ($labels as $i => $l) $ins->execute([$user['id'],$l,$i]);
+        } catch (PDOException) {
+            jsonOut(['ok'=>false,'error'=>tRaw('settings.err_migration', ['file' => 'migrations/2026-10_editions.sql'])]);
+        }
+        jsonOut(['ok'=>true]);
+        break;
+
     case 'save_grading':
         $mode = in_array($body['mode'] ?? '', ['simple','points','both'], true) ? $body['mode'] : 'simple';
         $def  = in_array($body['default'] ?? '', ['simple','points'], true) ? $body['default'] : 'simple';

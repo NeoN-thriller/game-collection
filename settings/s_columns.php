@@ -2,6 +2,7 @@
 /* SETTINGS › Columns: collection and wishlist columns, auction / search sites (filled by settings.js) */
 if (!defined('IN_SETTINGS')) exit;
 ?>
+<script>CP.trackVariants = <?= json_encode(!empty($user['track_variants'])) ?>;</script>
 <section class="cp-card">
   <h2><?= t('settings.coll_cols') ?></h2>
   <p class="export-desc"><?= t('settings.coll_cols_desc') ?></p>

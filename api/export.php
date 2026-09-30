@@ -41,7 +41,9 @@ foreach ($rows as $row) {
         'quality'         => $eff['name'] ?? '', // shown label; kept for older versions of the app
         'completeness'    => $row['completeness'],
         'played_status'   => $row['played_status'],
+        'variant'         => $row['variant'] ?? '',
         'wishlist'        => (bool)$row['wishlist'],
+        'wishlist_any'    => (bool)($row['wishlist_any'] ?? false),
         'price_paid'      => $row['price_paid'],
         'chart_price'     => $row['chart_price'],
         'price_min'       => $row['price_min'],
@@ -68,6 +70,12 @@ $data = [
     'completeness_options' => $optionList('user_completeness_options'),
     'played_options'       => $optionList('user_played_options'),
     'tag_options'          => $optionList('user_tag_options'),
+    'variant_options'      => $optionList('user_variant_options'),
+    'editions'             => [
+        'mode'           => $user['edition_mode'] ?? 'one',
+        'wishlist'       => $user['edition_wishlist'] ?? 'any',
+        'track_variants' => !empty($user['track_variants']),
+    ],
     'grading'              => ['mode' => $user['grading_mode'] ?? 'simple', 'default' => $user['grading_default'] ?? 'simple'],
     'entries'              => $entries,
 ];

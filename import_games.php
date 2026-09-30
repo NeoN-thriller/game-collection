@@ -30,10 +30,11 @@ $systems = db()->query("SELECT * FROM systems WHERE active=1 ORDER BY sort_order
   .result-box.show { display:block; }
   .result-box .ok  { color:var(--green); }
   .result-box .err { color:var(--red); }
+  .result-box .warn { color:var(--orange); }
   #preview-wrap { display:none; }
 </style>
 <?= csrfScript() ?>
-<?= appScript(['import']) ?>
+<?= appScript(['import', 'ed']) ?>
 </head>
 <body>
 
@@ -188,6 +189,7 @@ function confirmImport() {
       document.getElementById('preview-wrap').style.display = 'none';
       document.getElementById('game-list').value = '';
       toast(tRaw('import.done_toast'));
+      if (res.imported) edImportNotice(box, [systemId]);
     } else {
       box.innerHTML = `<div class="err">✗ ${t('import.failed', {error: res.error || tRaw('common.err_unknown')})}</div>`;
       btn.disabled = false;
@@ -213,5 +215,6 @@ function toast(msg, err=false) {
   setTimeout(() => t.classList.remove('show'), 2500);
 }
 </script>
+<script src="<?= BASE_URL ?>/assets/js/editions-admin.js?v=<?= @filemtime(__DIR__.'/assets/js/editions-admin.js') ?>"></script>
 </body>
 </html>

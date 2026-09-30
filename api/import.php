@@ -19,7 +19,8 @@ try {
     // Restore option lists if present
     foreach (['completeness_options' => 'user_completeness_options',
               'played_options'       => 'user_played_options',
-              'tag_options'          => 'user_tag_options'] as $key => $table) {
+              'tag_options'          => 'user_tag_options',
+              'variant_options'      => 'user_variant_options'] as $key => $table) {
         if (empty($data[$key])) continue;
         $pdo->prepare("DELETE FROM $table WHERE user_id=?")->execute([$user['id']]);
         $ins = $pdo->prepare("INSERT INTO $table (user_id, label, sort_order) VALUES (?,?,?)");
@@ -31,6 +32,16 @@ try {
     if (!empty($data['grading']['mode']) && in_array($data['grading']['mode'], ['simple','points','both'], true)) {
         $def = in_array($data['grading']['default'] ?? '', ['simple','points'], true) ? $data['grading']['default'] : 'simple';
         $pdo->prepare("UPDATE users SET grading_mode=?, grading_default=? WHERE id=?")->execute([$data['grading']['mode'], $def, $user['id']]);
+    }
+    // Editions & variants settings (exports from before editions have none)
+    if (!empty($data['editions']) && is_array($data['editions'])) {
+        $ed = $data['editions'];
+        $pdo->prepare("UPDATE users SET edition_mode=?, edition_wishlist=?, track_variants=? WHERE id=?")->execute([
+            ($ed['mode'] ?? '') === 'every' ? 'every' : 'one',
+            ($ed['wishlist'] ?? '') === 'exact' ? 'exact' : 'any',
+            !empty($ed['track_variants']) ? 1 : 0,
+            $user['id'],
+        ]);
     }
 
     $gst = $pdo->prepare("
@@ -54,8 +65,9 @@ try {
 
         // Only fields present in the file are written (older exports lack some of them)
         $fields = [];
-        foreach (['owned','wishlist','upgrade'] as $f)                      if (array_key_exists($f, $entry)) $fields[$f] = $entry[$f] ? 1 : 0;
+        foreach (['owned','wishlist','wishlist_any','upgrade'] as $f)       if (array_key_exists($f, $entry)) $fields[$f] = $entry[$f] ? 1 : 0;
         foreach (['completeness','played_status'] as $f)                     if (array_key_exists($f, $entry)) $fields[$f] = (string)($entry[$f] ?? '');
+        if (array_key_exists('variant', $entry)) $fields['variant'] = mb_substr((string)($entry['variant'] ?? ''), 0, 100);
         foreach (['price_paid','chart_price','price_min','price_max'] as $f) if (array_key_exists($f, $entry)) $fields[$f] = $money($entry[$f]);
         foreach (['upgrade_reason','notes','tag'] as $f)                     if (array_key_exists($f, $entry)) $fields[$f] = $entry[$f] === null ? null : (string)$entry[$f];
         if (array_key_exists('value_price_type', $entry)) {

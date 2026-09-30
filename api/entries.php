@@ -32,6 +32,7 @@ foreach ($rows as &$row) {
     $row['owned']    = (bool)$row['owned'];
     $row['upgrade']  = (bool)$row['upgrade'];
     $row['wishlist'] = (bool)$row['wishlist'];
+    $row['wishlist_any'] = (bool)($row['wishlist_any'] ?? false);
     $photos = [];
     if ($row['photos_raw']) {
         foreach (explode('||', $row['photos_raw']) as $p) {

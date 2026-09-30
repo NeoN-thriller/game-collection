@@ -6,6 +6,7 @@
      admin    — false: everyone · true: admins only (Site group)
      prefixes — language prefixes the section's JS needs (appScript); 'admin' is added on admin sections
      scripts  — extra files from assets/js/ loaded after settings.js / admin.js
+     badge    — optional language key for a small badge in the sidebar (e.g. settings.badge_new)
    Title: settings.nav.<slug, - as _> · partial: settings/s_<slug, - as _>.php
    ═══════════════════════════════════════════ */
 if (!defined('IN_SETTINGS')) exit;
@@ -23,6 +24,7 @@ return [
     'sharing'        => ['group' => 'you',        'admin' => false,   'prefixes' => ['settings']],
     'grading'        => ['group' => 'collection', 'admin' => false,   'prefixes' => ['settings']],
     'options'        => ['group' => 'collection', 'admin' => false,   'prefixes' => ['settings']],
+    'editions'       => ['group' => 'collection', 'admin' => false,   'prefixes' => ['settings', 'ed'], 'badge' => 'settings.badge_new'],
     'tags'           => ['group' => 'collection', 'admin' => false,   'prefixes' => ['settings']],
     'systems'        => ['group' => 'collection', 'admin' => false,   'prefixes' => ['settings']],
     'columns'        => ['group' => 'collection', 'admin' => false,   'prefixes' => ['settings']],
@@ -30,6 +32,6 @@ return [
     'general'        => ['group' => 'site',       'admin' => true,    'prefixes' => []],
     'site-appearance'=> ['group' => 'site',       'admin' => true,    'prefixes' => []],
     'grading-system' => ['group' => 'site',       'admin' => true,    'prefixes' => ['grading', 'ga'], 'scripts' => ['grading-admin.js']],
-    'catalogue'      => ['group' => 'site',       'admin' => true,    'prefixes' => ['pc', 'import']],
+    'catalogue'      => ['group' => 'site',       'admin' => true,    'prefixes' => ['pc', 'import', 'ed'], 'scripts' => ['editions-admin.js']],
     'users'          => ['group' => 'site',       'admin' => true,    'prefixes' => []],
 ];

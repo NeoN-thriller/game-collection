@@ -21,8 +21,11 @@ function adminToast(msg, ok=true) { toast(msg, !ok); }
 
 // ── FORMS: every POST form in the main pane is sent with AJAX and gets a toast ──
 // The server (settings.php) answers with JSON because of the X-Admin-Ajax header.
-document.addEventListener('DOMContentLoaded', () => {
-  document.querySelectorAll('.cp-main form[method="POST"]').forEach(form => {
+// bindAjaxForms(root) also binds forms added later (e.g. the catalogue game list after a refresh).
+function bindAjaxForms(root = document.querySelector('.cp-main')) {
+  root.querySelectorAll('form[method="POST"]').forEach(form => {
+    if (form.dataset.ajax) return;
+    form.dataset.ajax = '1';
     form.addEventListener('submit', async (e) => {
       if (e.defaultPrevented) return; // e.g. cancelled confirm() in an onsubmit handler
       e.preventDefault();
@@ -37,7 +40,8 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   });
-});
+}
+document.addEventListener('DOMContentLoaded', () => bindAjaxForms());
 
 // ── ACCOUNT ──
 async function changePassword() {
@@ -181,9 +185,46 @@ async function savePlayed() {
 function addItem(listId) {
   const div = document.createElement('div');
   div.className = 'comp-item'; div.draggable = true;
-  div.innerHTML = `<span class="drag-handle">⠿</span><input type="text" class="comp-label-input" value="" maxlength="100" placeholder="${t('settings.new_option')}"><button type="button" class="btn-danger" onclick="removeItem(this)">✕</button>`;
-  document.getElementById(listId).appendChild(div);
+  const list = document.getElementById(listId);
+  div.innerHTML = `<span class="drag-handle">⠿</span><input type="text" class="comp-label-input" value="" maxlength="100" placeholder="${list.dataset.placeholder ? esc(list.dataset.placeholder) : t('settings.new_option')}"><button type="button" class="btn-danger" onclick="removeItem(this)">✕</button>`;
+  list.appendChild(div);
   div.querySelector('input').focus();
+}
+
+// ── EDITIONS & VARIANTS ──
+function edPreviewRefresh() {
+  const box = document.getElementById('ed-preview');
+  if (!box) return;
+  const mode = document.querySelector('input[name="edition_mode"]:checked')?.value || 'one';
+  document.getElementById('ed-preview-val').textContent = box.dataset[mode];
+}
+
+async function saveEditions() {
+  const mode = document.querySelector('input[name="edition_mode"]:checked')?.value || 'one';
+  const res = await fetch(`${BASE}/api/settings.php`,{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({action:'save_editions', mode, wishlist: document.getElementById('ed-wishlist').value})
+  }).then(r=>r.json()).catch(()=>({ok:false}));
+  toast(res.ok ? tRaw('common.saved') : (res.error||tRaw('common.error')), !res.ok);
+}
+
+async function saveVariants() {
+  const labels = [...document.querySelectorAll('#variant-list .comp-label-input')].map(i=>i.value.trim()).filter(Boolean);
+  const res = await fetch(`${BASE}/api/settings.php`,{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({action:'save_variants', track: document.getElementById('ed-track').checked, labels})
+  }).then(r=>r.json()).catch(()=>({ok:false}));
+  toast(res.ok ? tRaw('common.saved') : (res.error||tRaw('common.error')), !res.ok);
+}
+
+function initEditions() {
+  document.querySelectorAll('input[name="edition_mode"]').forEach(r => r.addEventListener('change', edPreviewRefresh));
+  edPreviewRefresh();
+  document.getElementById('ed-track').addEventListener('change', e => {
+    document.getElementById('ed-var-on').hidden  = !e.target.checked;
+    document.getElementById('ed-var-off').hidden = e.target.checked;
+  });
+  initDrag('variant-list');
 }
 
 function initDrag(listId) {
@@ -344,6 +385,7 @@ async function saveSystemPrefs() {
 const col = (id, on) => ({ id, label: t('common.col.' + id), on });
 const DEFAULT_COLS_COLLECTION = [
   col('img', true), col('owned', true), col('wishlist', true), col('upgrade', true), col('title', true),
+  col('edition', true), ...(CP.trackVariants ? [col('variant', false)] : []),
   col('quality', true), col('completeness', true), col('played', true), col('copies', true),
   col('price_paid', true), col('buy_range', true), col('loose_price', false), col('cib_price', true),
   col('new_price', false), col('upgrade_reason', true), col('tag', false), col('notes', true),
@@ -374,7 +416,8 @@ function mergeWithDefaults(saved, defaults) {
 
 async function loadColPrefs() {
   const res = await fetch(`${BASE}/api/column_prefs.php`).then(r=>r.json());
-  const c = mergeWithDefaults(res.ok ? res.cols_collection : null, DEFAULT_COLS_COLLECTION);
+  // The variant column is only offered while the user tracks variants
+  const c = mergeWithDefaults(res.ok ? res.cols_collection : null, DEFAULT_COLS_COLLECTION).filter(x => x.id !== 'variant' || CP.trackVariants);
   const w = mergeWithDefaults(res.ok ? res.cols_wishlist   : null, DEFAULT_COLS_WISHLIST);
   renderColList('col-list',      c);
   renderColList('col-wish-list', w);
@@ -535,6 +578,7 @@ async function deleteBackup(btn) {
 const has = id => document.getElementById(id) !== null;
 if (has('comp-list'))     initDrag('comp-list');
 if (has('played-list'))   initDrag('played-list');
+if (has('variant-list'))  initEditions();
 if (has('tag-list'))      loadTagOptions();
 if (has('sys-sort-list')) loadSystems();
 if (has('col-list'))      loadColPrefs();

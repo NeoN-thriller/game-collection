@@ -249,6 +249,7 @@ td.td-title:hover { color:var(--accent2); }
 .chip-y  { background:color-mix(in srgb,var(--green) 12%,transparent); color:var(--mint); border:1px solid color-mix(in srgb,var(--green) 30%,transparent); }
 .chip-n  { background:transparent; color:var(--muted); border:1px solid var(--border); }
 .chip-up { background:color-mix(in srgb,var(--orange) 10%,transparent);  color:var(--orange); border:1px solid color-mix(in srgb,var(--orange) 30%,transparent); }
+.chip-blue { background:color-mix(in srgb,var(--blue) 10%,transparent); color:var(--blue); border:1px solid color-mix(in srgb,var(--blue) 30%,transparent); }
 
 .price    { font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case); font-size:.95rem; color:var(--accent2); letter-spacing:.04em; white-space:nowrap; }
 .price-chart { color:var(--wiiu); }
@@ -478,6 +479,46 @@ tbody tr.is-owned-wished:hover { background:color-mix(in srgb,var(--green) 12%,t
 .admin-table tr:hover td { background:var(--hover); }
 
 .invite-code { border-radius:calc(var(--radius) / 2); font-family:var(--font-body); font-size:.8rem; color:var(--wiiu); letter-spacing:.05em; background:color-mix(in srgb,var(--wiiu) 7%,transparent); padding:4px 10px; border:1px solid color-mix(in srgb,var(--wiiu) 20%,transparent); display:inline-block; }
+
+/* ── EDITIONS (settings/s_catalogue.php, s_editions.php, assets/js/editions-admin.js) ── */
+@media(min-width:761px) { .ed-mode-cards { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+.ed-var-off { margin-top:12px; padding:12px 14px; border:1px dashed var(--border2); border-radius:var(--radius); font-size:.72rem; color:var(--muted); line-height:1.6; }
+.ed-sug-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.ed-sug-head .ed-count { margin-left:0; }
+.ed-sug { border-radius:var(--radius); border:1px solid var(--border2); background:var(--surface2); padding:14px 16px; margin-top:12px; display:flex; flex-direction:column; gap:10px; }
+.ed-sug-top { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.ed-sug-name { flex:1; min-width:180px; }
+.ed-sug-add { font-size:.72rem; color:var(--wiiu); flex-basis:100%; }
+.ed-sug .admin-table input[type="text"] { width:100%; min-width:120px; }
+.ed-sug-actions { display:flex; justify-content:flex-end; gap:8px; flex-wrap:wrap; }
+.ed-sug-done { flex-direction:row; align-items:center; justify-content:space-between; font-size:.76rem; color:var(--text2); padding:10px 16px; }
+.ed-existing td { color:var(--muted); }
+.ed-selbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px; padding:8px 12px; border-radius:var(--radius); border:1px solid var(--accent2); background:var(--surface2); font-size:.76rem; }
+.ed-group-row td { background:var(--surface2); border-top:1px solid var(--border2); }
+.ed-member-row .ed-title { padding-left:22px; }
+.ed-indent { color:var(--muted); }
+.btn-icon.ed-danger { color:var(--red); }
+#ed-dlg .admin-table input[type="text"] { width:100%; }
+/* Collection: folded edition groups ("one per game") and their edition rows */
+tr.ed-grp { cursor:pointer; }
+.ed-toggle { display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap; min-height:28px; padding:0; background:none; border:0; color:inherit; font:inherit; text-align:left; cursor:pointer; }
+.ed-toggle:hover, .ed-toggle:focus-visible { color:var(--accent2); }
+.ed-ro { cursor:inherit; }
+tr.ed-child-row td.td-title { padding-left:26px; }
+.ed-child-title { font-size:.76rem; color:var(--text2); }
+.ed-label { font-size:.7rem; color:var(--text2); }
+/* Drawer: edition, variant, other editions (assets/js/editions-drawer.js) */
+.drawer-section[hidden], [id^="d-ed-"][hidden] { display:none; }
+.d-hint { font-size:.66rem; color:var(--muted); line-height:1.6; margin:0; }
+.ed-other { display:flex; align-items:center; gap:10px; font-size:.75rem; flex-wrap:wrap; }
+.ed-other-name { background:none; border:0; padding:0; font:inherit; color:var(--text); text-align:left; }
+button.ed-other-name { cursor:pointer; text-decoration:underline; text-decoration-color:var(--border2); text-underline-offset:3px; }
+button.ed-other-name:hover { color:var(--accent2); }
+.ed-other-info { flex:1; color:var(--muted); font-size:.7rem; }
+.chip-wish { background:color-mix(in srgb,var(--pink) 10%,transparent); color:var(--pink); border:1px solid color-mix(in srgb,var(--pink) 40%,transparent); }
+button.chip { cursor:pointer; font-family:inherit; min-height:26px; }
+/* Wishlist: an "any edition" wish that is found (another edition is owned) */
+tbody tr.ed-fulfilled td { opacity:.55; }
 
 /* ── MODAL ── */
 .modal-backdrop { position:fixed; inset:0; background:var(--overlay); z-index:150; display:none; align-items:center; justify-content:center; padding:20px; }
