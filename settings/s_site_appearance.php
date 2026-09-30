@@ -18,6 +18,15 @@ try {
   <?php if (!is_writable(LANG_DIR)): ?>
   <div class="ga-box ga-warn" style="margin:0 0 14px"><?= t('admin.lang.not_writable') ?></div>
   <?php endif; ?>
+  <form method="POST" class="field" style="max-width:280px;margin-bottom:6px">
+    <input type="hidden" name="csrf"   value="<?= csrf() ?>">
+    <input type="hidden" name="action" value="set_default_language">
+    <label for="site-lang"><?= t('admin.site.language') ?></label>
+    <select name="language" id="site-lang" onchange="this.form.requestSubmit()">
+      <?php foreach (availableLanguages() as $l): ?><option value="<?= htmlspecialchars($l['code']) ?>" <?= siteLanguage() === $l['code'] ? 'selected' : '' ?>><?= htmlspecialchars($l['name']) ?></option><?php endforeach; ?>
+    </select>
+  </form>
+  <p class="ga-desc" style="margin:0 0 14px"><?= t('admin.lang.default_note') ?></p>
   <table class="admin-table" style="margin-bottom:14px">
     <thead><tr><th><?= t('admin.lang.col_name') ?></th><th><?= t('admin.lang.col_code') ?></th><th><?= t('admin.lang.col_texts') ?></th><th><?= t('admin.lang.col_missing') ?></th><th></th></tr></thead>
     <tbody>

@@ -132,6 +132,8 @@ WiiU,007 Legends,63286,https://...,17.51,24.86,40.83,63286.jpg,data:image/jpeg;b
   <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
     <button class="btn btn-sm" onclick="pcPreview()"><?= t('import.preview') ?> →</button>
     <a href="<?= BASE_URL ?>/pc_import.php" class="btn-outline" style="padding:8px 14px;font-size:.72rem"><?= t('admin.pc.full_page') ?> ↗</a>
+    <a href="<?= BASE_URL ?>/api/pc_example.php" class="btn-outline" style="padding:8px 14px;font-size:.72rem" download>⬇ <?= t('pc.example') ?></a>
   </div>
+  <p class="ga-desc" style="margin:8px 0 0"><?= t('pc.example_note') ?></p>
   <div id="pc-result" style="display:none;margin-top:14px;background:var(--surface2);border:1px solid var(--border2);padding:12px 16px;font-size:.75rem;line-height:1.9"></div>
 </section>

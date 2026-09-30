@@ -33,7 +33,7 @@ if (!defined('IN_SETTINGS')) exit;
       <div class="sf-row">
         <div class="field" style="width:110px"><label for="sf-sym"><?= t('admin.site.symbol') ?></label>
           <input type="text" name="currency_symbol" id="sf-sym" maxlength="5" value="<?= htmlspecialchars(setting('currency_symbol')) ?>" oninput="sfMoney()"></div>
-        <div class="field" style="width:150px"><label for="sf-pos"><?= t('admin.site.position') ?></label>
+        <div class="field" style="width:180px"><label for="sf-pos"><?= t('admin.site.position') ?></label>
           <select name="currency_position" id="sf-pos" onchange="sfMoney()">
             <option value="before" <?= setting('currency_position') === 'before' ? 'selected' : '' ?>><?= t('admin.site.pos_before') ?></option>
             <option value="after"  <?= setting('currency_position') === 'after'  ? 'selected' : '' ?>><?= t('admin.site.pos_after') ?></option>
@@ -67,11 +67,7 @@ if (!defined('IN_SETTINGS')) exit;
           <select name="date_format" id="sf-date" onchange="sfDate()">
             <?php foreach (DATE_FORMATS as $f): ?><option value="<?= $f ?>" <?= setting('date_format') === $f ? 'selected' : '' ?>><?= $f ?></option><?php endforeach; ?>
           </select></div>
-        <div class="field" style="width:200px"><label for="sf-lang"><?= t('admin.site.language') ?></label>
-          <select name="default_language" id="sf-lang">
-            <?php foreach (availableLanguages() as $l): ?><option value="<?= htmlspecialchars($l['code']) ?>" <?= siteLanguage() === $l['code'] ? 'selected' : '' ?>><?= htmlspecialchars($l['name']) ?></option><?php endforeach; ?>
-          </select></div>
-        <div class="field" style="width:240px"><label for="sf-tz"><?= t('admin.site.timezone') ?></label>
+        <div class="field" style="flex:1;min-width:240px;max-width:420px"><label for="sf-tz"><?= t('admin.site.timezone') ?></label>
           <select name="timezone" id="sf-tz">
             <option value=""><?= t('admin.site.tz_server', ['tz' => ini_get('date.timezone') ?: 'UTC']) ?></option>
             <?php foreach (timezone_identifiers_list() as $tz): ?><option value="<?= htmlspecialchars($tz) ?>" <?= setting('timezone') === $tz ? 'selected' : '' ?>><?= htmlspecialchars($tz) ?></option><?php endforeach; ?>

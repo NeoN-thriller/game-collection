@@ -148,7 +148,6 @@ if ($action === 'save_site_settings') {
             'thousands_sep'     => $thou,
             'default_region'    => $pick('default_region', REGIONS),
             'date_format'       => $pick('date_format', DATE_FORMATS),
-            'default_language'  => $pick('default_language', array_keys(availableLanguages())),
             'default_grading'   => $pick('default_grading', ['simple', 'points', 'both']),
             'default_value_type'=> $pick('default_value_type', VALUE_TYPES),
             'timezone'          => $pick('timezone', timezone_identifiers_list()),
@@ -172,6 +171,14 @@ if ($action === 'upload_language') {
             $msg = tRaw('admin.lang.uploaded', ['name' => $data['_meta']['name'], 'n' => fmtNum(count($data) - 1)]);
         }
     }
+}
+
+if ($action === 'set_default_language') {
+    $code = (string)($_POST['language'] ?? '');
+    if (isset(availableLanguages()[$code])) {
+        setSetting('default_language', $code);
+        $msg = tRaw('admin.msg_language', ['name' => availableLanguages()[$code]['name']]);
+    } else { $msg = tRaw('common.error'); $msgErr = true; }
 }
 
 if ($action === 'set_default_theme') {

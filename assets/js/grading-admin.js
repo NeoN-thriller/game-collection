@@ -96,8 +96,10 @@ function renderLabels() {
   }
   el.innerHTML = `
     <p class="ga-desc">${t('ga.labels_desc')}</p>
-    <div class="ga-lhead"><span>${t('ga.col_colour')}</span><span>${t('grading.name')}</span><span>${t('admin.sys.short')}</span><span>${t('ga.starts_at')}</span><span>${t('admin.site.preview')}</span></div>
-    <div class="ga-lrows">${rows}</div>
+    <div class="ga-lrows">
+      <div class="ga-lhead"><span>${t('ga.col_colour')}</span><span>${t('grading.name')}</span><span>${t('admin.sys.short')}</span><span>${t('ga.starts_at')}</span><span>${t('admin.site.preview')}</span><span></span><span></span></div>
+      ${rows}
+    </div>
     <div class="ga-scale">${scale}</div>
     <div class="ga-scale-axis"><span>0</span><span>100</span></div>
     <div class="ga-msg ${prob ? 'bad' : 'good'}" id="ga-label-msg">${prob ? esc(prob) : tRaw('ga.n_labels', {n: L.length}) + ' ✓'}</div>
@@ -208,10 +210,10 @@ function renderProfiles() {
         <div class="ga-chips">${sysChips || `<span class="ga-desc">${t('ga.no_systems_yet')}</span>`}
           ${sysOpts ? `<select data-act-sel="sys-add" aria-label="${t('admin.sys.add')}" class="ga-sys-add"><option value="">+ ${t('common.system')}</option>${sysOpts}</select>` : ''}</div>
       </div>
-      <table class="admin-table ga-ctable">
+      <div class="ga-scroll"><table class="admin-table ga-ctable">
         <thead><tr><th>${t('ga.col_part')}</th><th>${t('admin.sys.short')}</th><th>${t('ga.col_template')}</th><th>${t('ga.col_weight')}</th><th>${t('ga.col_start_qty')}</th><th></th><th></th></tr></thead>
         <tbody>${rows}</tbody>
-      </table>
+      </table></div>
       <div class="ga-actions">
         <button type="button" class="btn-ghost" data-act="c-add">+ ${t('ga.add_part')}</button>
         <span class="ga-msg ${total === 100 ? 'good' : 'warn'}">${weightMsg(total)}</span>

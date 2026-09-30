@@ -14,7 +14,7 @@ if (!defined('IN_SETTINGS')) exit;
 const CP_ADMIN_ACTIONS = [
     'gen_invite', 'delete_invite', 'user_status', 'reset_password', 'unlock', 'unlock_all',
     'add_game', 'toggle_game', 'set_default_image', 'add_system', 'set_system_icon', 'set_system_region',
-    'save_site_settings', 'upload_language', 'set_default_theme',
+    'save_site_settings', 'upload_language', 'set_default_language', 'set_default_theme',
 ];
 
 return [
