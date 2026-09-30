@@ -10,6 +10,7 @@ $imported  = 0;
 $updated   = 0;
 $skippedArt= 0;
 $errors    = 0;
+$newSystems = [];
 
 foreach ($rows as $row) {
     $pcId    = trim($row['pc_id']     ?? '');
@@ -65,6 +66,7 @@ foreach ($rows as $row) {
         $upd = db()->prepare("UPDATE games SET sort_order=? WHERE id=?");
         foreach ($allG->fetchAll() as $idx => $r) $upd->execute([$idx+1,$r['id']]);
         $imported++;
+        $newSystems[(int)$sys['id']] = true;   // for the "possible edition groups" notice
         continue;
     }
 
@@ -93,7 +95,7 @@ foreach ($rows as $row) {
     }
 }
 
-jsonOut(['ok'=>true,'imported'=>$imported,'updated'=>$updated,'skipped_art'=>$skippedArt,'errors'=>$errors]);
+jsonOut(['ok'=>true,'imported'=>$imported,'updated'=>$updated,'skipped_art'=>$skippedArt,'errors'=>$errors,'system_ids'=>array_keys($newSystems)]);
 
 function saveArt(string $b64, int $gameId): ?string {
     try {

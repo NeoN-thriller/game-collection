@@ -149,7 +149,9 @@ CREATE TABLE `collection_entries` (
   `owned` tinyint(1) NOT NULL DEFAULT 0,
   `completeness` varchar(100) NOT NULL DEFAULT '',
   `played_status` varchar(100) NOT NULL DEFAULT '',
+  `variant` varchar(100) NOT NULL DEFAULT '',
   `wishlist` tinyint(1) NOT NULL DEFAULT 0,
+  `wishlist_any` tinyint(1) NOT NULL DEFAULT 0,
   `upgrade` tinyint(1) NOT NULL DEFAULT 0,
   `upgrade_reason` text DEFAULT NULL,
   `price_paid` decimal(8,2) DEFAULT NULL,
@@ -213,12 +215,54 @@ CREATE TABLE `games` (
   `notes_admin` text DEFAULT NULL,
   `sort_order` int(10) unsigned NOT NULL DEFAULT 0,
   `active` tinyint(1) NOT NULL DEFAULT 1,
+  `group_id` int(10) unsigned DEFAULT NULL,
+  `edition_label` varchar(100) DEFAULT NULL,
+  `edition_sort` smallint(6) NOT NULL DEFAULT 0,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`),
   KEY `idx_system` (`system_id`),
   KEY `idx_sort` (`system_id`,`sort_title`),
   KEY `idx_pc_id` (`pc_id`),
-  CONSTRAINT `games_ibfk_1` FOREIGN KEY (`system_id`) REFERENCES `systems` (`id`) ON DELETE CASCADE
+  KEY `idx_group` (`group_id`),
+  CONSTRAINT `games_ibfk_1` FOREIGN KEY (`system_id`) REFERENCES `systems` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `games_group_fk` FOREIGN KEY (`group_id`) REFERENCES `game_groups` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- Editions: games that PriceCharting lists separately (original, [Platinum], …) linked into one group.
+-- Admin-managed and site-wide; every edition keeps its own games row, prices and pc_id.
+DROP TABLE IF EXISTS `game_groups`;
+CREATE TABLE `game_groups` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `system_id` int(10) unsigned NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `sort_title` varchar(255) NOT NULL,
+  `main_game_id` int(10) unsigned DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_system` (`system_id`,`sort_title`),
+  KEY `main_game_id` (`main_game_id`),
+  CONSTRAINT `game_groups_system_fk` FOREIGN KEY (`system_id`) REFERENCES `systems` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `game_groups_main_fk` FOREIGN KEY (`main_game_id`) REFERENCES `games` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- Edition suggestions the admin rejected, stored per pair of games (game_a < game_b);
+-- a rejected pair is never suggested together again.
+DROP TABLE IF EXISTS `edition_ignores`;
+CREATE TABLE `edition_ignores` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `system_id` int(10) unsigned NOT NULL,
+  `game_a` int(10) unsigned NOT NULL,
+  `game_b` int(10) unsigned NOT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_pair` (`game_a`,`game_b`),
+  KEY `system_id` (`system_id`),
+  KEY `game_b` (`game_b`),
+  CONSTRAINT `edition_ignores_system_fk` FOREIGN KEY (`system_id`) REFERENCES `systems` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `edition_ignores_a_fk` FOREIGN KEY (`game_a`) REFERENCES `games` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `edition_ignores_b_fk` FOREIGN KEY (`game_b`) REFERENCES `games` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 
@@ -300,6 +344,9 @@ CREATE TABLE `users` (
   `grading_default` enum('simple','points') NOT NULL DEFAULT 'simple',
   `theme` varchar(50) DEFAULT NULL,
   `language` varchar(10) DEFAULT NULL,
+  `edition_mode` enum('one','every') NOT NULL DEFAULT 'one',
+  `edition_wishlist` enum('any','exact') NOT NULL DEFAULT 'any',
+  `track_variants` tinyint(1) NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
   UNIQUE KEY `username` (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -374,4 +421,17 @@ CREATE TABLE `user_tag_options` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_user_tag` (`user_id`,`label`),
   CONSTRAINT `user_tag_options_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- Print variants (UK, Benelux, …): optional per user, starts empty (no seed)
+DROP TABLE IF EXISTS `user_variant_options`;
+CREATE TABLE `user_variant_options` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` int(10) unsigned NOT NULL,
+  `label` varchar(100) NOT NULL,
+  `sort_order` smallint(6) NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_user_label` (`user_id`,`label`),
+  CONSTRAINT `user_variant_options_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

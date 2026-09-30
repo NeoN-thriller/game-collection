@@ -31,7 +31,7 @@ $st = db()->prepare("
            g.title, g.sort_title, g.sort_order AS game_sort, g.default_image,
            g.cib_price, g.cib_price_updated_at, g.pc_link,
            g.loose_price, g.loose_price_updated_at,
-           g.new_price, g.new_price_updated_at,
+           g.new_price, g.new_price_updated_at, g.group_id, g.edition_label,
            s.name AS system_name, s.short_name, s.id AS system_id, s.region AS system_region
     FROM collection_entries ce
     JOIN games g   ON g.id  = ce.game_id
@@ -63,8 +63,49 @@ foreach ($entries as $e) {
         'system_name'            => $e['system_name'],
         'short_name'             => $e['short_name'],
         'region'                 => systemRegion(['region' => $e['system_region']]),
+        'group_id'               => $e['group_id'] !== null ? (int)$e['group_id'] : null,
+        'edition_label'          => $e['edition_label'],
         'copies'                 => [],
     ];
+}
+
+// Editions: the groups of the wishlisted games, with the owner's status per edition.
+// A group needs at least two active editions; otherwise the game is shown as a normal game.
+$editionGroups = [];
+$groupIds = array_values(array_unique(array_filter(array_column($games, 'group_id'))));
+if ($groupIds) {
+    $in = implode(',', array_map('intval', $groupIds));
+    foreach (db()->query("SELECT id, title, main_game_id FROM game_groups WHERE id IN ($in)") as $gr) {
+        $editionGroups[(int)$gr['id']] = ['id' => (int)$gr['id'], 'title' => $gr['title'], 'main_game_id' => (int)$gr['main_game_id'], 'members' => []];
+    }
+    $ms = db()->prepare("
+        SELECT g.id, g.title, g.group_id, g.edition_label, g.cib_price,
+               COALESCE(MAX(ce.owned), 0) AS owned, COALESCE(MAX(ce.wishlist), 0) AS wished
+        FROM games g
+        LEFT JOIN collection_entries ce ON ce.game_id = g.id AND ce.user_id = ?
+        WHERE g.group_id IN ($in) AND g.active = 1
+        GROUP BY g.id, g.title, g.group_id, g.edition_label, g.cib_price, g.edition_sort
+        ORDER BY g.edition_sort, g.id
+    ");
+    $ms->execute([$user['id']]);
+    foreach ($ms->fetchAll() as $m) {
+        if (!isset($editionGroups[(int)$m['group_id']])) continue;
+        $editionGroups[(int)$m['group_id']]['members'][] = [
+            'id' => (int)$m['id'], 'title' => $m['title'], 'edition_label' => $m['edition_label'],
+            'cib_price' => $m['cib_price'], 'owned' => (bool)$m['owned'], 'wished' => (bool)$m['wished'],
+        ];
+    }
+    $editionGroups = array_filter($editionGroups, fn($gr) => count($gr['members']) >= 2);
+    foreach ($games as &$g) if ($g['group_id'] && !isset($editionGroups[$g['group_id']])) $g['group_id'] = null;
+    unset($g);
+}
+
+// Print variants (the wishlist owner's)
+$trackVariants = !empty($user['track_variants']);
+$variantOpts   = [];
+if ($trackVariants) {
+    $vq = db()->prepare("SELECT label FROM user_variant_options WHERE user_id=? ORDER BY sort_order");
+    $vq->execute([$user['id']]); $variantOpts = $vq->fetchAll(PDO::FETCH_COLUMN);
 }
 
 // All copies (not just the wishlisted one) of every wishlisted game, with photos
@@ -84,6 +125,7 @@ if ($games) {
         $c['owned']    = (bool)$c['owned'];
         $c['upgrade']  = (bool)$c['upgrade'];
         $c['wishlist'] = (bool)$c['wishlist'];
+        $c['wishlist_any'] = (bool)($c['wishlist_any'] ?? false);
         $c['photos']   = $c['photos_raw'] ? explode('||', $c['photos_raw']) : [];
         unset($c['photos_raw'], $c['user_id']);
         $games[$gid]['copies'][] = $c;
@@ -148,7 +190,7 @@ foreach ($entries as $e) {
   .d-empty { font-size:.7rem; color:var(--muted); font-style:italic; }
 </style>
 <?= csrfScript() ?>
-<?= appScript(['coll', 'drawer', 'grading', 'wish']) ?>
+<?= appScript(['coll', 'drawer', 'grading', 'wish', 'ed']) ?>
 </head>
 <body>
 
@@ -275,6 +317,10 @@ foreach ($entries as $e) {
         <div class="copy-tabs" id="copy-tabs"></div>
       </div>
 
+      <!-- Editions + print variant (assets/js/editions-drawer.js) -->
+      <div class="drawer-section" id="d-ed-edition" hidden></div>
+      <div class="drawer-section" id="d-ed-variant" hidden></div>
+
       <div class="drawer-section">
         <div class="section-label"><?= t('drawer.ownership') ?></div>
         <div class="toggle-row">
@@ -312,6 +358,7 @@ foreach ($entries as $e) {
           </table>
           <a id="d-pc-link" href="#" target="_blank" style="color:var(--wiiu);font-size:.68rem;display:none"><?= t('drawer.view_pc') ?> ↗</a>
         </div>
+        <div id="d-ed-prices-of" hidden></div>
         <div class="section-label" style="margin-top:10px;margin-bottom:6px"><?= t('drawer.value_type') ?></div>
         <div style="display:flex;gap:14px;font-size:.75rem;flex-wrap:wrap" id="d-price-type-wrap">
           <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="d-value-type" id="d-vtype-loose" value="loose"> <?= t('common.price.loose') ?></label>
@@ -360,7 +407,10 @@ foreach ($entries as $e) {
           <label class="toggle"><input type="checkbox" id="d-wishlist"><span class="toggle-slider"></span></label>
           <span class="toggle-label" id="lbl-wishlist"><?= t('drawer.not_wished') ?></span>
         </div>
+        <div id="d-ed-wish-any" hidden></div>
       </div>
+
+      <div class="drawer-section" id="d-ed-others" hidden></div>
 
       <div class="drawer-section">
         <div class="section-label"><?= t('common.col.notes') ?></div>
@@ -419,12 +469,18 @@ foreach ($entries as $e) {
 
 <script>window.GRADING = <?= gradingClientJson($canEdit ? $user : null) ?>;</script>
 <script src="<?= BASE_URL ?>/assets/js/grading.js?v=<?= @filemtime(__DIR__.'/assets/js/grading.js') ?>"></script>
+<script src="<?= BASE_URL ?>/assets/js/editions-drawer.js?v=<?= @filemtime(__DIR__.'/assets/js/editions-drawer.js') ?>"></script>
 <script>
 const BASE     = <?= json_encode(BASE_URL) ?>;
 const CAN_EDIT = <?= json_encode($canEdit) ?>;
 const GAMES    = <?= json_encode((object)$games, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
 const ROWS     = <?= json_encode($rowList) ?>;
 const AUCTION_SITES = <?= json_encode($auctionSites, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+const EDITION_GROUPS = <?= json_encode((object)$editionGroups, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+const EDITION_WISHLIST = <?= json_encode(($user['edition_wishlist'] ?? 'any') === 'exact' ? 'exact' : 'any') ?>;
+const TRACK_VARIANTS = <?= json_encode($trackVariants) ?>;
+const VARIANT_OPTS   = <?= json_encode($variantOpts, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+let reloadOnClose = false;   // another edition was put on / taken off the wishlist from the drawer
 
 let editGameId = null;
 let editCopy   = 1;
@@ -456,11 +512,32 @@ function entryDisplayImage(g, e) {
   return null;
 }
 
+// ── EDITIONS ──
+/** Whether the owner owns an edition (games on this wishlist use their loaded copies). */
+function editionOwned(grp, id) {
+  if (GAMES[id]) return GAMES[id].copies.some(c => c.owned);
+  return !!grp.members.find(m => m.id == id)?.owned;
+}
+/**
+ * Edition info for a wishlisted copy: {grp, any, fulfilledBy, cheapest}.
+ * "Any edition" wishes are found once the owner has another edition (the wished copy itself is not owned).
+ */
+function wishEdition(gameId, e) {
+  const g = GAMES[gameId];
+  const grp = EDITION_GROUPS[g.group_id] || null;
+  if (!grp) return { grp: null, any: false, fulfilledBy: null, cheapest: null };
+  const any = !!e.wishlist_any;
+  const fulfilledBy = any && !e.owned ? grp.members.find(m => m.id != gameId && editionOwned(grp, m.id)) || null : null;
+  const prices = grp.members.map(m => parseFloat(m.cib_price)).filter(n => !isNaN(n));
+  return { grp, any, fulfilledBy, cheapest: prices.length ? Math.min(...prices) : null };
+}
+
 // ── ROW RENDERING ──
 function buildRow(entryId, gameId) {
   const g = GAMES[gameId];
   const e = g && g.copies.find(c => c.id == entryId);
   if (!e) return null;
+  const ed = wishEdition(gameId, e);
 
   const imgSrc = entryDisplayImage(g, e);
   const imgCell = imgSrc
@@ -476,7 +553,10 @@ function buildRow(entryId, gameId) {
 
   // Dual CIB price: PC in blue (linked), personal in red
   const cibParts = [];
-  if (isSet(g.cib_price)) {
+  if (ed.any && ed.cheapest !== null) {
+    // "Any edition": the cheapest edition's price
+    cibParts.push(`<span class="price price-chart" title="${esc(tRaw('ed.wish_any'))}">${money(ed.cheapest)}</span>`);
+  } else if (isSet(g.cib_price)) {
     const cibTitle = g.cib_price_updated_at ? tRaw('coll.pc_cib_updated', {date: fmtDate(g.cib_price_updated_at)}) : tRaw('coll.pc_cib');
     const amt = money(g.cib_price);
     cibParts.push(g.pc_link
@@ -496,6 +576,10 @@ function buildRow(entryId, gameId) {
     : '<span class="price-na">—</span>';
 
   const upReason = e.upgrade && e.upgrade_reason ? e.upgrade_reason : '';
+  // Title: the game name with its edition ("any edition" or the label), and "owned (Platinum)" once found
+  const titleHtml = !ed.grp ? esc(g.title)
+    : `${esc(ed.grp.title)} <span class="chip chip-blue">${ed.any ? t('ed.any_edition') : esc(g.edition_label || '')}</span>`
+      + (ed.fulfilledBy ? ` <span class="chip chip-y">${t('ed.owned_as', {label: ed.fulfilledBy.edition_label || ed.fulfilledBy.title})}</span>` : '');
   const noteText = e.notes || (upReason ? '↑ '+upReason : '—');
   const tagLabel = e.tag || '';
 
@@ -506,17 +590,18 @@ function buildRow(entryId, gameId) {
     : `<button class="btn-icon" onclick="openDrawer(${gameId},${entryId})">${t('wish.view')}</button>`;
 
   const tr = document.createElement('tr');
+  if (ed.fulfilledBy) tr.classList.add('ed-fulfilled');
   Object.assign(tr.dataset, {
     entryId: entryId, gameId: gameId,
     system: g.system_id,
     owned: e.owned ? '1' : '0',
     upgrade: e.upgrade ? '1' : '0',
-    title: g.title.toLowerCase(),
+    title: (ed.grp ? ed.grp.title + ' ' + g.title : g.title).toLowerCase(),
     tag: tagLabel.toLowerCase(),
     systemName: (g.short_name||'').toLowerCase(),
     quality: GradingCore.sortValue(e),
     paid: parseFloat(e.price_paid)||0,
-    cib: parseFloat(g.cib_price)||0,
+    cib: (ed.any ? ed.cheapest : parseFloat(g.cib_price))||0,
     loose: parseFloat(g.loose_price)||0,
     newp: parseFloat(g.new_price)||0,
   });
@@ -526,7 +611,7 @@ function buildRow(entryId, gameId) {
     <td data-col="owned" style="text-align:center"><div class="owned-check ${e.owned?'checked':''}" ${ownedHandler}>${e.owned?'✓':''}</div></td>
     <td data-col="upgrade" style="text-align:center"><div class="upgrade-check ${e.upgrade?'checked':''}" ${upgradeHandler}>${e.upgrade?'↑':''}</div></td>
     <td data-col="system"><span class="sys-badge">${esc(g.short_name)}</span></td>
-    <td data-col="title" class="td-title" onclick="openDrawer(${gameId},${entryId})" title="${t('wish.show_details')}">${esc(g.title)}</td>
+    <td data-col="title" class="td-title" onclick="openDrawer(${gameId},${entryId})" title="${t('wish.show_details')}">${titleHtml}</td>
     <td data-col="upgrade_reason" style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.68rem;color:var(--orange);font-style:italic" title="${esc(e.upgrade_reason||'')}">${upReason ? esc(upReason) : '<span style="color:var(--border2)">—</span>'}</td>
     <td data-col="quality">${GradingUI.cellHtml([e])}</td>
     <td data-col="completeness" style="font-size:.7rem;color:var(--text2)">${esc(e.completeness||'—')}</td>
@@ -545,7 +630,20 @@ function renderAllRows() {
   const tbody = document.getElementById('tbody');
   tbody.innerHTML = '';
   GradingUI.beginRender();
-  ROWS.forEach(r => { const tr = buildRow(r.entry_id, r.game_id); if (tr) tbody.appendChild(tr); });
+  const anyShown = new Set();   // an "any edition" wish is shown once per group
+  ROWS.forEach(r => {
+    const e = findCopy(r.game_id, c => c.id == r.entry_id);
+    if (e) {
+      const ed = wishEdition(r.game_id, e);
+      if (ed.any) {
+        if (anyShown.has(ed.grp.id)) return;
+        anyShown.add(ed.grp.id);
+      }
+      if (ed.fulfilledBy && !CAN_EDIT) return;   // found: the public wishlist leaves it out
+    }
+    const tr = buildRow(r.entry_id, r.game_id);
+    if (tr) tbody.appendChild(tr);
+  });
 }
 
 // Re-sync all rows of one game after its data changed
@@ -756,8 +854,9 @@ function openDrawer(gameId, entryId=null) {
   const g = GAMES[gameId]; if (!g) return;
   editGameId = gameId;
 
-  document.getElementById('d-title').textContent  = g.title;
-  document.getElementById('d-system').textContent = `${g.system_name}${g.sort_order!=null ? ' · #'+String(g.sort_order).padStart(3,'0') : ''}`;
+  const grp = EDITION_GROUPS[g.group_id] || null;
+  document.getElementById('d-title').textContent  = grp ? grp.title : g.title;
+  document.getElementById('d-system').textContent = EdDrawer.subtitle(`${g.system_name}${g.sort_order!=null ? ' · #'+String(g.sort_order).padStart(3,'0') : ''}`, g, grp);
   const goto = document.getElementById('d-goto');
   if (goto) goto.href = `${BASE}/collection.php?s=${g.system_id}`;
 
@@ -793,15 +892,18 @@ function openDrawer(gameId, entryId=null) {
 
   // Quick search links
   const linksList = document.getElementById('d-links-list');
-  const titleEnc  = encodeURIComponent(g.title.replace(/['"]/g,''));
-  let links = `<a href="https://wikipedia.org/w/index.php?search=${titleEnc}" target="_blank" style="font-size:.75rem;color:var(--text2);text-decoration:none">🔍 Wikipedia: ${esc(g.title)}</a>`;
+  // "Any edition" wishes search for the game name without the edition bracket
+  const clicked   = entryId ? g.copies.find(c => c.id == entryId) : null;
+  const searchTitle = grp && clicked?.wishlist_any ? grp.title : g.title;
+  const titleEnc  = encodeURIComponent(searchTitle.replace(/['"]/g,''));
+  let links = `<a href="https://wikipedia.org/w/index.php?search=${titleEnc}" target="_blank" style="font-size:.75rem;color:var(--text2);text-decoration:none">🔍 Wikipedia: ${esc(searchTitle)}</a>`;
   (AUCTION_SITES||[]).forEach(site => {
     if (!site || !site.url_template) return;
     const url = site.url_template
       .replace('{system}', encodeURIComponent((g.short_name||'').toLowerCase()))
       .replace('{title}',  titleEnc)
       .replace('{region}', g.region === 'Mixed' ? '' : (g.region || ''));
-    links += `<a href="${esc(url)}" target="_blank" style="font-size:.75rem;color:var(--text2);text-decoration:none">🛒 ${esc(site.label)}: ${esc(g.title)}</a>`;
+    links += `<a href="${esc(url)}" target="_blank" style="font-size:.75rem;color:var(--text2);text-decoration:none">🛒 ${esc(site.label)}: ${esc(searchTitle)}</a>`;
   });
   linksList.innerHTML = links;
   document.getElementById('d-ext-links').style.display = 'block';
@@ -873,9 +975,35 @@ function loadCopyIntoForm(copyNum) {
   const vtype = c.value_price_type || FMT.valueType;
   document.querySelectorAll('input[name="d-value-type"]').forEach(r => r.checked = r.value === vtype);
   renderPhotoGrid(c.photos || [], c.primary_photo || '', c.id || null);
+  const g = GAMES[editGameId];
+  const grp = EDITION_GROUPS[g?.group_id] || null;
+  EdDrawer.load({
+    group: grp, game: g, copy: c,
+    trackVariants: TRACK_VARIANTS, variants: VARIANT_OPTS, wishDefault: EDITION_WISHLIST, canEdit: CAN_EDIT,
+    status: id => {
+      const m = grp?.members.find(x => x.id == id) || {};
+      const cs = GAMES[id]?.copies;
+      return cs ? { owned: cs.some(x=>x.owned), wished: cs.some(x=>x.wishlist), price: m.cib_price ?? null }
+                : { owned: m.owned, wished: m.wished, price: m.cib_price ?? null };
+    },
+    onOpen: id => openDrawer(id),
+    canOpen: id => !!GAMES[id],   // editions that are not on this wishlist have no row here
+    onWish: CAN_EDIT ? async id => {
+      const m = grp.members.find(x => x.id == id);
+      const res = await apiFetch('/api/entry_save.php', { game_id: id, copy_number: 1, wishlist: m.wished ? 0 : 1 });
+      if (!res.ok) { toast(tRaw('common.err_prefix', {error: res.error||''}), true); return; }
+      m.wished = !!res.entry.wishlist;
+      if (GAMES[id]) mergeSavedEntry(id, res.entry);
+      reloadOnClose = true;
+      toast(m.wished ? '♥ '+tRaw('coll.wish_added') : tRaw('coll.wish_removed'));
+    } : null,
+  });
 }
 
-function closeDrawer() { document.getElementById('drawer-backdrop').classList.remove('open'); editGameId = null; }
+function closeDrawer() {
+  document.getElementById('drawer-backdrop').classList.remove('open'); editGameId = null;
+  if (reloadOnClose) window.location.reload();
+}
 function handleBdClick(e){ if (e.target === document.getElementById('drawer-backdrop')) closeDrawer(); }
 
 async function saveEntry() {
@@ -900,7 +1028,15 @@ async function saveEntry() {
   };
   const grading = gradeEditor.getPayload();
   if (grading) payload.grading = grading;
+  Object.assign(payload, EdDrawer.payload());
   const res = await apiFetch('/api/entry_save.php', payload);
+  if (res.ok && res.moved_from) {
+    // Moved to another edition: the rows change, so show the fresh list
+    toast(tRaw('common.saved'));
+    reloadOnClose = true;
+    closeDrawer();
+    return;
+  }
   if (res.ok) {
     mergeSavedEntry(gameId, res.entry);
     closeDrawer();
@@ -1093,6 +1229,7 @@ document.addEventListener('keydown', e => {
 
 // ── INIT ──
 renderAllRows();
+updateCounts();
 initWishCols();
 setWLOwned(''); setWLUpgrade('');
 

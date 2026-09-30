@@ -38,6 +38,15 @@ $tagOptsQ = db()->prepare("SELECT label FROM user_tag_options WHERE user_id=? OR
 $tagOptsQ->execute([$user['id']]); $tagOpts = $tagOptsQ->fetchAll(PDO::FETCH_COLUMN);
 
 $gradeLabels = gradingConfig()['labels'];
+
+// Editions and print variants (per user)
+$editionMode   = ($user['edition_mode'] ?? 'one') === 'every' ? 'every' : 'one';
+$trackVariants = !empty($user['track_variants']);
+$variantOpts   = [];
+if ($trackVariants) {
+    $vq = db()->prepare("SELECT label FROM user_variant_options WHERE user_id=? ORDER BY sort_order");
+    $vq->execute([$user['id']]); $variantOpts = $vq->fetchAll(PDO::FETCH_COLUMN);
+}
 ?>
 <!DOCTYPE html>
 <html lang="<?= currentLang() ?>">
@@ -48,7 +57,7 @@ $gradeLabels = gradingConfig()['labels'];
 <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/main.css?v=<?= @filemtime(__DIR__.'/assets/css/main.css') ?>">
 <?= themeHead($user) ?>
 <?= csrfScript() ?>
-<?= appScript(['coll', 'drawer', 'grading']) ?>
+<?= appScript(['coll', 'drawer', 'grading', 'ed']) ?>
 </head>
 <body>
 
@@ -111,6 +120,15 @@ $gradeLabels = gradingConfig()['labels'];
     <option value=""><?= t('coll.all_played') ?></option>
     <?php foreach ($playedOpts as $p): ?><option><?= htmlspecialchars($p) ?></option><?php endforeach; ?>
   </select>
+  <select id="tb-edition" hidden aria-label="<?= t('ed.edition') ?>">
+    <option value=""><?= t('ed.all_editions') ?></option>
+  </select>
+  <?php if ($trackVariants && $variantOpts): ?>
+  <select id="tb-variant" aria-label="<?= t('ed.variant') ?>">
+    <option value=""><?= t('ed.all_variants') ?></option>
+    <?php foreach ($variantOpts as $v): ?><option><?= htmlspecialchars($v) ?></option><?php endforeach; ?>
+  </select>
+  <?php endif; ?>
   <select id="tb-tag">
     <option value="" disabled selected>— <?= t('coll.all_tags') ?> —</option>
     <option value=""><?= t('coll.all_tags') ?></option>
@@ -145,6 +163,8 @@ $gradeLabels = gradingConfig()['labels'];
         <th data-col="wishlist" style="width:28px;text-align:center" data-sort="wishlist">♥</th>
         <th data-col="upgrade" style="width:28px;text-align:center" data-sort="upgrade">↑</th>
         <th data-col="title" data-sort="title"><?= t('common.col.title') ?> ↕</th>
+        <th data-col="edition" data-sort="edition"><?= t('ed.edition') ?> ↕</th>
+        <th data-col="variant" data-sort="variant"><?= t('ed.variant') ?> ↕</th>
         <th data-col="quality" data-sort="quality"><?= t('coll.th_cond') ?> ↕</th>
         <th data-col="completeness" data-sort="completeness"><?= t('coll.complete') ?> ↕</th>
         <th data-col="played" data-sort="played_status"><?= t('common.col.played') ?> ↕</th>
@@ -191,6 +211,10 @@ $gradeLabels = gradingConfig()['labels'];
         <div class="copy-tabs" id="copy-tabs"></div>
       </div>
 
+      <!-- Editions + print variant (assets/js/editions-drawer.js) -->
+      <div class="drawer-section" id="d-ed-edition" hidden></div>
+      <div class="drawer-section" id="d-ed-variant" hidden></div>
+
       <div class="drawer-section">
         <div class="section-label"><?= t('drawer.ownership') ?></div>
         <div class="toggle-row">
@@ -228,6 +252,7 @@ $gradeLabels = gradingConfig()['labels'];
           </table>
           <a id="d-pc-link" href="#" target="_blank" style="color:var(--wiiu);font-size:.68rem;display:none"><?= t('drawer.view_pc') ?> ↗</a>
         </div>
+        <div id="d-ed-prices-of" hidden></div>
         <div class="section-label" style="margin-top:10px;margin-bottom:6px"><?= t('drawer.value_type') ?></div>
         <div style="display:flex;gap:14px;font-size:.75rem;flex-wrap:wrap" id="d-price-type-wrap">
           <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="d-value-type" id="d-vtype-loose" value="loose"> <?= t('common.price.loose') ?></label>
@@ -276,7 +301,10 @@ $gradeLabels = gradingConfig()['labels'];
           <label class="toggle"><input type="checkbox" id="d-wishlist"><span class="toggle-slider"></span></label>
           <span class="toggle-label" id="lbl-wishlist"><?= t('drawer.not_wished') ?></span>
         </div>
+        <div id="d-ed-wish-any" hidden></div>
       </div>
+
+      <div class="drawer-section" id="d-ed-others" hidden></div>
 
       <div class="drawer-section">
         <div class="section-label"><?= t('common.col.notes') ?></div>
@@ -325,6 +353,7 @@ $gradeLabels = gradingConfig()['labels'];
 
 <script>window.GRADING = <?= gradingClientJson($user) ?>;</script>
 <script src="<?= BASE_URL ?>/assets/js/grading.js?v=<?= @filemtime(__DIR__.'/assets/js/grading.js') ?>"></script>
+<script src="<?= BASE_URL ?>/assets/js/editions-drawer.js?v=<?= @filemtime(__DIR__.'/assets/js/editions-drawer.js') ?>"></script>
 <script>
 const BASE     = <?= json_encode(BASE_URL) ?>;
 const USER_ID  = <?= (int)$user['id'] ?>;
@@ -333,6 +362,10 @@ const SYS_NAME = <?= json_encode($curSys['name']       ?? '') ?>;
 const SYS_SHORT= <?= json_encode($curSys['short_name'] ?? '') ?>;
 const SYS_REGION = <?= json_encode($curSys ? systemRegion($curSys) : setting('default_region')) ?>;
 const SYS_COUNTS_TOTALS = <?= json_encode((bool)($curSys['count_for_totals'] ?? true)) ?>;
+const EDITION_MODE   = <?= json_encode($editionMode) ?>;   // 'one' = editions folded under the game · 'every' = one row per edition
+const TRACK_VARIANTS = <?= json_encode($trackVariants) ?>;
+const VARIANT_OPTS   = <?= json_encode($variantOpts, JSON_HEX_TAG | JSON_HEX_AMP) ?>;
+const EDITION_WISHLIST = <?= json_encode(($user['edition_wishlist'] ?? 'any') === 'exact' ? 'exact' : 'any') ?>;
 window.USER_AUCTION_SITES = <?= json_encode(json_decode($user['auction_sites'] ?? '[]', true) ?: []) ?>;
 
 let allGames  = [];
@@ -353,8 +386,9 @@ const gradeEditor = new GradingUI.Editor({
 });
 
 // Column preferences
-const DEFAULT_COL_ORDER = ['img','owned','wishlist','upgrade','title','quality','completeness','played','copies','price_paid','buy_range','loose_price','cib_price','new_price','upgrade_reason','tag','notes'];
-let activeCols = new Set(DEFAULT_COL_ORDER);
+const DEFAULT_COL_ORDER = ['img','owned','wishlist','upgrade','title','edition','variant','quality','completeness','played','copies','price_paid','buy_range','loose_price','cib_price','new_price','upgrade_reason','tag','notes'];
+const DEFAULT_COL_OFF   = new Set(['variant']);   // hidden until the user turns it on
+let activeCols = new Set(DEFAULT_COL_ORDER.filter(id => !DEFAULT_COL_OFF.has(id)));
 let colOrder   = [...DEFAULT_COL_ORDER];
 
 async function init() {
@@ -364,6 +398,7 @@ async function init() {
     fetch(`${BASE}/api/column_prefs.php`).then(r=>r.json()),
   ]);
   allGames = gRes.games || [];
+  buildGroups(gRes.groups || []);
   buildEntryMap(eRes.entries || []);
 
   // Apply column prefs from saved cols_collection
@@ -373,12 +408,13 @@ async function init() {
     activeCols = new Set(saved.filter(c => c.on).map(c => c.id));
     // Add any new columns not in saved prefs (with default on)
     DEFAULT_COL_ORDER.forEach(id => {
-      if (!colOrder.includes(id)) { colOrder.push(id); activeCols.add(id); }
+      if (!colOrder.includes(id)) { colOrder.push(id); if (!DEFAULT_COL_OFF.has(id)) activeCols.add(id); }
     });
   } else {
     colOrder   = [...DEFAULT_COL_ORDER];
-    activeCols = new Set(DEFAULT_COL_ORDER);
+    activeCols = new Set(DEFAULT_COL_ORDER.filter(id => !DEFAULT_COL_OFF.has(id)));
   }
+  if (!TRACK_VARIANTS) activeCols.delete('variant');   // variants switched off: no column
 
   applyColumnOrder();
   applyColumnVisibility();
@@ -394,7 +430,7 @@ function buildEntryMap(entries) {
 }
 
 // Map col id -> 0-based column index in the table
-const COL_INDEX = {img:0,owned:1,wishlist:2,upgrade:3,title:4,quality:5,completeness:6,played:7,copies:8,price_paid:9,buy_range:10,loose_price:11,cib_price:12,new_price:13,upgrade_reason:14,tag:15,notes:16};
+const COL_INDEX = {img:0,owned:1,wishlist:2,upgrade:3,title:4,edition:5,variant:6,quality:7,completeness:8,played:9,copies:10,price_paid:11,buy_range:12,loose_price:13,cib_price:14,new_price:15,upgrade_reason:16,tag:17,notes:18};
 // edit button is always last col, never hidden
 
 function applyColumnOrder() {} // no-op, handled in applyColumnVisibility
@@ -459,59 +495,135 @@ function getDisplayPhoto(game) {
   return null;
 }
 
-function render() {
-  const q  = document.getElementById('tb-search').value.toLowerCase();
-  const fo = document.getElementById('tb-owned').value;    // 'all'|'owned'|'1'|'0'
-  const fq = document.getElementById('tb-quality').value;   // ''|'label:<id>'|'m:points'|'m:simple'|'m:none'
-  const fmin = parseInt(document.getElementById('tb-minscore').value, 10);
-  const fc = document.getElementById('tb-completeness').value;
-  const fp = document.getElementById('tb-played').value;
-  const ftag = document.getElementById('tb-tag').value;
-  const fu = document.getElementById('tb-upgrade').value;  // ''|'1'
-  const fw = document.getElementById('tb-wishlist').value; // ''|'1'
+// ── EDITIONS ──
+// groupMap: group id → {id, title, sort_title, main_game_id, members:[games by edition_sort]}.
+// Only groups with at least two active games count; a lone edition is shown as a normal game.
+let groupMap   = {};
+let openGroups = new Set();
+const OPEN_KEY = `ed-open-${USER_ID}-${SYS_ID}`;
 
-  let list = allGames.filter(g => {
-    const copies = entryMap[g.id] || [];
-    const owned  = copies.some(c=>c.owned);
-
-    // Owned filter
-    if (fo === 'owned' && !owned) return false;   // default: owned only
-    if (fo === '1'     && !owned) return false;   // explicit owned
-    if (fo === '0'     && owned)  return false;   // not owned
-    // fo === 'all' → show everything
-
-    if (q  && !g.title.toLowerCase().includes(q)) return false;
-    if (fq && !copies.some(c=>matchesCondition(c, fq))) return false;
-    if (fmin && !copies.some(c=>{ const e=GradingCore.effective(c); return e.score!==null && e.score>=fmin; })) return false;
-    if (fc && !copies.some(c=>c.completeness===fc)) return false;
-    if (fp && !copies.some(c=>c.played_status===fp)) return false;
-    if (ftag && !copies.some(c=>c.tag===ftag)) return false;
-    if (fu === '1' && !copies.some(c=>c.upgrade))  return false;
-    if (fw === '1' && !copies.some(c=>c.wishlist)) return false;
-    return true;
+function buildGroups(groups) {
+  const byId = {};
+  (groups || []).forEach(gr => { byId[gr.id] = { ...gr, members: [] }; });
+  allGames.forEach(g => { if (g.group_id && byId[g.group_id]) byId[g.group_id].members.push(g); });
+  groupMap = {};
+  Object.values(byId).forEach(gr => {
+    if (gr.members.length < 2) return;
+    gr.members.sort((a, b) => (+a.edition_sort - +b.edition_sort) || (+a.id - +b.id));
+    groupMap[gr.id] = gr;
   });
+  allGames.forEach(g => { g._group = groupMap[g.group_id] || null; });
+  try { openGroups = new Set(JSON.parse(localStorage.getItem(OPEN_KEY) || '[]').map(String)); } catch { openGroups = new Set(); }
+
+  // Edition filter: the labels present in this system
+  const labels = [...new Set(allGames.filter(g => g._group && g.edition_label).map(g => g.edition_label))]
+    .sort((a, b) => a.localeCompare(b));
+  const sel = document.getElementById('tb-edition');
+  if (labels.length) {
+    sel.insertAdjacentHTML('beforeend', labels.map(l => `<option value="${escAttr(l)}">${esc(l)}</option>`).join(''));
+    sel.hidden = false;
+  }
+}
+
+function toggleGroup(id) {
+  id = String(id);
+  openGroups.has(id) ? openGroups.delete(id) : openGroups.add(id);
+  try { localStorage.setItem(OPEN_KEY, JSON.stringify([...openGroups])); } catch { /* not remembered */ }
+  render();
+}
+
+// An item is one table row at the top level: {game} or, in "one per game" mode, {group}
+const itemGames  = it => it.group ? it.group.members : [it.game];
+const itemCopies = it => itemGames(it).flatMap(g => entryMap[g.id] || []);
+const itemOwned  = it => itemCopies(it).some(c => c.owned);
+/** Lowest price of the item's games (a group costs its cheapest edition); null when none has one. */
+function itemPrice(it, field) {
+  const v = itemGames(it).map(g => parseFloat(g[field])).filter(n => !isNaN(n));
+  return v.length ? Math.min(...v) : null;
+}
+function itemSortTitle(it) {
+  if (it.group) return it.group.sort_title || it.group.title;
+  const g = it.game;
+  return g._group ? `${g._group.sort_title || g._group.title}\u0000${String(g.edition_sort).padStart(5, '0')}` : (g.sort_title || g.title);
+}
+/** All top-level items for the user's mode, unfiltered. */
+function allItems() {
+  if (EDITION_MODE !== 'one') return allGames.map(game => ({ game }));
+  const items = allGames.filter(g => !g._group).map(game => ({ game }));
+  Object.values(groupMap).forEach(group => items.push({ group }));
+  return items;
+}
+
+function readFilters() {
+  return {
+    q:    document.getElementById('tb-search').value.toLowerCase(),
+    fo:   document.getElementById('tb-owned').value,        // 'all'|'owned'|'1'|'0'
+    fq:   document.getElementById('tb-quality').value,      // ''|'label:<id>'|'m:points'|'m:simple'|'m:none'
+    fmin: parseInt(document.getElementById('tb-minscore').value, 10),
+    fc:   document.getElementById('tb-completeness').value,
+    fp:   document.getElementById('tb-played').value,
+    ftag: document.getElementById('tb-tag').value,
+    fu:   document.getElementById('tb-upgrade').value,      // ''|'1'
+    fw:   document.getElementById('tb-wishlist').value,     // ''|'1'
+    fe:   document.getElementById('tb-edition').value,      // '' | edition label
+    fv:   document.getElementById('tb-variant')?.value || '',
+  };
+}
+
+/** Filters on the copies (any copy may match each filter). */
+function copiesMatch(copies, f) {
+  if (f.fq && !copies.some(c=>matchesCondition(c, f.fq))) return false;
+  if (f.fmin && !copies.some(c=>{ const e=GradingCore.effective(c); return e.score!==null && e.score>=f.fmin; })) return false;
+  if (f.fc && !copies.some(c=>c.completeness===f.fc)) return false;
+  if (f.fp && !copies.some(c=>c.played_status===f.fp)) return false;
+  if (f.ftag && !copies.some(c=>c.tag===f.ftag)) return false;
+  if (f.fu === '1' && !copies.some(c=>c.upgrade))  return false;
+  if (f.fw === '1' && !copies.some(c=>c.wishlist)) return false;
+  if (f.fv && !copies.some(c=>c.variant===f.fv)) return false;
+  return true;
+}
+
+function itemMatches(it, f) {
+  const owned = itemOwned(it);
+  if ((f.fo === 'owned' || f.fo === '1') && !owned) return false;   // default: owned only
+  if (f.fo === '0' && owned) return false;
+  const games = itemGames(it);
+  if (f.q) {
+    const names = games.map(g => g.title).concat(it.group ? [it.group.title] : it.game._group ? [it.game._group.title] : []);
+    if (!names.some(n => n.toLowerCase().includes(f.q))) return false;
+  }
+  if (f.fe && !games.some(g => g._group && g.edition_label === f.fe)) return false;
+  return copiesMatch(itemCopies(it), f);
+}
+
+function render() {
+  const f = readFilters();
+  const list = allItems().filter(it => itemMatches(it, f));
 
   // Best condition among the copies (owned ones first): higher score / label = higher
-  const condValue = g => { const cs=entryMap[g.id]||[]; const own=cs.filter(c=>c.owned); return Math.max(-1, ...(own.length?own:cs).map(c=>GradingCore.sortValue(c))); };
+  const condValue = cs => { const own=cs.filter(c=>c.owned); return Math.max(-1, ...(own.length?own:cs).map(c=>GradingCore.sortValue(c))); };
+  const firstCopy = it => { const cs=itemCopies(it); return cs.find(c=>c.owned&&c.copy_number==1) || cs.find(c=>c.copy_number==1) || {}; };
   list.sort((a,b) => {
     let va, vb;
-    const ca = (entryMap[a.id]||[]).find(c=>c.copy_number==1)||{};
-    const cb = (entryMap[b.id]||[]).find(c=>c.copy_number==1)||{};
+    const ca = firstCopy(a), cb = firstCopy(b);
+    const csa = itemCopies(a), csb = itemCopies(b);
     switch(sortKey) {
-      case 'title':        va=a.sort_title||a.title; vb=b.sort_title||b.title; break;
-      case 'owned':        va=(entryMap[a.id]||[]).some(c=>c.owned)?0:1; vb=(entryMap[b.id]||[]).some(c=>c.owned)?0:1; break;
-      case 'quality':      va=-condValue(a); vb=-condValue(b); break;
+      case 'title':        va=itemSortTitle(a); vb=itemSortTitle(b); break;
+      case 'owned':        va=csa.some(c=>c.owned)?0:1; vb=csb.some(c=>c.owned)?0:1; break;
+      case 'quality':      va=-condValue(csa); vb=-condValue(csb); break;
       case 'completeness': va=ca.completeness||'zzz'; vb=cb.completeness||'zzz'; break;
       case 'played_status':va=ca.played_status||'zzz'; vb=cb.played_status||'zzz'; break;
-      case 'copies':       va=(entryMap[a.id]||[]).length; vb=(entryMap[b.id]||[]).length; break;
-      case 'wishlist':      va=(entryMap[a.id]||[]).some(c=>c.wishlist)?0:1; vb=(entryMap[b.id]||[]).some(c=>c.wishlist)?0:1; break;
-      case 'upgrade':      va=(entryMap[a.id]||[]).some(c=>c.upgrade)?0:1; vb=(entryMap[b.id]||[]).some(c=>c.upgrade)?0:1; break;
+      case 'copies':       va=csa.length; vb=csb.length; break;
+      case 'wishlist':     va=csa.some(c=>c.wishlist)?0:1; vb=csb.some(c=>c.wishlist)?0:1; break;
+      case 'upgrade':      va=csa.some(c=>c.upgrade)?0:1; vb=csb.some(c=>c.upgrade)?0:1; break;
       case 'price_paid':   va=parseFloat(ca.price_paid)||0; vb=parseFloat(cb.price_paid)||0; break;
-      case 'chart_price':  va=parseFloat(a.cib_price)||0;   vb=parseFloat(b.cib_price)||0;   break;
-      case 'loose_price':  va=parseFloat(a.loose_price)||0; vb=parseFloat(b.loose_price)||0; break;
-      case 'new_price':    va=parseFloat(a.new_price)||0;   vb=parseFloat(b.new_price)||0;   break;
-      case 'tag':          va=(entryMap[a.id]||[]).find(c=>c.tag)?.tag||'zzz'; vb=(entryMap[b.id]||[]).find(c=>c.tag)?.tag||'zzz'; break;
-      default: va=a.title; vb=b.title;
+      case 'chart_price':  va=itemPrice(a,'cib_price')||0;   vb=itemPrice(b,'cib_price')||0;   break;
+      case 'loose_price':  va=itemPrice(a,'loose_price')||0; vb=itemPrice(b,'loose_price')||0; break;
+      case 'new_price':    va=itemPrice(a,'new_price')||0;   vb=itemPrice(b,'new_price')||0;   break;
+      case 'tag':          va=csa.find(c=>c.tag)?.tag||'zzz'; vb=csb.find(c=>c.tag)?.tag||'zzz'; break;
+      case 'edition':      va=a.game?.edition_label||''; vb=b.game?.edition_label||''; break;
+      case 'variant':      va=csa.find(c=>c.owned&&c.variant)?.variant||'zzz'; vb=csb.find(c=>c.owned&&c.variant)?.variant||'zzz'; break;
+      default:             va=itemSortTitle(a); vb=itemSortTitle(b);
     }
     if (typeof va==='string') { va=va.toLowerCase(); vb=vb.toLowerCase(); }
     return va<vb?-sortDir:va>vb?sortDir:0;
@@ -521,7 +633,34 @@ function render() {
   tbody.innerHTML = '';
   GradingUI.beginRender();
 
-  list.forEach(g => {
+  list.forEach(it => {
+    if (it.game) {
+      const g = it.game;
+      // "Every edition": the game name with the edition in its own column
+      tbody.appendChild(gameRow(g, { title: g._group ? g._group.title : g.title, edition: g._group ? g.edition_label : '' }));
+      return;
+    }
+    const grp = it.group, open = openGroups.has(String(grp.id));
+    tbody.appendChild(groupRow(grp, open));
+    if (open) grp.members
+      .filter(m => !f.fe || m.edition_label === f.fe)
+      .forEach(m => tbody.appendChild(gameRow(m, { child: true, title: m.edition_label || m.title, edition: '' })));
+  });
+
+  document.getElementById('empty-state').style.display = list.length===0?'block':'none';
+  updateStats(list);
+  applyColumnVisibility(); // reorder + show/hide after each render
+}
+
+const DASH = '<span class="price-na">—</span>';
+
+/** Owned copies' variants, e.g. "UK, Benelux (HOL)". */
+function variantText(copies) {
+  return [...new Set(copies.filter(c=>c.owned && c.variant).map(c=>c.variant))].join(', ');
+}
+
+/** One game (or one edition) row. opts: {title, edition, child} */
+function gameRow(g, opts) {
     const copies    = entryMap[g.id] || [];
     const owned     = copies.some(c=>c.owned);
     const ownedCopies = copies.filter(c=>c.owned);
@@ -534,6 +673,7 @@ function render() {
     if (owned) tr.classList.add('is-owned');
     if (wishlist && !owned) tr.classList.add('is-wishlist');
     if (wishlist && owned) tr.classList.add('is-owned-wished');
+    if (opts.child) tr.classList.add('ed-child-row');
 
     const photo = getDisplayPhoto(g);
     let imgCell = '';
@@ -551,24 +691,24 @@ function render() {
 
     // Completeness — owned copies only
     const compCell = displayCopies.length === 0
-      ? `<span class="price-na">—</span>`
+      ? DASH
       : displayCopies.length > 1
         ? displayCopies.map(c => `<span style="font-size:.68rem;color:var(--text2);display:block;line-height:1.6">${esc(c.completeness||'—')}</span>`).join('')
         : `<span style="font-size:.7rem;color:var(--text2)">${esc(displayCopies[0].completeness||'—')}</span>`;
 
     // Paid — owned copies only
     const paidCell = displayCopies.length === 0
-      ? `<span class="price-na">—</span>`
+      ? DASH
       : displayCopies.length > 1
         ? displayCopies.map(c => c.price_paid != null
             ? `<span class="price" style="display:block;font-size:.85rem">${money(c.price_paid)}</span>`
             : `<span class="price-na" style="display:block">—</span>`).join('')
         : (displayCopies[0].price_paid != null
             ? `<span class="price">${money(displayCopies[0].price_paid)}</span>`
-            : `<span class="price-na">—</span>`);
+            : DASH);
 
     // Buy range — from copy 1 only (shared reference)
-    let rangeCell = '<span class="price-na">—</span>';
+    let rangeCell = DASH;
     if (c1.price_min!=null && c1.price_max!=null) rangeCell=`<span class="price-range">${money(c1.price_min, 0)}–${money(c1.price_max, 0)}</span>`;
     else if (c1.price_min!=null) rangeCell=`<span class="price-range">≥${money(c1.price_min, 0)}</span>`;
     else if (c1.price_max!=null) rangeCell=`<span class="price-range">≤${money(c1.price_max, 0)}</span>`;
@@ -588,12 +728,12 @@ function render() {
     if (c1.chart_price != null) {
       cibParts.push(`<span class="price" style="color:var(--personal-price)" title="${t('coll.personal_price')}">${money(c1.chart_price)}</span>`);
     }
-    const chartCell = cibParts.length ? cibParts.join(' <span style="color:var(--border2)">·</span> ') : `<span class="price-na">—</span>`;
+    const chartCell = cibParts.length ? cibParts.join(' <span style="color:var(--border2)">·</span> ') : DASH;
 
     // Notes — owned copies if any, otherwise wishlist entry notes
     const wishCopy = copies.find(c=>c.wishlist);
     const noteCell = displayCopies.length === 0
-      ? (wishCopy?.notes ? `<span style="font-size:.66rem;color:var(--muted);font-style:italic">${esc(wishCopy.notes)}</span>` : `<span class="price-na">—</span>`)
+      ? (wishCopy?.notes ? `<span style="font-size:.66rem;color:var(--muted);font-style:italic">${esc(wishCopy.notes)}</span>` : DASH)
       : displayCopies.length > 1
         ? displayCopies.map(c => `<span style="font-size:.65rem;color:var(--muted);font-style:italic;display:block;line-height:1.6">${esc(c.notes||'—')}</span>`).join('')
         : `<span style="font-size:.66rem;color:var(--muted);font-style:italic">${esc(displayCopies[0].notes||'—')}</span>`;
@@ -601,46 +741,114 @@ function render() {
     const noteText = displayCopies[0]?.notes || wishCopy?.notes || '—';
     const copyCnt = ownedCopies.length > 0
       ? `<span class="chip chip-y">${ownedCopies.length}</span>`
-      : `<span class="price-na">—</span>`;
-    const playCell = played ? `<span style="font-size:.68rem;color:var(--wiiu)">${esc(played)}</span>` : `<span class="price-na">—</span>`;
+      : DASH;
+    const playCell = played ? `<span style="font-size:.68rem;color:var(--wiiu)">${esc(played)}</span>` : DASH;
     const upReason = copies.find(c=>c.upgrade)?.upgrade_reason || '';
+    const variants = variantText(copies);
+    const titleHtml = opts.child
+      ? `<span class="ed-child-title"><span aria-hidden="true">└ </span>${esc(opts.title)}</span>`
+      : `<span class="game-num">#${String(g.sort_order).padStart(3,'0')}</span>${esc(opts.title)}`;
 
     tr.innerHTML = `
       <td data-col="img">${imgCell}</td>
       <td data-col="owned" style="text-align:center"><div class="owned-check ${owned?'checked':''}" onclick="toggleOwned(${g.id})">${owned?'✓':''}</div></td>
       <td data-col="wishlist" style="text-align:center"><div class="wish-check ${wishlist?'checked':''}" onclick="toggleWishlist(${g.id})">${wishlist?'♥':''}</div></td>
       <td data-col="upgrade" style="text-align:center"><div class="upgrade-check ${upgrade?'checked':''}" onclick="toggleUpgrade(${g.id})" title="${escAttr(upReason)}">${upgrade?'↑':''}</div></td>
-      <td data-col="title" class="td-title" style="cursor:pointer" onclick="openDrawer(${g.id})"><span class="game-num">#${String(g.sort_order).padStart(3,'0')}</span>${esc(g.title)}</td>
+      <td data-col="title" class="td-title" style="cursor:pointer" onclick="openDrawer(${g.id})">${titleHtml}</td>
+      <td data-col="edition"><span class="ed-label">${opts.edition ? esc(opts.edition) : DASH}</span></td>
+      <td data-col="variant"><span class="ed-label">${variants ? esc(variants) : DASH}</span></td>
       <td data-col="quality">${qualCell}</td>
       <td data-col="completeness">${compCell}</td>
       <td data-col="played">${playCell}</td>
       <td data-col="copies">${copyCnt}</td>
       <td data-col="price_paid">${paidCell}</td>
       <td data-col="buy_range">${rangeCell}</td>
-      <td data-col="loose_price">${g.loose_price != null ? `<span class="price price-chart" style="color:var(--muted)" title="${escAttr(g.loose_price_updated_at?tRaw('coll.last_updated', {date: fmtDate(g.loose_price_updated_at)}):tRaw('common.col.loose_price'))}">${money(g.loose_price)}</span>` : `<span class="price-na">—</span>`}</td>
+      <td data-col="loose_price">${g.loose_price != null ? `<span class="price price-chart" style="color:var(--muted)" title="${escAttr(g.loose_price_updated_at?tRaw('coll.last_updated', {date: fmtDate(g.loose_price_updated_at)}):tRaw('common.col.loose_price'))}">${money(g.loose_price)}</span>` : DASH}</td>
       <td data-col="cib_price">${chartCell}</td>
-      <td data-col="new_price">${g.new_price != null ? `<span class="price price-chart" style="color:var(--green)" title="${escAttr(g.new_price_updated_at?tRaw('coll.last_updated', {date: fmtDate(g.new_price_updated_at)}):tRaw('common.col.new_price'))}">${money(g.new_price)}</span>` : `<span class="price-na">—</span>`}</td>
+      <td data-col="new_price">${g.new_price != null ? `<span class="price price-chart" style="color:var(--green)" title="${escAttr(g.new_price_updated_at?tRaw('coll.last_updated', {date: fmtDate(g.new_price_updated_at)}):tRaw('common.col.new_price'))}">${money(g.new_price)}</span>` : DASH}</td>
       <td data-col="upgrade_reason" class="note-cell" style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.66rem;color:var(--orange);font-style:italic" title="${escAttr(upReason)}">${upReason ? esc(upReason) : '<span style=\'color:var(--border2)\'>—</span>'}</td>
       <td data-col="tag"><span style="font-size:.68rem;color:var(--wiiu)">${esc(copies.find(c=>c.tag)?.tag||'')|| '<span style=\'color:var(--border2)\'>—</span>'}</span></td>
       <td data-col="notes" class="note-cell" style="max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.66rem;color:var(--muted);font-style:italic" title="${escAttr(noteText)}">${noteCell}</td>
       <td data-col="__edit"><button class="btn-icon" onclick="openDrawer(${g.id})">${t('common.edit')}</button></td>
     `;
-    tbody.appendChild(tr);
-  });
+    return tr;
+}
 
-  document.getElementById('empty-state').style.display = list.length===0?'block':'none';
-  updateStats(list);
-  applyColumnVisibility(); // reorder + show/hide after each render
+/** "€ 4,50 – € 9,80" over the group's editions (one price when they're equal). */
+function priceRange(games, field, style) {
+  const v = games.map(g => parseFloat(g[field])).filter(n => !isNaN(n));
+  if (!v.length) return DASH;
+  const lo = Math.min(...v), hi = Math.max(...v);
+  return `<span class="price price-chart" style="white-space:nowrap;${style||''}">${money(lo)}${hi > lo ? ' – ' + money(hi) : ''}</span>`;
+}
+
+/** The folded row of an edition group ("one per game" mode). Clicking it opens / closes the editions. */
+function groupRow(grp, open) {
+  const games  = grp.members;
+  const copies = games.flatMap(g => entryMap[g.id] || []);
+  const ownedCopies = copies.filter(c => c.owned);
+  const owned    = ownedCopies.length > 0;
+  const wishlist = copies.some(c => c.wishlist);
+  const upgrade  = copies.some(c => c.upgrade);
+
+  const tr = document.createElement('tr');
+  tr.className = 'ed-grp';
+  if (owned) tr.classList.add('is-owned');
+  if (wishlist && !owned) tr.classList.add('is-wishlist');
+  if (wishlist && owned) tr.classList.add('is-owned-wished');
+  tr.addEventListener('click', e => { if (!e.target.closest('a, img')) toggleGroup(grp.id); });
+
+  // Photo of the first edition that has one (the main release first)
+  let imgCell = '';
+  for (const g of games) {
+    const p = getDisplayPhoto(g);
+    if (p) { imgCell = `<img class="img-thumb" src="${p.src}" onclick="openLightboxGame(${g.id})" alt="">`; break; }
+  }
+  // Best grade among the owned copies
+  const best = ownedCopies.slice().sort((a, b) => GradingCore.sortValue(b) - GradingCore.sortValue(a))[0];
+  const ownedLabels = games.filter(g => (entryMap[g.id] || []).some(c => c.owned)).map(g => g.edition_label).filter(Boolean);
+  const variants = variantText(copies);
+  const n = games.length;
+
+  tr.innerHTML = `
+    <td data-col="img">${imgCell}</td>
+    <td data-col="owned" style="text-align:center"><div class="owned-check ed-ro ${owned?'checked':''}" aria-hidden="true">${owned?'✓':''}</div></td>
+    <td data-col="wishlist" style="text-align:center"><div class="wish-check ed-ro ${wishlist?'checked':''}" aria-hidden="true">${wishlist?'♥':''}</div></td>
+    <td data-col="upgrade" style="text-align:center"><div class="upgrade-check ed-ro ${upgrade?'checked':''}" aria-hidden="true">${upgrade?'↑':''}</div></td>
+    <td data-col="title" class="td-title">
+      <button type="button" class="ed-toggle" aria-expanded="${open}" title="${escAttr(tRaw('ed.expand'))}">
+        <span>${esc(grp.title)}</span>
+        <span class="chip chip-blue">${t('ed.n_editions', {n: fmtNum(n)})} ${open ? '▾' : '▸'}</span>
+      </button>
+    </td>
+    <td data-col="edition"><span class="ed-label">${ownedLabels.length ? esc(ownedLabels.join(', ')) : DASH}</span></td>
+    <td data-col="variant"><span class="ed-label">${variants ? esc(variants) : DASH}</span></td>
+    <td data-col="quality">${best ? GradingUI.cellHtml([best], {}) : DASH}</td>
+    <td data-col="completeness"></td>
+    <td data-col="played"></td>
+    <td data-col="copies">${ownedCopies.length ? `<span class="chip chip-y">${ownedCopies.length}</span>` : DASH}</td>
+    <td data-col="price_paid"></td>
+    <td data-col="buy_range"></td>
+    <td data-col="loose_price">${priceRange(games, 'loose_price', 'color:var(--muted)')}</td>
+    <td data-col="cib_price">${priceRange(games, 'cib_price')}</td>
+    <td data-col="new_price">${priceRange(games, 'new_price', 'color:var(--green)')}</td>
+    <td data-col="upgrade_reason"></td>
+    <td data-col="tag"></td>
+    <td data-col="notes"></td>
+    <td data-col="__edit"></td>
+  `;
+  return tr;
 }
 
 function updateStats(filtered) {
-  const allOwned  = allGames.filter(g=>(entryMap[g.id]||[]).some(c=>c.owned));
-  const tot       = allGames.length;
+  const units     = allItems();
+  const ownedN    = units.filter(itemOwned).length;
+  const tot       = units.length;
   const allCopies = Object.values(entryMap).flat().filter(c=>c.owned);
 
   // Only show owned/copies counts if this system counts toward totals
-  const ownedDisplay  = SYS_COUNTS_TOTALS ? fmtNum(allOwned.length) : '—';
-  const pctDisplay    = SYS_COUNTS_TOTALS ? (tot ? Math.round(allOwned.length/tot*100)+'%' : '0%') : '—';
+  const ownedDisplay  = SYS_COUNTS_TOTALS ? fmtNum(ownedN) : '—';
+  const pctDisplay    = SYS_COUNTS_TOTALS ? (tot ? Math.round(ownedN/tot*100)+'%' : '0%') : '—';
   const copiesDisplay = SYS_COUNTS_TOTALS ? fmtNum(allCopies.length) : '—';
 
   document.getElementById('st-owned').textContent   = ownedDisplay;
@@ -648,11 +856,13 @@ function updateStats(filtered) {
   document.getElementById('st-copies').textContent  = copiesDisplay;
   document.getElementById('st-upgrade').textContent = allCopies.filter(c=>c.upgrade).length;
   document.getElementById('st-spent').textContent   = money(allCopies.reduce((s,c)=>s+(parseFloat(c.price_paid)||0),0), 0);
-  document.getElementById('prog-fill').style.width  = tot?(allOwned.length/tot*100)+'%':'0%';
-  document.getElementById('prog-text').textContent  = fmtNum(allOwned.length)+' / '+fmtNum(tot);
+  document.getElementById('prog-fill').style.width  = tot?(ownedN/tot*100)+'%':'0%';
+  // "84 / 250 games" vs "97 / 312 editions" once this system has linked editions
+  const unit = Object.keys(groupMap).length ? ' ' + tRaw(EDITION_MODE === 'one' ? 'ed.unit_games' : 'ed.unit_editions') : '';
+  document.getElementById('prog-text').textContent  = fmtNum(ownedN)+' / '+fmtNum(tot)+unit;
 
-  // CIB totals from games table
-  const cibAll   = allGames.reduce((s,g)=>s+(parseFloat(g.cib_price)||0),0);
+  // CIB totals (a group counts its cheapest edition in "one per game" mode)
+  const cibAll   = units.reduce((s,it)=>s+(itemPrice(it,'cib_price')||0),0);
   // Owned value — uses each copy's selected price type
   let ownedValue = 0;
   allGames.forEach(g => {
@@ -667,13 +877,12 @@ function updateStats(filtered) {
   document.getElementById('st-cib-all').textContent   = money(cibAll, 0);
   document.getElementById('st-cib-owned').textContent = money(ownedValue, 0);
 
-  const fCopies   = filtered.map(g=>entryMap[g.id]||[]).flat();
-  const fOwned    = filtered.filter(g=>(entryMap[g.id]||[]).some(c=>c.owned));
+  const fCopies   = filtered.flatMap(itemCopies);
+  const fOwned    = filtered.filter(itemOwned);
   const fSpend    = fCopies.reduce((s,c)=>s+(parseFloat(c.price_paid)||0),0);
-  const fCibAll   = filtered.reduce((s,g)=>s+(parseFloat(g.cib_price)||0),0);
-  const fCibOwned = fOwned.reduce((s,g)=>s+(parseFloat(g.cib_price)||0),0);
+  const fCibAll   = filtered.reduce((s,it)=>s+(itemPrice(it,'cib_price')||0),0);
   document.getElementById('sum-show').textContent  = fmtNum(filtered.length);
-  document.getElementById('sum-tot').textContent   = fmtNum(allGames.length);
+  document.getElementById('sum-tot').textContent   = fmtNum(tot);
   document.getElementById('sum-own').textContent   = fmtNum(fOwned.length);
   document.getElementById('sum-spend').textContent = money(fSpend);
   document.getElementById('sum-chart').textContent = fCibAll > 0 ? money(fCibAll) : '—';
@@ -750,8 +959,8 @@ async function toggleUpgrade(gameId) {
 function openDrawer(gameId) {
   editGameId = gameId;
   const g = allGames.find(x=>x.id==gameId); if (!g) return;
-  document.getElementById('d-title').textContent  = g.title;
-  document.getElementById('d-system').textContent = SYS_NAME + (SYS_REGION && SYS_REGION !== 'Mixed' ? ' · ' + SYS_REGION : '');
+  document.getElementById('d-title').textContent  = g._group ? g._group.title : g.title;
+  document.getElementById('d-system').textContent = EdDrawer.subtitle(SYS_NAME + (SYS_REGION && SYS_REGION !== 'Mixed' ? ' · ' + SYS_REGION : ''), g, g._group);
 
   // Show CIB price from PriceCharting if available
   // Show PC prices
@@ -847,6 +1056,15 @@ function loadCopyIntoForm(copyNum) {
   const vtype = c.value_price_type || FMT.valueType;
   document.querySelectorAll('input[name="d-value-type"]').forEach(r => r.checked = r.value === vtype);
   renderPhotoGrid(c.photos||[], c.primary_photo||'', c.id||null);
+  const g = allGames.find(x=>x.id==editGameId);
+  EdDrawer.load({
+    group: g?._group || null, game: g, copy: c,
+    trackVariants: TRACK_VARIANTS, variants: VARIANT_OPTS, wishDefault: EDITION_WISHLIST, canEdit: true,
+    status: id => { const cs = entryMap[id] || [], m = allGames.find(x=>x.id==id);
+      return { owned: cs.some(x=>x.owned), wished: cs.some(x=>x.wishlist), price: m && m.cib_price != null ? m.cib_price : null }; },
+    onOpen: id => openDrawer(id),
+    onWish: id => toggleWishlist(id),
+  });
 }
 
 function closeDrawer() { document.getElementById('drawer-backdrop').classList.remove('open'); editGameId=null; }
@@ -873,13 +1091,21 @@ async function saveEntry() {
   };
   const grading = gradeEditor.getPayload();
   if (grading) payload.grading = grading;
+  Object.assign(payload, EdDrawer.payload());
   const res = await apiFetch('/api/entry_save.php', payload);
   if (res.ok) {
     if (!entryMap[editGameId]) entryMap[editGameId]=[];
     const idx=entryMap[editGameId].findIndex(c=>c.copy_number==editCopy);
-    if (idx>=0) entryMap[editGameId][idx]={...entryMap[editGameId][idx],...res.entry};
-    else entryMap[editGameId].push(res.entry);
-    render(); closeDrawer(); toast(tRaw('common.saved'));
+    const merged = idx>=0 ? {...entryMap[editGameId][idx],...res.entry} : res.entry;
+    if (res.moved_from) {
+      // The copy now belongs to another edition (same entry id, new copy number)
+      if (idx>=0) entryMap[editGameId].splice(idx,1);
+      (entryMap[res.entry.game_id] = entryMap[res.entry.game_id] || []).push(merged);
+    } else if (idx>=0) entryMap[editGameId][idx]=merged;
+    else entryMap[editGameId].push(merged);
+    const movedTo = res.moved_from ? allGames.find(x=>x.id==res.entry.game_id) : null;
+    render(); closeDrawer();
+    toast(movedTo ? tRaw('ed.moved', {label: movedTo.edition_label || movedTo.title}) : tRaw('common.saved'));
   } else { toast(tRaw('common.err_prefix', {error: res.error}),true); }
 }
 
@@ -1119,7 +1345,7 @@ function setUpgrade(val) {
 setOwned('owned'); setWishlist(''); setUpgrade('');
 
 // Dropdown filter listeners
-['tb-search','tb-quality','tb-minscore','tb-completeness','tb-played','tb-tag'].forEach(id=>{
+['tb-search','tb-quality','tb-minscore','tb-completeness','tb-played','tb-tag','tb-edition','tb-variant'].forEach(id=>{
   document.getElementById(id)?.addEventListener('input',render);
   document.getElementById(id)?.addEventListener('change',render);
 });

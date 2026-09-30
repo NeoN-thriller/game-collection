@@ -20,13 +20,19 @@ $showIcons = (bool)($user['show_system_icons'] ?? 1);
 $countSystemIds = array_map(fn($s) => (int)$s['id'],
     array_filter($systems, fn($s) => (bool)$s['count_for_totals']));
 
+// Editions: in "one per game" mode linked editions count once (the unit key); in "every edition" mode per game row.
+// Copies, spent, value and condition stay per copy.
+$editionMode = ($user['edition_mode'] ?? 'one') === 'every' ? 'every' : 'one';
+$unit = $editionMode === 'one' ? editionUnitSql('g') : 'g.id';
+$nGamesKey = $editionMode === 'one' ? 'dashboard.n_games' : 'ed.n_editions';
+
 // Stats per system (all systems — cards always show their own %)
 $statsSt = db()->prepare("
     SELECT
         g.system_id,
-        COUNT(DISTINCT g.id)                                         AS total_games,
-        COUNT(DISTINCT CASE WHEN ce.owned=1 THEN g.id END)          AS owned,
-        COUNT(DISTINCT CASE WHEN ce.wishlist=1 THEN g.id END)       AS wishlisted,
+        COUNT(DISTINCT $unit)                                        AS total_games,
+        COUNT(DISTINCT CASE WHEN ce.owned=1 THEN $unit END)         AS owned,
+        COUNT(DISTINCT CASE WHEN ce.wishlist=1 THEN $unit END)      AS wishlisted,
         COUNT(CASE WHEN ce.owned=1 THEN ce.id END)                  AS total_copies,
         COUNT(CASE WHEN ce.owned=1 AND ce.upgrade=1 THEN ce.id END) AS upgrades,
         COALESCE(SUM(CASE WHEN ce.owned=1 THEN ce.price_paid END),0) AS total_spent,
@@ -223,7 +229,7 @@ $totalOwnedVal= array_sum(array_column($statsRaw,   'owned_value'));
     </div>
     <div class="overall-stat">
       <div class="overall-val"><?= fmtNum($totalGames) ?></div>
-      <div class="overall-label"><?= t('dashboard.total_games') ?></div>
+      <div class="overall-label"><?= t($editionMode === 'one' ? 'dashboard.total_games' : 'ed.total_editions') ?></div>
     </div>
     <div class="overall-stat">
       <div class="overall-val blue"><?= fmtNum($totalOwned) ?></div>
@@ -301,6 +307,7 @@ $totalOwnedVal= array_sum(array_column($statsRaw,   'owned_value'));
   }
 
   function sysCardHeader(array $s, array $st, bool $showIcons): string {
+    global $nGamesKey;
     $icon = '';
     if ($showIcons && !empty($s['icon_image'])) {
       $icon = '<img src="'.BASE_URL.'/uploads/icons/'.htmlspecialchars($s['icon_image']).'" alt="" style="width:28px;height:28px;object-fit:contain;flex-shrink:0;margin-right:8px">';
@@ -309,7 +316,7 @@ $totalOwnedVal= array_sum(array_column($statsRaw,   'owned_value'));
     $html  = '<div class="sys-card-header">';
     $html .= '<div style="display:flex;align-items:center">'.$icon.'<div>';
     $html .= '<div class="sys-name">'.htmlspecialchars($s['name']).'</div>';
-    $html .= '<div class="sys-short">'.htmlspecialchars(systemRegion($s)).' · '.t('dashboard.n_games', ['n' => fmtNum($st['total_games'])]).'</div>';
+    $html .= '<div class="sys-short">'.htmlspecialchars(systemRegion($s)).' · '.t($nGamesKey, ['n' => fmtNum($st['total_games'])]).'</div>';
     $html .= '</div></div>';
     $html .= '<div style="text-align:right"><div class="sys-pct">'.$pct.'%</div>';
     $html .= '<div class="sys-pct-label">'.(int)$st['owned'].' / '.(int)$st['total_games'].'</div></div>';

@@ -9,9 +9,22 @@ $gameId  = (int)($body['game_id'] ?? 0);
 $copyNum = max(1, (int)($body['copy_number'] ?? 1));
 if (!$gameId) jsonOut(['ok'=>false,'error'=>tRaw('api.invalid_game')], 400);
 
-$chk = db()->prepare("SELECT id FROM games WHERE id=?");
+$chk = db()->prepare("SELECT id, group_id FROM games WHERE id=?");
 $chk->execute([$gameId]);
-if (!$chk->fetch()) jsonOut(['ok'=>false,'error'=>tRaw('api.game_not_found')], 404);
+$game = $chk->fetch();
+if (!$game) jsonOut(['ok'=>false,'error'=>tRaw('api.game_not_found')], 404);
+
+// Editions: move this copy to another edition of the same group (keeps the entry id, so grading, photos and notes stay)
+$moveTo = (int)($body['move_to_game_id'] ?? 0);
+if ($moveTo === $gameId) $moveTo = 0;
+if ($moveTo) {
+    $mv = db()->prepare("SELECT group_id FROM games WHERE id=?");
+    $mv->execute([$moveTo]);
+    $targetGroup = $mv->fetchColumn();
+    if ($game['group_id'] === null || $targetGroup === false || (string)$targetGroup !== (string)$game['group_id']) {
+        jsonOut(['ok'=>false,'error'=>tRaw('api.invalid_game')], 400);
+    }
+}
 
 // Only the fields present in the request are written, so quick toggles
 // (owned / wishlist / upgrade) never wipe the copy's other details or its grading.
@@ -20,6 +33,8 @@ $text  = fn($v) => $v === null ? null : (string)$v;
 $fields = [];
 foreach (['owned','wishlist','upgrade'] as $f)                    if (array_key_exists($f, $body)) $fields[$f] = (int)(bool)$body[$f];
 foreach (['completeness','played_status'] as $f)                   if (array_key_exists($f, $body)) $fields[$f] = (string)($body[$f] ?? '');
+if (array_key_exists('variant', $body))      $fields['variant']      = mb_substr(trim((string)($body['variant'] ?? '')), 0, 100);
+if (array_key_exists('wishlist_any', $body)) $fields['wishlist_any'] = (int)(bool)$body['wishlist_any'];
 foreach (['price_paid','chart_price','price_min','price_max'] as $f) if (array_key_exists($f, $body)) $fields[$f] = $money($body[$f]);
 foreach (['upgrade_reason','notes','tag'] as $f)                   if (array_key_exists($f, $body)) $fields[$f] = $text($body[$f]);
 if (array_key_exists('value_price_type', $body)) {
@@ -34,9 +49,15 @@ gradingConfig(); // loads (and on first run seeds) grading data before the trans
 $pdo = db();
 $pdo->beginTransaction();
 try {
-    $find = $pdo->prepare("SELECT id FROM collection_entries WHERE user_id=? AND game_id=? AND copy_number=? FOR UPDATE");
+    $find = $pdo->prepare("SELECT id, wishlist FROM collection_entries WHERE user_id=? AND game_id=? AND copy_number=? FOR UPDATE");
     $find->execute([$user['id'], $gameId, $copyNum]);
-    $entryId = $find->fetchColumn();
+    $cur = $find->fetch();
+    $entryId = $cur ? $cur['id'] : false;
+
+    // First time on the wishlist (e.g. the ♥ in the table): "any edition" follows the user's setting for games with editions
+    if (($fields['wishlist'] ?? 0) === 1 && !array_key_exists('wishlist_any', $fields) && (!$cur || !$cur['wishlist'])) {
+        $fields['wishlist_any'] = $game['group_id'] !== null && ($user['edition_wishlist'] ?? 'any') === 'any' ? 1 : 0;
+    }
 
     if (!$entryId) {
         // New copies use the site's default price tier for "owned value" unless the request says otherwise
@@ -56,6 +77,14 @@ try {
     if (isset($body['grading']) && is_array($body['grading'])) {
         saveEntryGrading((int)$entryId, (int)$user['id'], $body['grading']);
     }
+
+    if ($moveTo) {
+        $next = $pdo->prepare("SELECT COALESCE(MAX(copy_number), 0) + 1 FROM collection_entries WHERE user_id=? AND game_id=? FOR UPDATE");
+        $next->execute([$user['id'], $moveTo]);
+        $newCopy = (int)$next->fetchColumn();
+        $pdo->prepare("UPDATE collection_entries SET game_id=?, copy_number=?, updated_at=NOW() WHERE id=?")
+            ->execute([$moveTo, $newCopy, $entryId]);
+    }
     $pdo->commit();
 } catch (Throwable $e) {
     $pdo->rollBack();
@@ -74,8 +103,9 @@ $entry = $st2->fetch();
 $entry['owned']    = (bool)$entry['owned'];
 $entry['upgrade']  = (bool)$entry['upgrade'];
 $entry['wishlist'] = (bool)$entry['wishlist'];
+$entry['wishlist_any'] = (bool)($entry['wishlist_any'] ?? false);
 $entry['photos']   = $entry['photos_raw'] ? explode('||', $entry['photos_raw']) : [];
 unset($entry['photos_raw']);
 $entry['grading']  = loadEntryGrading([$entry['id']])[(int)$entry['id']] ?? null;
 
-jsonOut(['ok'=>true,'entry'=>$entry]);
+jsonOut(['ok'=>true, 'entry'=>$entry] + ($moveTo ? ['moved_from' => ['game_id' => $gameId, 'copy_number' => $copyNum]] : []));

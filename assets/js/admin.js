@@ -79,14 +79,6 @@ function sfDate() {
 }
 
 // ── GAME LISTS ──
-function filterGames(q) {
-  q = q.toLowerCase();
-  document.querySelectorAll('#games-admin-table tbody tr').forEach(tr => {
-    const title = tr.querySelector('td:nth-child(2)')?.textContent.toLowerCase() || '';
-    tr.style.display = !q || title.includes(q) ? '' : 'none';
-  });
-}
-
 // ── PRICECHARTING QUICK IMPORT ──
 function parseCSVLine(line) {
   const result=[]; let cur='',inQ=false;
@@ -133,12 +125,13 @@ async function pcConfirm() {
   const res = document.getElementById('pc-result');
   const rows = res._rows; if (!rows) return;
   res.textContent = tRaw('import.importing');
-  const BATCH=20; let imported=0,updated=0,errors=0;
+  const BATCH=20; let imported=0,updated=0,errors=0; const sysIds=[];
   for(let i=0;i<rows.length;i+=BATCH){
     const r=await fetch(ADMIN_BASE+'/api/pc_import.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rows:rows.slice(i,i+BATCH)})}).then(r=>r.json());
-    if(r.ok){imported+=r.imported||0;updated+=r.updated||0;errors+=r.errors||0;}else errors++;
+    if(r.ok){imported+=r.imported||0;updated+=r.updated||0;errors+=r.errors||0;sysIds.push(...(r.system_ids||[]));}else errors++;
   }
   res.innerHTML=`<span style="color:var(--green)">✓ ${t('admin.pc.done', {added: imported, updated})}${errors?`, <span style="color:var(--red)">${tn('pc.res_errors', errors)}</span>`:''}.</span>`;
+  if (typeof edImportNotice === 'function') edImportNotice(res, sysIds);
 }
 
 // ── START: only what the current section shows ──
