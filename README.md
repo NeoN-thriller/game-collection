@@ -116,15 +116,22 @@ Admins see an extra **Site** group in **Settings** (General, Languages & Themes,
 
 ### Upgrading an existing install
 
-1. Back up the database.
-2. Copy the new files over the old ones (keep your `config.php`).
-3. Run the migrations in `migrations/` that you haven't run yet, in date order, e.g.:
+Admins see **Settings → Updates** (a *New* badge, and a notice on the dashboard, when a newer release is out). The site asks GitHub once a day for the latest release; the server needs outgoing HTTPS (the cURL extension, or `allow_url_fopen`).
 
-   ```bash
-   mysql -u game_user -p game_collection < migrations/2026-09_point_grading.sql
-   ```
+1. Back up the database and the `uploads/` folder.
+2. On **Settings → Updates**, fetch the new version to the server, then download the zip from that page (it's kept in `uploads/updates/`, which is never served directly).
+3. Extract it and upload the files inside its folder over the old ones. `config.php` isn't in the zip; skip `web.config` / `.htaccess` if you changed them.
+4. Open the site. If the update changes the database, admins are sent to **Settings → Updates** to run the database update; other users see a short "being updated" notice until then. Each file in `migrations/` runs once, in number order, and is recorded in the `schema_migrations` table.
 
-4. Open any page. On first load the app seeds the default grading data from `assets/grading-defaults.json`, gives each system a default format profile based on its name, and converts the old Mint / Good / Fair / Poor values to grade labels. Systems it can't match are listed under **Settings → Grading System → Format Profiles**.
+On the first page load after the point-grading update, the app also seeds the default grading data from `assets/grading-defaults.json`, gives each system a default format profile based on its name, and converts the old Mint / Good / Fair / Poor values to grade labels. Systems it can't match are listed under **Settings → Grading System → Format Profiles**.
+
+Installs from before the database updater: the first time it runs, it records which of the existing migrations your database already has (by checking the columns they add), so only the missing ones run.
+
+### Publishing a release (for the maintainer)
+
+1. Bump `APP_VERSION` in `version.php`.
+2. Database change? Add `migrations/NNN_name.sql` (the next number), make the same change in `schema.sql`, and add the file name to the `INSERT INTO schema_migrations` at the end of `schema.sql`.
+3. Commit and push, then publish a GitHub release tagged `v` + the version (e.g. `v1.1.0`). Its description is shown as the release notes. Optionally attach your own `.zip`; otherwise GitHub's source zip is used.
 
 ---
 
@@ -153,7 +160,9 @@ The `console` value must match a system's **short name** (case-insensitive). Row
 
 ```
 ├── schema.sql           Database schema (fresh installs only)
-├── migrations/          Schema updates for existing installs
+├── migrations/          Database updates for existing installs (run from Settings → Updates)
+├── version.php          The installed version (APP_VERSION), compared with the latest GitHub release
+├── updates.php          Update check, release zip download, database update runner
 ├── install.php          Setup wizard (locks itself after installing)
 ├── boot.php             Loaded first by every page: sends you to install.php while there is no config.php
 ├── index.php            Sign in / register (invite code)
@@ -178,14 +187,14 @@ The `console` value must match a system's **short name** (case-insensitive). Row
 ├── assets/js/           settings.js / admin.js (settings page), grading.js (drawer editor + scoring), grading-admin.js (grading editors)
 ├── assets/systems.json  Systems the installer offers (per maker; edit to add more)
 ├── assets/grading-defaults.json  Default grading system (labels, templates, profiles, system matching)
-└── uploads/             User photos, default images, backups
+└── uploads/             User photos, default images, backups, fetched release zips
 ```
 
 ---
 
 ## Database
 
-`schema.sql` creates 23 tables:
+`schema.sql` creates 27 tables, including:
 
 | Table | Purpose |
 |---|---|
@@ -203,6 +212,7 @@ The `console` value must match a system's **short name** (case-insensitive). Row
 | `user_played_options` | Each user's played-status labels |
 | `user_tag_options` | Each user's tag labels |
 | `app_settings` | Site-wide key/value settings (e.g. the default weight of users' own items) |
+| `schema_migrations` | Which files in `migrations/` this database already has |
 | `grade_labels` | Condition labels: name, short code, colour, and the score each one starts at |
 | `grade_templates`, `grade_categories`, `grade_defects` | How a part is graded: categories (max points) and defects (deductions) |
 | `grade_profiles`, `grade_profile_components` | Format profiles: which parts a copy has, their template and weight |

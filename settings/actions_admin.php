@@ -194,3 +194,29 @@ if ($action === 'delete_invite') {
     db()->prepare("DELETE FROM invite_codes WHERE id=? AND used_by IS NULL")->execute([$id]);
     $msg = tRaw('admin.msg_invite_deleted');
 }
+
+// ── Updates (forms on settings/s_updates.php are plain POSTs: the page shows $msg and $migrationResult) ──
+
+if ($action === 'check_updates') {
+    $c = updateCheckNow();
+    if (!$c['ok']) { $msg = tRaw('updates.err_check', ['error' => $c['error']]); $msgErr = true; }
+    else $msg = ($r = updateAvailable($c)) ? tRaw('updates.status_new', ['version' => $r['version']]) : tRaw('updates.checked_ok');
+}
+
+if ($action === 'fetch_update') {
+    $release = updateCache()['release'] ?? null;
+    if (!$release) { $msg = tRaw('updates.err_no_release'); $msgErr = true; }
+    else { [$ok, $msg] = updateDownload($release); $msgErr = !$ok; }
+}
+
+if ($action === 'delete_update') {
+    if ($path = updateZipPath((string)($_POST['file'] ?? ''))) @unlink($path);
+    $msg = tRaw('updates.dl_deleted');
+}
+
+if ($action === 'run_migrations') {
+    $migrationResult = runPendingMigrations();
+    if (!$migrationResult['ok'])    { $msg = $migrationResult['error']; $msgErr = true; }
+    elseif ($migrationResult['done']) $msg = tRaw('updates.db_done', ['n' => count($migrationResult['done'])]);
+    else                              $msg = tRaw('updates.db_nothing');
+}

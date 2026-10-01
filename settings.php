@@ -13,6 +13,8 @@ $s = (string)($_GET['s'] ?? 'account');
 if (!isset($sections[$s])) $s = 'account';
 // Admin-only section for a normal user: back to the start, without saying it exists
 if ($sections[$s]['admin'] && !isAdmin()) { header('Location: '.BASE_URL.'/settings.php'); exit; }
+// Updates: a badge while a newer release or a database update is waiting (cached check, no request to GitHub)
+if (isAdmin() && (updateAvailable(updateCache()) || pendingMigrations())) $sections['updates']['badge'] = 'updates.badge';
 $sec       = $sections[$s];
 $showAdmin = $sec['admin'] === true;
 $navKey    = fn(string $slug) => 'settings.nav.'.str_replace('-', '_', $slug);
@@ -48,6 +50,7 @@ $jsVer    = fn(string $f) => BASE_URL.'/assets/js/'.$f.'?v='.@filemtime(__DIR__.
 <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/main.css?v=<?= @filemtime(__DIR__.'/assets/css/main.css') ?>">
 <?= themeHead($user) ?>
 <?= csrfScript() ?>
+<?= $s !== 'updates' ? updateRefreshScript($user) : '' /* the Updates section checks by itself */ ?>
 <?= appScript($prefixes) ?>
 <script>window.CP = { base: <?= json_encode(BASE_URL) ?>, section: <?= json_encode($s) ?> };</script>
 </head>
@@ -70,7 +73,7 @@ $jsVer    = fn(string $f) => BASE_URL.'/assets/js/'.$f.'?v='.@filemtime(__DIR__.
     <p class="cp-group"><?= t('settings.group.'.$group) ?></p>
     <?php foreach ($slugs as $slug): ?>
     <a href="<?= BASE_URL ?>/settings.php?s=<?= $slug ?>" class="cp-link<?= $slug === $s ? ' active' : '' ?>"<?= $slug === $s ? ' aria-current="page"' : '' ?>>
-      <?= t($navKey($slug)) ?><?php if ($sections[$slug]['admin']): ?> <span class="cp-badge"><?= t('settings.admin_badge') ?></span><?php elseif (!empty($sections[$slug]['badge'])): ?> <span class="cp-badge"><?= t($sections[$slug]['badge']) ?></span><?php endif; ?>
+      <?= t($navKey($slug)) ?><?php if (!empty($sections[$slug]['badge'])): ?> <span class="cp-badge"><?= t($sections[$slug]['badge']) ?></span><?php elseif ($sections[$slug]['admin']): ?> <span class="cp-badge"><?= t('settings.admin_badge') ?></span><?php endif; ?>
     </a>
     <?php endforeach; ?>
     <?php endforeach; ?>

@@ -1,7 +1,7 @@
 -- ═══════════════════════════════════════════════════════════════════
 --  Migration: themes
 --
---  Run ONCE on an existing database (MySQL 8+ / MariaDB 10.5+).
+--  Run by Settings › Updates (or by hand, once, in number order).
 --  Back up the database first.
 --
 --  Adds users.theme (the user's own theme; NULL = follow the site
@@ -12,7 +12,7 @@
 
 SET NAMES utf8mb4;
 
--- Also created by 2026-09_point_grading.sql; harmless if it already exists
+-- Also created by 001_point_grading.sql; harmless if it already exists
 CREATE TABLE IF NOT EXISTS `app_settings` (
   `name`  varchar(64) NOT NULL,
   `value` text DEFAULT NULL,

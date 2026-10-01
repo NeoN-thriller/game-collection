@@ -16,6 +16,7 @@ const CP_ADMIN_ACTIONS = [
     'gen_invite', 'delete_invite', 'user_status', 'reset_password', 'unlock', 'unlock_all',
     'add_game', 'toggle_game', 'set_default_image', 'add_system', 'set_system_icon', 'set_system_region',
     'save_site_settings', 'upload_language', 'set_default_language', 'set_default_theme',
+    'check_updates', 'fetch_update', 'delete_update', 'run_migrations',
 ];
 
 return [
@@ -34,4 +35,5 @@ return [
     'grading-system' => ['group' => 'site',       'admin' => true,    'prefixes' => ['grading', 'ga'], 'scripts' => ['grading-admin.js']],
     'catalogue'      => ['group' => 'site',       'admin' => true,    'prefixes' => ['pc', 'import', 'ed'], 'scripts' => ['editions-admin.js']],
     'users'          => ['group' => 'site',       'admin' => true,    'prefixes' => []],
+    'updates'        => ['group' => 'site',       'admin' => true,    'prefixes' => []],
 ];

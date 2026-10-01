@@ -2,7 +2,7 @@
 --  Migration: point grading (condition labels, format profiles,
 --  component templates, per-copy grading data)
 --
---  Run ONCE on an existing database (MySQL 8+ / MariaDB 10.5+).
+--  Run by Settings › Updates (or by hand, once, in number order).
 --  Back up the database first.
 --
 --  This file only changes the schema. The default data (grade labels,

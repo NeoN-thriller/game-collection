@@ -29,7 +29,7 @@ switch ($action) {
         try {
             db()->prepare("UPDATE users SET edition_mode=?, edition_wishlist=? WHERE id=?")->execute([$mode, $wish, $user['id']]);
         } catch (PDOException) {
-            jsonOut(['ok'=>false,'error'=>tRaw('settings.err_migration', ['file' => 'migrations/2026-10_editions.sql'])]);
+            jsonOut(['ok'=>false,'error'=>tRaw('settings.err_migration')]);
         }
         jsonOut(['ok'=>true]);
         break;
@@ -43,7 +43,7 @@ switch ($action) {
             $ins = db()->prepare("INSERT INTO user_variant_options (user_id,label,sort_order) VALUES(?,?,?)");
             foreach ($labels as $i => $l) $ins->execute([$user['id'],$l,$i]);
         } catch (PDOException) {
-            jsonOut(['ok'=>false,'error'=>tRaw('settings.err_migration', ['file' => 'migrations/2026-10_editions.sql'])]);
+            jsonOut(['ok'=>false,'error'=>tRaw('settings.err_migration')]);
         }
         jsonOut(['ok'=>true]);
         break;
@@ -63,7 +63,7 @@ switch ($action) {
             // Choosing the site default stores "no choice", so the user follows it if the admin changes it
             db()->prepare("UPDATE users SET language=? WHERE id=?")->execute([$lang === siteLanguage() ? null : $lang, $user['id']]);
         } catch (PDOException) {
-            jsonOut(['ok'=>false,'error'=>tRaw('settings.err_migration', ['file' => 'migrations/2026-10_languages_settings.sql'])]);
+            jsonOut(['ok'=>false,'error'=>tRaw('settings.err_migration')]);
         }
         jsonOut(['ok'=>true]);
         break;
@@ -74,7 +74,7 @@ switch ($action) {
         try {
             db()->prepare("UPDATE users SET theme=? WHERE id=?")->execute([$theme === '' ? null : $theme, $user['id']]);
         } catch (PDOException) {
-            jsonOut(['ok'=>false,'error'=>tRaw('settings.err_migration', ['file' => 'migrations/2026-09_themes.sql'])]);
+            jsonOut(['ok'=>false,'error'=>tRaw('settings.err_migration')]);
         }
         jsonOut(['ok'=>true]);
         break;

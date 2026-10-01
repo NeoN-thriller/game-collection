@@ -1,8 +1,8 @@
 -- ═══════════════════════════════════════════════════════════════════
 --  Migration: editions + print variants
 --
---  Run ONCE on an existing database (MySQL 8+ / MariaDB 10.5+).
---  Back up the database first. Needs 2026-10_languages_settings.sql
+--  Run by Settings › Updates (or by hand, once, in number order).
+--  Back up the database first. Needs 003_languages_settings.sql
 --  to have run.
 --
 --  Editions: games that PriceCharting lists separately (original,

@@ -202,6 +202,7 @@ $totalOwnedVal= array_sum(array_column($statsRaw,   'owned_value'));
   }
 </style>
 <?= csrfScript() ?>
+<?= updateRefreshScript($user) ?>
 <?= appScript(['dashboard']) ?>
 </head>
 <body>
@@ -220,6 +221,7 @@ $totalOwnedVal= array_sum(array_column($statsRaw,   'owned_value'));
 <div class="dash-wrap">
   <div class="dash-title"><?= t('common.nav.dashboard') ?></div>
   <div class="dash-sub"><?= t('dashboard.subtitle', ['user' => $user['username']]) ?></div>
+  <?= updateNoticeHtml($user) ?>
 
   <!-- OVERALL STATS -->
   <div class="overall-grid">

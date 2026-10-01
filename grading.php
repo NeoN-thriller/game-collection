@@ -40,7 +40,7 @@ function ensureGradingSeeded(): void {
     } catch (PDOException $e) {
         if ($e->getCode() === '42S02') { // table doesn't exist
             http_response_code(500);
-            exit('<p style="font:1rem monospace;padding:40px">Database update needed: run <b>migrations/2026-09_point_grading.sql</b> on the database, then reload.</p>');
+            exit('<p style="font:1rem monospace;padding:40px">'.t('settings.err_migration').'</p>');
         }
         throw $e;
     }

@@ -1,8 +1,8 @@
 -- ═══════════════════════════════════════════════════════════════════
 --  Migration: languages + site settings
 --
---  Run ONCE on an existing database (MySQL 8+ / MariaDB 10.5+).
---  Back up the database first. Needs 2026-09_themes.sql to have run.
+--  Run by Settings › Updates (or by hand, once, in number order).
+--  Back up the database first. Needs 002_themes.sql to have run.
 --
 --  Adds users.language (the user's own language; NULL = follow the
 --  site default).

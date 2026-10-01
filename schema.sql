@@ -435,3 +435,19 @@ CREATE TABLE `user_variant_options` (
   UNIQUE KEY `uq_user_label` (`user_id`,`label`),
   CONSTRAINT `user_variant_options_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Database updates (migrations/) this schema already includes: Settings › Updates only runs the
+-- files not listed here. Adding a migration? Make the same change in this file and add its name below.
+DROP TABLE IF EXISTS `schema_migrations`;
+CREATE TABLE `schema_migrations` (
+  `filename`   varchar(190) NOT NULL,
+  `applied_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`filename`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT INTO `schema_migrations` (`filename`) VALUES
+  ('001_point_grading.sql'),
+  ('002_themes.sql'),
+  ('003_languages_settings.sql'),
+  ('004_editions.sql'),
+  ('005_photo_backups.sql');
