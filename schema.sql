@@ -347,8 +347,11 @@ CREATE TABLE `users` (
   `edition_mode` enum('one','every') NOT NULL DEFAULT 'one',
   `edition_wishlist` enum('any','exact') NOT NULL DEFAULT 'any',
   `track_variants` tinyint(1) NOT NULL DEFAULT 0,
+  `label_template_id` int(10) unsigned DEFAULT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `username` (`username`)
+  UNIQUE KEY `username` (`username`),
+  KEY `label_template_id` (`label_template_id`),
+  CONSTRAINT `users_label_template_fk` FOREIGN KEY (`label_template_id`) REFERENCES `label_templates` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 
@@ -435,3 +438,79 @@ CREATE TABLE `user_variant_options` (
   UNIQUE KEY `uq_user_label` (`user_id`,`label`),
   CONSTRAINT `user_variant_options_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- Condition reports: one public share per copy (a copy can be re-shared with a new token; old rows stay revoked)
+DROP TABLE IF EXISTS `copy_shares`;
+CREATE TABLE `copy_shares` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `entry_id` int(10) unsigned NOT NULL,
+  `user_id` int(10) unsigned NOT NULL,
+  `token` char(32) NOT NULL,
+  `active` tinyint(1) NOT NULL DEFAULT 1,
+  `mode` enum('snapshot','live') NOT NULL DEFAULT 'snapshot',
+  `snapshot` mediumtext DEFAULT NULL,
+  `for_sale` tinyint(1) NOT NULL DEFAULT 0,
+  `graded_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `revoked_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_token` (`token`),
+  KEY `entry_id` (`entry_id`),
+  KEY `user_id` (`user_id`),
+  CONSTRAINT `copy_shares_entry_fk` FOREIGN KEY (`entry_id`) REFERENCES `collection_entries` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `copy_shares_user_fk` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- Sticker sizes. user_id NULL = site-wide (added by the admin); otherwise a user's own size.
+DROP TABLE IF EXISTS `label_sizes`;
+CREATE TABLE `label_sizes` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` int(10) unsigned DEFAULT NULL,
+  `name` varchar(100) NOT NULL,
+  `width_mm` decimal(5,1) NOT NULL,
+  `height_mm` decimal(5,1) NOT NULL,
+  `sort_order` smallint(6) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `user_id` (`user_id`),
+  CONSTRAINT `label_sizes_user_fk` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT INTO `label_sizes` (`id`, `user_id`, `name`, `width_mm`, `height_mm`, `sort_order`) VALUES
+  (1, NULL, 'Dymo 99012',       89.0,  36.0, 1),
+  (2, NULL, 'Brother DK-11209', 62.0,  29.0, 2),
+  (3, NULL, 'Brother DK-11202', 62.0, 100.0, 3),
+  (4, NULL, 'A4 sheet 3×8',     70.0,  37.0, 4);
+
+
+-- Label templates. user_id NULL = site template (the admin edits it; everyone can use it);
+-- otherwise a user's own template, optionally shared (read-only) with everyone.
+DROP TABLE IF EXISTS `label_templates`;
+CREATE TABLE `label_templates` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` int(10) unsigned DEFAULT NULL,
+  `name` varchar(100) NOT NULL,
+  `size_id` int(10) unsigned DEFAULT NULL,
+  `orientation` enum('landscape','portrait') NOT NULL DEFAULT 'landscape',
+  `layout` enum('horizontal','stacked') NOT NULL DEFAULT 'horizontal',
+  `fields` text NOT NULL,
+  `colour` tinyint(1) NOT NULL DEFAULT 1,
+  `cut_line` tinyint(1) NOT NULL DEFAULT 1,
+  `shared` tinyint(1) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `user_id` (`user_id`),
+  KEY `shared` (`shared`),
+  KEY `size_id` (`size_id`),
+  CONSTRAINT `label_templates_user_fk` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `label_templates_size_fk` FOREIGN KEY (`size_id`) REFERENCES `label_sizes` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- The site's default template: every user without a default of their own uses the first site template
+INSERT INTO `label_templates` (`id`, `user_id`, `name`, `size_id`, `orientation`, `layout`, `fields`, `colour`, `cut_line`, `shared`) VALUES
+  (1, NULL, 'Default', 1, 'landscape', 'horizontal',
+   '[{"id":"score","on":true,"scale":1},{"id":"cond","on":true,"scale":1},{"id":"qr","on":true,"scale":1},{"id":"title","on":true,"scale":1},{"id":"meta","on":true,"scale":1},{"id":"date","on":true,"scale":1},{"id":"id","on":true,"scale":1}]',
+   1, 1, 0);
