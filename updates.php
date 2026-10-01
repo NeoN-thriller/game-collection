@@ -17,6 +17,7 @@ const LEGACY_MIGRATIONS = [
     '002_themes.sql'             => ['users', 'theme'],
     '003_languages_settings.sql' => ['users', 'language'],
     '004_editions.sql'           => ['games', 'group_id'],
+    '006_condition_report.sql'   => ['users', 'label_template_id'],
 ];
 
 // ── Database migrations ──────────────────

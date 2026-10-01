@@ -514,3 +514,21 @@ INSERT INTO `label_templates` (`id`, `user_id`, `name`, `size_id`, `orientation`
   (1, NULL, 'Default', 1, 'landscape', 'horizontal',
    '[{"id":"score","on":true,"scale":1},{"id":"cond","on":true,"scale":1},{"id":"qr","on":true,"scale":1},{"id":"title","on":true,"scale":1},{"id":"meta","on":true,"scale":1},{"id":"date","on":true,"scale":1},{"id":"id","on":true,"scale":1}]',
    1, 1, 0);
+
+
+-- Database updates (migrations/) this schema already includes: Settings › Updates only runs the
+-- files not listed here. Adding a migration? Make the same change in this file and add its name below.
+DROP TABLE IF EXISTS `schema_migrations`;
+CREATE TABLE `schema_migrations` (
+  `filename`   varchar(190) NOT NULL,
+  `applied_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`filename`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT INTO `schema_migrations` (`filename`) VALUES
+  ('001_point_grading.sql'),
+  ('002_themes.sql'),
+  ('003_languages_settings.sql'),
+  ('004_editions.sql'),
+  ('005_photo_backups.sql'),
+  ('006_condition_report.sql');

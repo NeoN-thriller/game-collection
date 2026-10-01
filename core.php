@@ -402,8 +402,13 @@ require_once __DIR__ . '/i18n.php';
 require_once __DIR__ . '/grading.php';
 require_once __DIR__ . '/editions.php';
 require_once __DIR__ . '/condition_report.php';
+require_once __DIR__ . '/version.php';
+require_once __DIR__ . '/updates.php';
 
 applyTimezone();
+
+// Database updates waiting: only sign-in and Settings › Updates (admins) work until they've run
+migrationGate();
 
 // Every state-changing request to /api/* must carry a valid CSRF token
 // (X-CSRF-Token header added by csrfScript(), or a 'csrf' form field).
