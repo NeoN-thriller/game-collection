@@ -28,9 +28,10 @@ function ownShare(int $shareId, int $uid): array {
     return $s;
 }
 
-/** What the drawer shows for a share. */
+/** What the drawer shows for a share, with the data for its label preview (assets/js/labels.js). */
 function shareOut(?array $s): ?array {
     if (!$s) return null;
+    $report = shareReport($s);
     return [
         'id'        => (int)$s['id'],
         'url'       => shareUrl($s['token']),
@@ -39,6 +40,7 @@ function shareOut(?array $s): ?array {
         'for_sale'  => (bool)$s['for_sale'],
         'graded_at' => $s['graded_at'],
         'graded_fmt'=> $s['graded_at'] ? fmtDate($s['graded_at']) : '',
+        'label'     => $report ? labelDataFromReport($report, $s['token']) : null,
     ];
 }
 
@@ -57,10 +59,11 @@ case 'get':
     $st->execute([(int)$body['entry_id'], $uid]);
     $templates = labelTemplatesFor($user);
     jsonOut(['ok'=>true, 'share'=>shareOut($st->fetch() ?: null),
-             'templates'=>array_map(fn($t) => ['id' => $t['id'], 'name' => $t['name']], $templates),
+             'templates'=>array_map(fn($t) => array_intersect_key($t, array_flip(
+                 ['id', 'name', 'width_mm', 'height_mm', 'orientation', 'layout', 'fields', 'colour', 'cut_line'])), $templates),
              'default_template_id'=>labelDefaultTemplateId($user, $templates)]);
 
-// ── New share: token + snapshot of the current grading ──
+// ── New share: live (follows the current grading); the snapshot is stored too, for switching live off ──
 case 'create':
     $e = ownEntry((int)($body['entry_id'] ?? 0), $uid);
     if (!$e['owned']) jsonOut(['ok'=>false,'error'=>tRaw('cr.err_not_owned')], 400);
@@ -68,7 +71,7 @@ case 'create':
     $st->execute([(int)$e['id'], $uid]);
     if ($existing = $st->fetch()) jsonOut(['ok'=>true, 'share'=>shareOut($existing)]);
     $report = conditionReport((int)$e['id']);
-    $pdo->prepare("INSERT INTO copy_shares (entry_id, user_id, token, mode, snapshot, for_sale, graded_at) VALUES (?,?,?,'snapshot',?,0,NOW())")
+    $pdo->prepare("INSERT INTO copy_shares (entry_id, user_id, token, mode, snapshot, for_sale, graded_at) VALUES (?,?,?,'live',?,0,NOW())")
         ->execute([(int)$e['id'], $uid, shareNewToken(), json_encode($report, JSON_UNESCAPED_UNICODE)]);
     jsonOut(['ok'=>true, 'share'=>shareOut(reloadShare((int)$pdo->lastInsertId()))]);
 

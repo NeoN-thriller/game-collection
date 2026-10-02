@@ -65,6 +65,7 @@ $lblData = [
 
     <div class="lbl-block">
       <div class="section-label"><?= t('lbl.fields') ?></div>
+      <p class="d-hint" id="lbl-join-hint" style="margin:0"><?= t('lbl.join_hint') ?></p>
       <div class="lbl-fields" id="lbl-fields"></div>
       <button type="button" class="btn-ghost btn-sm" id="lbl-reset-sizes"><?= t('lbl.reset_sizes') ?></button>
     </div>

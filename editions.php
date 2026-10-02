@@ -109,7 +109,7 @@ function editionSuggestions(?int $systemId = null): array {
     if (!$systems) return [];
     $in = implode(',', array_map('intval', array_keys($systems)));
 
-    $games = $pdo->query("SELECT id, system_id, title, group_id, edition_label, edition_sort, cib_price
+    $games = $pdo->query("SELECT id, system_id, title, group_id, edition_label, edition_sort, cib_price, pc_link
                           FROM games WHERE active=1 AND system_id IN ($in) ORDER BY id")->fetchAll();
     $groups = [];
     foreach ($pdo->query("SELECT id, system_id, title, main_game_id FROM game_groups WHERE system_id IN ($in)") as $gr) {
@@ -230,12 +230,18 @@ function editionSuggestions(?int $systemId = null): array {
     return $out;
 }
 
+/** A game's PriceCharting page (set by the CSV import) when it's an http(s) URL, else null. */
+function pcLinkSafe(?string $link): ?string {
+    return $link !== null && preg_match('~^https?://~i', $link) ? $link : null;
+}
+
 function editionMemberOut(array $g, bool $existing): array {
     return [
         'game_id'       => (int)$g['id'],
         'title'         => $g['title'],
         'edition_label' => $existing && ($g['edition_label'] ?? '') !== '' ? $g['edition_label'] : editionDefaultLabel($g['title']),
         'cib_price'     => $g['cib_price'] !== null ? (float)$g['cib_price'] : null,
+        'pc_link'       => pcLinkSafe($g['pc_link'] ?? null),
         'existing'      => $existing,
     ];
 }

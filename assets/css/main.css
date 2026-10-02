@@ -496,6 +496,8 @@ tbody tr.is-owned-wished:hover { background:color-mix(in srgb,var(--green) 12%,t
 .ed-selbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px; padding:8px 12px; border-radius:var(--radius); border:1px solid var(--accent2); background:var(--surface2); font-size:.76rem; }
 .ed-group-row td { background:var(--surface2); border-top:1px solid var(--border2); }
 .ed-member-row .ed-title { padding-left:22px; }
+.ed-pc-link { color:inherit; text-decoration:none; border-bottom:1px dotted var(--muted); }
+.ed-pc-link:hover { color:var(--accent); border-bottom-color:var(--accent); }
 .ed-indent { color:var(--muted); }
 .btn-icon.ed-danger { color:var(--red); }
 #ed-dlg .admin-table input[type="text"] { width:100%; }
@@ -893,6 +895,10 @@ tbody tr.ed-fulfilled td { opacity:.55; }
 .cr-share-qr { display:flex; align-items:center; gap:12px; }
 .cr-share-qr-img { width:96px; height:96px; background:#fff; padding:4px; border-radius:calc(var(--radius) / 2); flex-shrink:0; }
 .cr-share-qr-img svg { width:100%; height:100%; display:block; }
+.cr-share-png { background:#f3efe6; border-radius:var(--radius); padding:12px; display:flex; align-items:center; justify-content:center; min-height:90px; }
+.cr-share-png img { display:block; max-width:100%; height:auto; box-shadow:0 1px 4px rgba(0,0,0,.25); }
+.cr-share-png .d-hint { margin:0; color:#555; }
+.cr-share-png-actions { display:flex; gap:8px; flex-wrap:wrap; }
 .cr-share-update, .cr-share-actions { display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; }
 
 /* ── LABEL (assets/js/labels.js): black on white, sized in mm (print) or px (preview) ── */
@@ -936,6 +942,10 @@ tbody tr.ed-fulfilled td { opacity:.55; }
 .lbl-field { display:flex; align-items:center; gap:10px; padding:4px 0; border-bottom:1px solid var(--border); flex-wrap:wrap; }
 .lbl-field.off .lbl-check { color:var(--muted); }
 .lbl-field .lbl-check { flex:1; min-width:120px; }
+.lbl-field.joined { padding-left:14px; }
+.lbl-join-mark { color:var(--muted); margin-right:2px; }
+.lbl-join { display:flex; align-items:center; gap:5px; font-size:.68rem; color:var(--muted); cursor:pointer; white-space:nowrap; }
+.lbl-field.joined .lbl-join { color:var(--accent); }
 .lbl-check { display:flex; align-items:center; gap:8px; font-size:.76rem; color:var(--text2); cursor:pointer; }
 .lbl-check[hidden] { display:none; }
 .lbl-scale, .lbl-move { display:flex; align-items:center; gap:4px; }

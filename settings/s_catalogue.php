@@ -1,6 +1,6 @@
 <?php
-/* SETTINGS › Catalogue (admin): systems, edition suggestions, game lists per system (&sys=)
-   with edition linking, PriceCharting import */
+/* SETTINGS › Catalogue (admin): PriceCharting import, edition suggestions, systems, game lists per system (&sys=)
+   with edition linking */
 if (!defined('IN_SETTINGS')) exit;
 
 $systems = db()->query("SELECT * FROM systems ORDER BY sort_order")->fetchAll();
@@ -32,6 +32,7 @@ foreach ($games as $g) {
     $edData['games'][(int)$g['id']] = [
         'title' => $g['title'], 'group_id' => $g['group_id'] !== null ? (int)$g['group_id'] : null,
         'edition_label' => $g['edition_label'], 'cib_price' => $g['cib_price'] !== null ? (float)$g['cib_price'] : null,
+        'pc_link' => pcLinkSafe($g['pc_link']),
     ];
 }
 foreach ($groups as $gid => $gr) {
@@ -45,7 +46,7 @@ $gameRow = function (array $g, bool $member = false, bool $isMain = false) { ?>
     <tr class="<?= $member ? 'ed-member-row' : '' ?>" data-game-id="<?= $g['id'] ?>" data-linked="<?= $member ? 1 : 0 ?>"<?= $member ? ' data-group-id="'.(int)$g['group_id'].'"' : '' ?> style="<?= !$g['active']?'opacity:.45':'' ?>">
       <td><input type="checkbox" class="ed-pick" value="<?= $g['id'] ?>" aria-label="<?= t('ed.pick') ?>: <?= htmlspecialchars($g['title']) ?>"></td>
       <td style="color:var(--muted);font-size:.7rem"><?= $g['sort_order'] ?></td>
-      <td class="ed-title"><?php if ($member): ?><span class="ed-indent" aria-hidden="true">└</span> <?php endif; ?><?= htmlspecialchars($g['title']) ?></td>
+      <td class="ed-title"><?php if ($member): ?><span class="ed-indent" aria-hidden="true">└</span> <?php endif; ?><?php if ($pc = pcLinkSafe($g['pc_link'])): ?><a href="<?= htmlspecialchars($pc) ?>" target="_blank" rel="noopener" class="ed-pc-link" title="<?= t('ed.view_pc') ?>"><?= htmlspecialchars($g['title']) ?></a><?php else: ?><?= htmlspecialchars($g['title']) ?><?php endif; ?></td>
       <td><?php if ($member): ?><?= htmlspecialchars((string)$g['edition_label']) ?><?php if ($isMain): ?> <span class="chip chip-y"><?= t('ed.main_tag') ?></span><?php endif; ?><?php else: ?><span style="color:var(--muted)">—</span><?php endif; ?></td>
       <td>
         <?php if ($g['default_image']): ?>
@@ -78,6 +79,41 @@ $gameRow = function (array $g, bool $member = false, bool $isMain = false) { ?>
     </tr>
 <?php };
 ?>
+<section class="cp-card">
+  <h2><?= t('common.nav.pc_import') ?></h2>
+  <p style="font-size:.74rem;color:var(--muted);margin-bottom:14px;line-height:1.7">
+    <?= t('admin.pc.desc') ?><br>
+    <span style="color:var(--orange)"><?= t('common.currency_note', ['symbol' => setting('currency_symbol')]) ?></span>
+  </p>
+  <textarea id="pc-csv" aria-label="<?= t('common.nav.pc_import') ?>" style="width:100%;height:130px;background:var(--surface);border:1px solid var(--border2);color:var(--text);font-family:var(--font-body);font-size:.7rem;padding:10px;resize:vertical;outline:none" placeholder="<?= t('pc.placeholder') ?>
+console,name,data-product,link,loose,cib,new,coverArt,coverArtBase64
+WiiU,007 Legends,63286,https://...,17.51,24.86,40.83,63286.jpg,data:image/jpeg;base64,..."></textarea>
+  <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+    <button class="btn btn-sm" onclick="pcPreview()"><?= t('import.preview') ?> →</button>
+    <a href="<?= BASE_URL ?>/pc_import.php" class="btn-outline" style="padding:8px 14px;font-size:.72rem"><?= t('admin.pc.full_page') ?> ↗</a>
+    <a href="<?= BASE_URL ?>/api/pc_example.php" class="btn-outline" style="padding:8px 14px;font-size:.72rem" download>⬇ <?= t('pc.example') ?></a>
+  </div>
+  <p class="ga-desc" style="margin:8px 0 0"><?= t('pc.example_note') ?></p>
+  <div id="pc-result" style="display:none;margin-top:14px;background:var(--surface2);border:1px solid var(--border2);padding:12px 16px;font-size:.75rem;line-height:1.9"></div>
+</section>
+
+<section class="cp-card" id="edition-suggestions">
+  <div class="ed-sug-head">
+    <h2 style="margin:0"><?= t('ed.sug_title') ?></h2>
+    <span class="cp-badge ed-count" id="ed-sug-count" hidden></span>
+    <select id="ed-sug-sys" aria-label="<?= t('common.col.system') ?>" style="width:auto;margin-left:auto">
+      <option value="0"<?= $edSuggestSys === 0 ? ' selected' : '' ?>><?= t('ed.sug_all_systems') ?></option>
+      <?php foreach ($systems as $sy): ?>
+      <option value="<?= $sy['id'] ?>"<?= (int)$sy['id'] === $edSuggestSys ? ' selected' : '' ?>><?= htmlspecialchars($sy['name']) ?></option>
+      <?php endforeach; ?>
+    </select>
+    <button class="btn-ghost btn-sm" type="button" id="ed-sug-scan"><?= t('ed.sug_scan') ?></button>
+  </div>
+  <p class="ga-desc" style="margin:10px 0 12px"><?= t('ed.sug_intro') ?></p>
+  <button class="btn btn-sm" type="button" id="ed-accept-exact" hidden></button>
+  <div id="ed-sug-list" aria-live="polite"></div>
+</section>
+
 <section class="cp-card">
   <h2><?= t('dashboard.systems') ?></h2>
   <form method="POST" style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
@@ -127,30 +163,13 @@ $gameRow = function (array $g, bool $member = false, bool $isMain = false) { ?>
   </table>
 </section>
 
-<section class="cp-card" id="edition-suggestions">
-  <div class="ed-sug-head">
-    <h2 style="margin:0"><?= t('ed.sug_title') ?></h2>
-    <span class="cp-badge ed-count" id="ed-sug-count" hidden></span>
-    <select id="ed-sug-sys" aria-label="<?= t('common.col.system') ?>" style="width:auto;margin-left:auto">
-      <option value="0"<?= $edSuggestSys === 0 ? ' selected' : '' ?>><?= t('ed.sug_all_systems') ?></option>
-      <?php foreach ($systems as $sy): ?>
-      <option value="<?= $sy['id'] ?>"<?= (int)$sy['id'] === $edSuggestSys ? ' selected' : '' ?>><?= htmlspecialchars($sy['name']) ?></option>
-      <?php endforeach; ?>
-    </select>
-    <button class="btn-ghost btn-sm" type="button" id="ed-sug-scan"><?= t('ed.sug_scan') ?></button>
-  </div>
-  <p class="ga-desc" style="margin:10px 0 12px"><?= t('ed.sug_intro') ?></p>
-  <button class="btn btn-sm" type="button" id="ed-accept-exact" hidden></button>
-  <div id="ed-sug-list" aria-live="polite"></div>
-</section>
-
-<section class="cp-card">
+<section class="cp-card" id="game-lists">
   <h2><?= t('admin.games.title') ?></h2>
 
   <!-- System tabs -->
   <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:16px;border-bottom:1px solid var(--border2);padding-bottom:0">
     <?php foreach ($systems as $sy): ?>
-    <a href="<?= BASE_URL ?>/settings.php?s=catalogue&amp;sys=<?= $sy['id'] ?>" <?= $sy['id']==$viewSys ? 'aria-current="page"' : '' ?> style="padding:8px 14px;font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:<?= $sy['id']==$viewSys?'var(--accent2)':'var(--muted)' ?>;border-bottom:2px solid <?= $sy['id']==$viewSys?'var(--accent2)':'transparent' ?>;white-space:nowrap;margin-bottom:-1px"><?= htmlspecialchars($sy['short_name']) ?></a>
+    <a href="<?= BASE_URL ?>/settings.php?s=catalogue&amp;sys=<?= $sy['id'] ?>#game-lists" <?= $sy['id']==$viewSys ? 'aria-current="page"' : '' ?> style="padding:8px 14px;font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:<?= $sy['id']==$viewSys?'var(--accent2)':'var(--muted)' ?>;border-bottom:2px solid <?= $sy['id']==$viewSys?'var(--accent2)':'transparent' ?>;white-space:nowrap;margin-bottom:-1px"><?= htmlspecialchars($sy['short_name']) ?></a>
     <?php endforeach; ?>
   </div>
 
@@ -234,21 +253,3 @@ $gameRow = function (array $g, bool $member = false, bool $isMain = false) { ?>
     </div>
   </div>
 </div>
-
-<section class="cp-card">
-  <h2><?= t('common.nav.pc_import') ?></h2>
-  <p style="font-size:.74rem;color:var(--muted);margin-bottom:14px;line-height:1.7">
-    <?= t('admin.pc.desc') ?><br>
-    <span style="color:var(--orange)"><?= t('common.currency_note', ['symbol' => setting('currency_symbol')]) ?></span>
-  </p>
-  <textarea id="pc-csv" aria-label="<?= t('common.nav.pc_import') ?>" style="width:100%;height:130px;background:var(--surface);border:1px solid var(--border2);color:var(--text);font-family:var(--font-body);font-size:.7rem;padding:10px;resize:vertical;outline:none" placeholder="<?= t('pc.placeholder') ?>
-console,name,data-product,link,loose,cib,new,coverArt,coverArtBase64
-WiiU,007 Legends,63286,https://...,17.51,24.86,40.83,63286.jpg,data:image/jpeg;base64,..."></textarea>
-  <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-    <button class="btn btn-sm" onclick="pcPreview()"><?= t('import.preview') ?> →</button>
-    <a href="<?= BASE_URL ?>/pc_import.php" class="btn-outline" style="padding:8px 14px;font-size:.72rem"><?= t('admin.pc.full_page') ?> ↗</a>
-    <a href="<?= BASE_URL ?>/api/pc_example.php" class="btn-outline" style="padding:8px 14px;font-size:.72rem" download>⬇ <?= t('pc.example') ?></a>
-  </div>
-  <p class="ga-desc" style="margin:8px 0 0"><?= t('pc.example_note') ?></p>
-  <div id="pc-result" style="display:none;margin-top:14px;background:var(--surface2);border:1px solid var(--border2);padding:12px 16px;font-size:.75rem;line-height:1.9"></div>
-</section>

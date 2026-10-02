@@ -7,6 +7,10 @@
 const ED_API = BASE + '/api/editions.php';
 
 function edEsc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+/** A title, linked to its PriceCharting page when the import gave one (opens in a new tab). */
+function edTitleHtml(title, link) {
+  return link ? `<a href="${edEsc(link)}" target="_blank" rel="noopener" class="ed-pc-link" title="${t('ed.view_pc')}">${edEsc(title)}</a>` : edEsc(title);
+}
 function edToast(msg, err = false) { if (typeof toast === 'function') toast(msg, err); }
 
 async function edPost(action, data = {}) {
@@ -63,7 +67,7 @@ function edRenderSuggestions() {
     const rows = s.members.map(m => `
       <tr${m.existing ? ' class="ed-existing"' : ''}>
         <td><input type="radio" name="ed-main-${i}" value="${m.game_id}" ${+m.game_id === +s.main_game_id ? 'checked' : ''} aria-label="${t('ed.main')}: ${edEsc(m.title)}"></td>
-        <td>${edEsc(m.title)}</td>
+        <td>${edTitleHtml(m.title, m.pc_link)}</td>
         <td><input type="text" class="ed-label" data-game="${m.game_id}" value="${edEsc(m.edition_label)}" maxlength="100" aria-label="${t('ed.col_label')}: ${edEsc(m.title)}"></td>
         <td style="text-align:right;white-space:nowrap">${m.cib_price !== null ? money(m.cib_price) : '—'}</td>
       </tr>`).join('');
@@ -263,7 +267,7 @@ function edOpenDialog(st) {
     const label = g.group_id && g.edition_label ? g.edition_label : edDefaultLabel(g.title);
     return `<tr>
       <td><input type="radio" name="ed-dlg-main" value="${id}" ${+id === +st.main ? 'checked' : ''} aria-label="${t('ed.main')}: ${edEsc(g.title)}"></td>
-      <td>${edEsc(g.title)}</td>
+      <td>${edTitleHtml(g.title, g.pc_link)}</td>
       <td><input type="text" class="ed-dlg-label" data-game="${id}" value="${edEsc(label)}" maxlength="100" aria-label="${t('ed.col_label')}: ${edEsc(g.title)}"></td>
     </tr>`;
   }).join('');

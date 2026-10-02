@@ -27,7 +27,6 @@ return [
     'labels'         => ['group' => 'collection', 'admin' => false,   'prefixes' => ['settings', 'lbl'], 'scripts' => ['vendor/qrcode.js', 'labels.js', 'labels-editor.js'], 'badge' => 'settings.badge_new'],
     'options'        => ['group' => 'collection', 'admin' => false,   'prefixes' => ['settings']],
     'editions'       => ['group' => 'collection', 'admin' => false,   'prefixes' => ['settings', 'ed'], 'badge' => 'settings.badge_new'],
-    'tags'           => ['group' => 'collection', 'admin' => false,   'prefixes' => ['settings']],
     'systems'        => ['group' => 'collection', 'admin' => false,   'prefixes' => ['settings']],
     'columns'        => ['group' => 'collection', 'admin' => false,   'prefixes' => ['settings']],
     'backup'         => ['group' => 'collection', 'admin' => false,   'prefixes' => ['settings', 'import']],

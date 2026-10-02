@@ -10,6 +10,7 @@ $user = requireAuth();
 
 $sections = require __DIR__ . '/settings/sections.php';
 $s = (string)($_GET['s'] ?? 'account');
+if ($s === 'tags') $s = 'options';   // tags moved into Completeness, Played & Tags
 if (!isset($sections[$s])) $s = 'account';
 // Admin-only section for a normal user: back to the start, without saying it exists
 if ($sections[$s]['admin'] && !isAdmin()) { header('Location: '.BASE_URL.'/settings.php'); exit; }

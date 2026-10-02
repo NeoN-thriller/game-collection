@@ -7,6 +7,8 @@
    ═══════════════════════════════════════════ */
 
 const LABEL_FIELDS = ['score', 'cond', 'qr', 'title', 'meta', 'date', 'id'];
+/** How fields were grouped into columns before templates had a join flag (see labelNormaliseFields()). */
+const LABEL_FIELD_GROUPS = ['score' => 'score', 'cond' => 'score', 'qr' => 'qr', 'title' => 'text', 'meta' => 'text', 'date' => 'text', 'id' => 'text'];
 
 /** Human-friendly report id from a token: "7F2A-91C0". Not a secret; the full token grants access. */
 function shareReportId(string $token): string {
@@ -90,7 +92,8 @@ function conditionReport(int $entryId): ?array {
         $label = $labelsById[(int)$e['grade_label_id']];
     }
     $profileId = $e['grade_profile_id'] !== null ? (int)$e['grade_profile_id'] : null;
-    $profile   = $cfg['profiles'][$profileId] ?? null;
+    // (no null array key: PHP 8.5 prints a deprecation for it, which broke the JSON of api/share.php)
+    $profile   = $profileId !== null ? ($cfg['profiles'][$profileId] ?? null) : null;
 
     // Parts: scored the same way as on save; missing parts (qty 0) are listed but not scored
     $parts = [];
@@ -216,7 +219,12 @@ function labelDataFromReport(array $r, string $token): array {
 
 // ── Label templates and sizes ────────────
 
-/** Fields in print order with on/off and scale (0.5–2.0, step 0.1); unknown ids dropped, missing ones added (off). */
+/**
+ * Fields in print order with on/off, scale (0.5–2.0, step 0.1) and join (horizontal layout: same column as
+ * the visible field above); unknown ids dropped, missing ones added (off). Templates from before the join
+ * flag get the old grouping: score + condition together, the QR code alone, the text fields together.
+ * Mirror of withJoins() in assets/js/labels.js.
+ */
 function labelNormaliseFields(mixed $fields): array {
     $out = []; $seen = [];
     foreach (is_array($fields) ? $fields : [] as $f) {
@@ -224,9 +232,17 @@ function labelNormaliseFields(mixed $fields): array {
         if (!in_array($id, LABEL_FIELDS, true) || isset($seen[$id])) continue;
         $seen[$id] = true;
         $scale = round(max(0.5, min(2.0, (float)($f['scale'] ?? 1))), 1);
-        $out[] = ['id' => $id, 'on' => !empty($f['on']), 'scale' => $scale];
+        $out[] = ['id' => $id, 'on' => !empty($f['on']), 'scale' => $scale, 'join' => isset($f['join']) ? !empty($f['join']) : null];
     }
-    foreach (LABEL_FIELDS as $id) if (!isset($seen[$id])) $out[] = ['id' => $id, 'on' => false, 'scale' => 1.0];
+    foreach (LABEL_FIELDS as $id) if (!isset($seen[$id])) $out[] = ['id' => $id, 'on' => false, 'scale' => 1.0, 'join' => null];
+    $prevOn = null;
+    foreach ($out as $i => &$f) {
+        $group = LABEL_FIELD_GROUPS[$f['id']];
+        $prev  = $f['on'] ? $prevOn : ($i > 0 ? LABEL_FIELD_GROUPS[$out[$i - 1]['id']] : null);
+        if ($f['join'] === null) $f['join'] = $i > 0 && $prev === $group && $group !== 'qr';
+        if ($f['on']) $prevOn = $group;
+    }
+    unset($f);
     return $out;
 }
 

@@ -24,10 +24,13 @@ const LEGACY_MIGRATIONS = [
 // Each file in migrations/ runs once, in number order (001_, 002_, …), and is then recorded
 // in schema_migrations. schema.sql lists the ones it already includes, so fresh installs skip them.
 
-/** Every migration file name, in the order they must run. */
+/**
+ * Every migration file name, in the order they must run. Only numbered files (001_name.sql) count:
+ * files left on the server under an old name (e.g. 2026-10_editions.sql) are ignored.
+ */
 function migrationFiles(): array {
     $files = array_filter(array_map('basename', glob(MIGRATIONS_DIR . '*.sql') ?: []),
-                          fn($f) => preg_match('/^[A-Za-z0-9_.-]+\.sql$/', $f));
+                          fn($f) => preg_match('/^\d{3}_[A-Za-z0-9_.-]+\.sql$/', $f));
     usort($files, 'strnatcmp');
     return $files;
 }

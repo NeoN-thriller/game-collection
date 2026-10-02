@@ -180,6 +180,8 @@ function verifyCsrf(): void {
 function jsonOut(mixed $data, int $code = 200): never {
     http_response_code($code);
     header('Content-Type: application/json');
+    // Drop anything printed before (e.g. a PHP warning with display_errors on): it would break the JSON
+    while (ob_get_level()) ob_end_clean();
     echo json_encode($data);
     exit;
 }

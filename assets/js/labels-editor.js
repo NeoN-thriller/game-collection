@@ -80,11 +80,15 @@ function leRenderSizes() {
 }
 
 function leRenderFields() {
-  const c = LE.cur, ro = !c.editable;
+  const c = LE.cur, ro = !c.editable, cols = c.layout !== 'stacked';
+  c.fields = Labels.withJoins(c.fields);
+  leEl('lbl-join-hint').hidden = !cols;
   leEl('lbl-fields').innerHTML = c.fields.map((f, i) => {
     const pct = Math.round(f.scale * 100);
-    return `<div class="lbl-field${f.on ? '' : ' off'}" data-i="${i}">
-      <label class="lbl-check"><input type="checkbox" data-f="on"${f.on ? ' checked' : ''}${ro ? ' disabled' : ''}> ${t('lbl.f_' + f.id)}</label>
+    const joined = cols && i > 0 && f.join;
+    return `<div class="lbl-field${f.on ? '' : ' off'}${joined ? ' joined' : ''}" data-i="${i}">
+      <label class="lbl-check"><input type="checkbox" data-f="on"${f.on ? ' checked' : ''}${ro ? ' disabled' : ''}> ${joined ? '<span class="lbl-join-mark" aria-hidden="true">└</span>' : ''}${t('lbl.f_' + f.id)}</label>
+      ${cols && i > 0 ? `<label class="lbl-join" title="${t('lbl.join_title')}"><input type="checkbox" data-f="join"${f.join ? ' checked' : ''}${ro ? ' disabled' : ''}> ${t('lbl.join')}</label>` : ''}
       <span class="lbl-scale">
         <button type="button" class="lbl-sq" data-f="minus" aria-label="${t('lbl.smaller')}"${ro || f.scale <= 0.5 ? ' disabled' : ''}>−</button>
         <span class="lbl-pct${pct !== 100 ? ' changed' : ''}">${pct}%</span>
@@ -200,9 +204,10 @@ function leInit() {
     LE.cur.orientation = r.value;
     LE.cur.layout = r.value === 'portrait' ? 'stacked' : 'horizontal';   // the matching layout; can be changed after
     document.querySelectorAll('input[name="lbl-layout"]').forEach(x => { x.checked = x.value === LE.cur.layout; });
+    leRenderFields();
     leChanged();
   }));
-  document.querySelectorAll('input[name="lbl-layout"]').forEach(r => r.addEventListener('change', () => { LE.cur.layout = r.value; leChanged(); }));
+  document.querySelectorAll('input[name="lbl-layout"]').forEach(r => r.addEventListener('change', () => { LE.cur.layout = r.value; leRenderFields(); leChanged(); }));
   leEl('lbl-colour').addEventListener('change', e => { LE.cur.colour = e.target.checked; leChanged(); });
   leEl('lbl-cut').addEventListener('change', e => { LE.cur.cut_line = e.target.checked; leChanged(); });
   leEl('lbl-shared').addEventListener('change', e => { LE.cur.shared = e.target.checked; LE.dirty = true; });
@@ -235,7 +240,7 @@ function leInit() {
     leRenderEditor();
   });
 
-  // Fields: on/off, size −/+, order ↑/↓
+  // Fields: on/off, same column as above, size −/+, order ↑/↓
   leEl('lbl-fields').addEventListener('click', e => {
     const b = e.target.closest('button[data-f]');
     if (!b) return;
@@ -248,8 +253,9 @@ function leInit() {
     leChanged();
   });
   leEl('lbl-fields').addEventListener('change', e => {
-    if (e.target.dataset.f !== 'on') return;
-    LE.cur.fields[+e.target.closest('[data-i]').dataset.i].on = e.target.checked;
+    const f = e.target.dataset.f;
+    if (f !== 'on' && f !== 'join') return;
+    LE.cur.fields[+e.target.closest('[data-i]').dataset.i][f] = e.target.checked;
     leRenderFields();
     leChanged();
   });
