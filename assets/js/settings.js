@@ -208,6 +208,15 @@ async function saveEditions() {
   toast(res.ok ? tRaw('common.saved') : (res.error||tRaw('common.error')), !res.ok);
 }
 
+async function saveCompilationMode() {
+  const mode = document.querySelector('input[name="compilation_mode"]:checked')?.value || 'own';
+  const res = await fetch(`${BASE}/api/settings.php`,{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({action:'save_compilation_mode', mode})
+  }).then(r=>r.json()).catch(()=>({ok:false}));
+  toast(res.ok ? tRaw('common.saved') : (res.error||tRaw('common.error')), !res.ok);
+}
+
 async function saveVariants() {
   const labels = [...document.querySelectorAll('#variant-list .comp-label-input')].map(i=>i.value.trim()).filter(Boolean);
   const res = await fetch(`${BASE}/api/settings.php`,{

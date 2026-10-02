@@ -18,4 +18,5 @@ $games = $st->fetchAll();
 $gr = db()->prepare("SELECT id, title, sort_title, main_game_id FROM game_groups WHERE system_id=?");
 $gr->execute([$sysId]);
 
-jsonOut(['ok'=>true, 'games'=>$games, 'groups'=>$gr->fetchAll()]);
+// Compilations of this system and what they contain: [{id, items:[game ids]}]
+jsonOut(['ok'=>true, 'games'=>$games, 'groups'=>$gr->fetchAll(), 'compilations'=>compilationsOfSystem($sysId)]);

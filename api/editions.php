@@ -153,6 +153,19 @@ case 'unignore':
         return ['pairs' => count($pairs)];
     });
 
+// ── Switch a game off (e.g. a duplicate spelled differently) or back on: {game_id, active} ──
+// Same as Disable / Enable in the game list: an inactive game is hidden from the collection, wishlist and suggestions.
+case 'set_game_active':
+    $gid = (int)($body['game_id'] ?? 0);
+    $st = $pdo->prepare("UPDATE games SET active=? WHERE id=?");
+    $st->execute([!empty($body['active']) ? 1 : 0, $gid]);
+    if (!$st->rowCount()) {
+        $chk = $pdo->prepare("SELECT 1 FROM games WHERE id=?");
+        $chk->execute([$gid]);
+        if (!$chk->fetchColumn()) jsonOut(['ok'=>false,'error'=>tRaw('api.invalid_game')], 404);
+    }
+    jsonOut(['ok'=>true]);
+
 // ── Dissolve a group ─────────────────────
 case 'unlink_group':
     editionTx(function () use ($body) {

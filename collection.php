@@ -57,7 +57,7 @@ if ($trackVariants) {
 <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/main.css?v=<?= @filemtime(__DIR__.'/assets/css/main.css') ?>">
 <?= themeHead($user) ?>
 <?= csrfScript() ?>
-<?= appScript(['coll', 'drawer', 'grading', 'ed', 'cr']) ?>
+<?= appScript(['coll', 'drawer', 'grading', 'ed', 'cr', 'comp']) ?>
 </head>
 <body>
 
@@ -306,6 +306,9 @@ if ($trackVariants) {
 
       <div class="drawer-section" id="d-ed-others" hidden></div>
 
+      <!-- Compilations: what this game contains / which compilations it's in (assets/js/compilations-drawer.js) -->
+      <div class="drawer-section" id="d-comp" hidden></div>
+
       <div class="drawer-section">
         <div class="section-label"><?= t('common.col.notes') ?></div>
         <div class="field"><textarea id="d-notes" placeholder="<?= t('drawer.notes_ph') ?>"></textarea></div>
@@ -342,6 +345,7 @@ if ($trackVariants) {
 <script>window.GRADING = <?= gradingClientJson($user) ?>;</script>
 <script src="<?= BASE_URL ?>/assets/js/grading.js?v=<?= @filemtime(__DIR__.'/assets/js/grading.js') ?>"></script>
 <script src="<?= BASE_URL ?>/assets/js/editions-drawer.js?v=<?= @filemtime(__DIR__.'/assets/js/editions-drawer.js') ?>"></script>
+<script src="<?= BASE_URL ?>/assets/js/compilations-drawer.js?v=<?= @filemtime(__DIR__.'/assets/js/compilations-drawer.js') ?>"></script>
 <script src="<?= BASE_URL ?>/assets/js/lightbox.js?v=<?= @filemtime(__DIR__.'/assets/js/lightbox.js') ?>"></script>
 <script src="<?= BASE_URL ?>/assets/js/vendor/qrcode.js?v=<?= @filemtime(__DIR__.'/assets/js/vendor/qrcode.js') ?>"></script>
 <script src="<?= BASE_URL ?>/assets/js/labels.js?v=<?= @filemtime(__DIR__.'/assets/js/labels.js') ?>"></script>
@@ -358,6 +362,7 @@ const EDITION_MODE   = <?= json_encode($editionMode) ?>;   // 'one' = editions f
 const TRACK_VARIANTS = <?= json_encode($trackVariants) ?>;
 const VARIANT_OPTS   = <?= json_encode($variantOpts, JSON_HEX_TAG | JSON_HEX_AMP) ?>;
 const EDITION_WISHLIST = <?= json_encode(($user['edition_wishlist'] ?? 'any') === 'exact' ? 'exact' : 'any') ?>;
+const COMP_MODE = <?= json_encode(compilationMode($user)) ?>;   // 'own' = a compilation is its own game · 'contents' = its games count as owned
 window.USER_AUCTION_SITES = <?= json_encode(json_decode($user['auction_sites'] ?? '[]', true) ?: []) ?>;
 
 let allGames  = [];
@@ -387,6 +392,7 @@ async function init() {
   ]);
   allGames = gRes.games || [];
   buildGroups(gRes.groups || []);
+  buildCompilations(gRes.compilations || []);
   buildEntryMap(eRes.entries || []);
 
   // Apply column prefs from saved cols_collection
@@ -520,10 +526,46 @@ function toggleGroup(id) {
   render();
 }
 
+// ── COMPILATIONS ──
+// compMap: compilation game id → [ids of the games inside] · inComps: game id → [compilations it's in]
+let compMap = {}, inComps = {};
+function buildCompilations(list) {
+  const active = new Set(allGames.map(g => +g.id));
+  compMap = {}; inComps = {};
+  list.forEach(c => {
+    if (!active.has(+c.id)) return;
+    const items = c.items.filter(id => active.has(+id));
+    if (!items.length) return;
+    compMap[c.id] = items;
+    items.forEach(id => (inComps[id] ||= []).push(+c.id));
+  });
+}
+const isComp     = g => !!compMap[g.id];
+const ownsCopy   = id => (entryMap[id] || []).some(c => c.owned);
+/** Compilations containing this game that the user owns. */
+const viaComps   = id => (inComps[id] || []).filter(ownsCopy);
+const gameById   = id => allGames.find(x => +x.id === +id);
+/** "Count the games inside" mode: owned through a compilation, without a copy of its own. */
+const ownedVia   = id => COMP_MODE === 'contents' && !ownsCopy(id) && viaComps(id).length > 0;
+
 // An item is one table row at the top level: {game} or, in "one per game" mode, {group}
 const itemGames  = it => it.group ? it.group.members : [it.game];
 const itemCopies = it => itemGames(it).flatMap(g => entryMap[g.id] || []);
-const itemOwned  = it => itemCopies(it).some(c => c.owned);
+const itemOwned  = it => itemCopies(it).some(c => c.owned) || itemGames(it).some(g => ownedVia(g.id));
+/** Items that count in the progress totals: in "count the games inside" mode compilations don't. */
+const countsInTotals = it => COMP_MODE !== 'contents' || !(it.game && isComp(it.game));
+
+/** Chips after a title: "Compilation · 2 games" and "In Arkane Collection" (a compilation the user owns). */
+function compChips(g) {
+  let html = '';
+  if (isComp(g)) html += ` <span class="chip chip-blue" title="${escAttr(compMap[g.id].map(id => gameById(id)?.title || '').join(', '))}">${t('comp.chip', {n: fmtNum(compMap[g.id].length)})}</span>`;
+  const via = viaComps(g.id);
+  if (via.length) {
+    const names = via.map(id => gameById(id)?.title || '');
+    html += ` <span class="chip chip-y comp-via" title="${escAttr(names.join(', '))}">${t('comp.in_your', {title: names[0]})}${via.length > 1 ? ' +' + (via.length - 1) : ''}</span>`;
+  }
+  return html;
+}
 /** Lowest price of the item's games (a group costs its cheapest edition); null when none has one. */
 function itemPrice(it, field) {
   const v = itemGames(it).map(g => parseFloat(g[field])).filter(n => !isNaN(n));
@@ -650,7 +692,8 @@ function variantText(copies) {
 /** One game (or one edition) row. opts: {title, edition, child} */
 function gameRow(g, opts) {
     const copies    = entryMap[g.id] || [];
-    const owned     = copies.some(c=>c.owned);
+    const via       = ownedVia(g.id);                 // owned through a compilation (no copy of its own)
+    const owned     = copies.some(c=>c.owned) || via;
     const ownedCopies = copies.filter(c=>c.owned);
     const c1        = copies.find(c=>c.copy_number==1) || {};
     const wishlist  = copies.some(c=>c.wishlist);
@@ -733,13 +776,13 @@ function gameRow(g, opts) {
     const playCell = played ? `<span style="font-size:.68rem;color:var(--wiiu)">${esc(played)}</span>` : DASH;
     const upReason = copies.find(c=>c.upgrade)?.upgrade_reason || '';
     const variants = variantText(copies);
-    const titleHtml = opts.child
+    const titleHtml = (opts.child
       ? `<span class="ed-child-title"><span aria-hidden="true">└ </span>${esc(opts.title)}</span>`
-      : `<span class="game-num">#${String(g.sort_order).padStart(3,'0')}</span>${esc(opts.title)}`;
+      : `<span class="game-num">#${String(g.sort_order).padStart(3,'0')}</span>${esc(opts.title)}`) + compChips(g);
 
     tr.innerHTML = `
       <td data-col="img">${imgCell}</td>
-      <td data-col="owned" style="text-align:center"><div class="owned-check ${owned?'checked':''}" onclick="toggleOwned(${g.id})">${owned?'✓':''}</div></td>
+      <td data-col="owned" style="text-align:center"><div class="owned-check ${owned?'checked':''}${via?' comp-via-check':''}" onclick="toggleOwned(${g.id})"${via ? ` title="${escAttr(tRaw('comp.owned_via_hint'))}"` : ''}>${owned?'✓':''}</div></td>
       <td data-col="wishlist" style="text-align:center"><div class="wish-check ${wishlist?'checked':''}" onclick="toggleWishlist(${g.id})">${wishlist?'♥':''}</div></td>
       <td data-col="upgrade" style="text-align:center"><div class="upgrade-check ${upgrade?'checked':''}" onclick="toggleUpgrade(${g.id})" title="${escAttr(upReason)}">${upgrade?'↑':''}</div></td>
       <td data-col="title" class="td-title" style="cursor:pointer" onclick="openDrawer(${g.id})">${titleHtml}</td>
@@ -775,7 +818,7 @@ function groupRow(grp, open) {
   const games  = grp.members;
   const copies = games.flatMap(g => entryMap[g.id] || []);
   const ownedCopies = copies.filter(c => c.owned);
-  const owned    = ownedCopies.length > 0;
+  const owned    = itemOwned({ group: grp });   // a copy of any edition, or (counting mode) through a compilation
   const wishlist = copies.some(c => c.wishlist);
   const upgrade  = copies.some(c => c.upgrade);
 
@@ -797,6 +840,7 @@ function groupRow(grp, open) {
   const ownedLabels = games.filter(g => (entryMap[g.id] || []).some(c => c.owned)).map(g => g.edition_label).filter(Boolean);
   const variants = variantText(copies);
   const n = games.length;
+  const grpVia = [...new Set(games.flatMap(g => viaComps(g.id)))];   // owned compilations containing an edition
 
   tr.innerHTML = `
     <td data-col="img">${imgCell}</td>
@@ -807,7 +851,7 @@ function groupRow(grp, open) {
       <button type="button" class="ed-toggle" aria-expanded="${open}" title="${escAttr(tRaw('ed.expand'))}">
         <span>${esc(grp.title)}</span>
         <span class="chip chip-blue">${t('ed.n_editions', {n: fmtNum(n)})} ${open ? '▾' : '▸'}</span>
-      </button>
+      </button>${grpVia.length ? ` <span class="chip chip-y comp-via">${t('comp.in_your', {title: gameById(grpVia[0])?.title || ''})}</span>` : ''}
     </td>
     <td data-col="edition"><span class="ed-label">${ownedLabels.length ? esc(ownedLabels.join(', ')) : DASH}</span></td>
     <td data-col="variant"><span class="ed-label">${variants ? esc(variants) : DASH}</span></td>
@@ -829,7 +873,7 @@ function groupRow(grp, open) {
 }
 
 function updateStats(filtered) {
-  const units     = allItems();
+  const units     = allItems().filter(countsInTotals);
   const ownedN    = units.filter(itemOwned).length;
   const tot       = units.length;
   const allCopies = Object.values(entryMap).flat().filter(c=>c.owned);
@@ -866,7 +910,7 @@ function updateStats(filtered) {
   document.getElementById('st-cib-owned').textContent = money(ownedValue, 0);
 
   const fCopies   = filtered.flatMap(itemCopies);
-  const fOwned    = filtered.filter(itemOwned);
+  const fOwned    = filtered.filter(countsInTotals).filter(itemOwned);
   const fSpend    = fCopies.reduce((s,c)=>s+(parseFloat(c.price_paid)||0),0);
   const fCibAll   = filtered.reduce((s,it)=>s+(itemPrice(it,'cib_price')||0),0);
   document.getElementById('sum-show').textContent  = fmtNum(filtered.length);
@@ -1001,6 +1045,10 @@ function openDrawer(gameId) {
     linksList.innerHTML += `<a href="${url}" target="_blank" style="font-size:.75rem;color:var(--text2);text-decoration:none">🛒 ${esc(site.label)}: ${esc(g.title)}</a>`;
   });
   extWrap.style.display = 'block';
+
+  // Compilations: what this game contains, and which compilations it's in
+  const compItem = id => ({ id, title: gameById(id)?.title || '', owned: ownsCopy(id) });
+  CompDrawer.load({ contains: (compMap[g.id] || []).map(compItem), alsoIn: (inComps[g.id] || []).map(compItem), onOpen: id => openDrawer(id) });
 
   editCopy = 1;
   renderCopyTabs(); loadCopyIntoForm(editCopy);

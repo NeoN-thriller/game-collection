@@ -31,6 +31,12 @@ Built with plain PHP, MySQL and vanilla JavaScript. No frameworks, no build step
 - Switching method never loses data: point grades and simple labels are both kept on every copy.
 - The admin manages the **grade labels** (names, colours, the score each one starts at), **format profiles** (which parts a copy has and their weights, with a default per system) and **component templates** (categories and defects). Defaults for cartridges, discs, UMDs, big-box PC games and boxed consoles are included.
 
+### Compilations
+- A compilation is a catalogue game that contains other games of the same system (e.g. *Dishonored Prey: The Arkane Collection* → *Dishonored [Definitive Edition]* and *Prey*). A game can be in any number of compilations.
+- **Admin:** Settings → Catalogue → Compilations suggests likely compilations (titles with *Collection*, *Trilogy*, *Bundle*, … or with other games' names in them); accept, adjust or reject each one. Any game's contents can be edited with the **Contents** button in the game list.
+- **Per user** (Settings → Editions & Variants): a compilation counts as its own game, or the games inside it count as owned (the compilation itself is then left out of the game totals).
+- The drawer shows what a compilation contains and which compilations a game is in. A wished game stays on the wishlist when you own it in a compilation, with an "In your …" mark.
+
 ### Dashboard
 - Overall totals: systems, games, owned, completion %, copies, upgrades, wishlisted, total spent, owned value, and average condition score.
 - A completion card per system with progress, spend, value, condition breakdown (per grade label), average score, and counts.
@@ -150,7 +156,7 @@ The import expects a CSV with a header row. Required columns:
 console,name,data-product,link,cib,coverArtBase64
 ```
 
-Optional columns: `loose`, `new`, `coverArt`.
+Optional columns: `loose`, `new`. Other columns (such as PriceCharting's `coverArt` file name) are ignored.
 
 The `console` value must match a system's **short name** (case-insensitive). Rows with an unknown console are flagged in the preview and skipped.
 
@@ -194,7 +200,7 @@ The `console` value must match a system's **short name** (case-insensitive). Row
 
 ## Database
 
-`schema.sql` creates 27 tables, including:
+`schema.sql` creates 31 tables, including:
 
 | Table | Purpose |
 |---|---|
@@ -212,6 +218,7 @@ The `console` value must match a system's **short name** (case-insensitive). Row
 | `user_played_options` | Each user's played-status labels |
 | `user_tag_options` | Each user's tag labels |
 | `app_settings` | Site-wide key/value settings (e.g. the default weight of users' own items) |
+| `compilation_items` | What each compilation contains (compilation game → contained games) |
 | `schema_migrations` | Which files in `migrations/` this database already has |
 | `grade_labels` | Condition labels: name, short code, colour, and the score each one starts at |
 | `grade_templates`, `grade_categories`, `grade_defects` | How a part is graded: categories (max points) and defects (deductions) |

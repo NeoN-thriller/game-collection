@@ -34,7 +34,7 @@ return [
     'site-appearance'=> ['group' => 'site',       'admin' => true,    'prefixes' => []],
     'grading-system' => ['group' => 'site',       'admin' => true,    'prefixes' => ['grading', 'ga'], 'scripts' => ['grading-admin.js']],
     'label-sizes'    => ['group' => 'site',       'admin' => true,    'prefixes' => ['lbl'], 'scripts' => ['labels-editor.js']],
-    'catalogue'      => ['group' => 'site',       'admin' => true,    'prefixes' => ['pc', 'import', 'ed'], 'scripts' => ['editions-admin.js']],
+    'catalogue'      => ['group' => 'site',       'admin' => true,    'prefixes' => ['pc', 'import', 'ed', 'comp'], 'scripts' => ['editions-admin.js', 'compilations-admin.js']],
     'users'          => ['group' => 'site',       'admin' => true,    'prefixes' => []],
     'updates'        => ['group' => 'site',       'admin' => true,    'prefixes' => []],
 ];

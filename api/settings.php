@@ -34,6 +34,12 @@ switch ($action) {
         jsonOut(['ok'=>true]);
         break;
 
+    case 'save_compilation_mode':
+        $mode = ($body['mode'] ?? '') === 'contents' ? 'contents' : 'own';
+        db()->prepare("UPDATE users SET compilation_mode=? WHERE id=?")->execute([$mode, $user['id']]);
+        jsonOut(['ok'=>true]);
+        break;
+
     case 'save_variants':
         // Turning tracking off only hides the variant field; stored values on copies are kept
         $labels = array_values(array_unique(array_filter(array_map(fn($l) => mb_substr(trim((string)$l), 0, 100), $body['labels'] ?? []), fn($l)=>$l!=='')));

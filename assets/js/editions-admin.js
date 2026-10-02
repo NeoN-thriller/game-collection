@@ -35,7 +35,7 @@ function edEditionsText(group) {
 }
 
 // ══════════ SUGGESTIONS ══════════
-const edSug = { list: [], done: {} };   // done: key → {text, undo}
+const edSug = { list: [], done: {} };   // done: key → {text, undo}; a suggestion's .disabled = games switched off from its card
 const ED_LEVEL_CHIP = { exact: 'chip-y', similar: 'chip-blue', partial: 'chip-up' };
 
 async function edLoadSuggestions() {
@@ -70,7 +70,11 @@ function edRenderSuggestions() {
         <td>${edTitleHtml(m.title, m.pc_link)}</td>
         <td><input type="text" class="ed-label" data-game="${m.game_id}" value="${edEsc(m.edition_label)}" maxlength="100" aria-label="${t('ed.col_label')}: ${edEsc(m.title)}"></td>
         <td style="text-align:right;white-space:nowrap">${m.cib_price !== null ? money(m.cib_price) : '—'}</td>
+        <td style="text-align:right">${m.existing ? '' : `<button class="btn-icon" type="button" data-disable="${i}" data-game="${m.game_id}" title="${t('ed.disable_title')}">${t('ed.disable')}</button>`}</td>
       </tr>`).join('');
+    const disabled = (s.disabled || []).map(m => `
+      <div class="ed-sug-disabled">${t('ed.disabled_one', { title: m.title })}
+        <button class="btn-ghost btn-sm" type="button" data-enable="${i}" data-game="${m.game_id}">${t('ed.undo')}</button></div>`).join('');
     return `
     <article class="ed-sug" data-i="${i}">
       <div class="ed-sug-top">
@@ -80,9 +84,9 @@ function edRenderSuggestions() {
         <span class="ga-desc" style="margin:0">${t('ed.why_' + s.level)}${all ? ' · ' + edEsc(s.system_name) : ''}</span>
       </div>
       <table class="admin-table">
-        <thead><tr><th>${t('ed.main')}</th><th>${t('ed.col_title')}</th><th>${t('ed.col_label')}</th><th style="text-align:right">${t('common.col.cib_price')}</th></tr></thead>
+        <thead><tr><th>${t('ed.main')}</th><th>${t('ed.col_title')}</th><th>${t('ed.col_label')}</th><th style="text-align:right">${t('common.col.cib_price')}</th><th></th></tr></thead>
         <tbody>${rows}</tbody>
-      </table>
+      </table>${disabled}
       <div class="ed-sug-actions">
         <button class="btn-ghost btn-sm" type="button" data-ignore="${i}">${t('ed.not_editions')}</button>
         <button class="btn btn-sm" type="button" data-link="${i}">${t('ed.link')}</button>
@@ -125,6 +129,55 @@ async function edIgnoreSuggestion(i) {
   return true;
 }
 
+/**
+ * Switches a game in suggestion i off (a duplicate, not an edition) and takes it out of the card.
+ * A card left with nothing to link is closed, with Undo.
+ */
+async function edDisableMember(i, gameId) {
+  const s = edSug.list[i];
+  const m = s?.members.find(x => +x.game_id === gameId);
+  if (!m) return false;
+  const msg = m.copies > 0 ? tRaw('ed.confirm_disable_copies', { title: m.title, n: fmtNum(m.copies) })
+                           : tRaw('ed.confirm_disable', { title: m.title });
+  if (!confirm(msg)) return false;
+  if (!(await edPost('set_game_active', { game_id: gameId, active: 0 })).ok) return false;
+  // Keep what was typed in the card: it's drawn again without this game
+  const card = document.querySelector(`.ed-sug[data-i="${i}"]`);
+  card?.querySelectorAll('.ed-label').forEach(inp => {
+    const x = s.members.find(y => +y.game_id === +inp.dataset.game);
+    if (x) x.edition_label = inp.value;
+  });
+  const name = card?.querySelector('.ed-sug-name'), main = card?.querySelector(`input[name="ed-main-${i}"]:checked`);
+  if (name) s.title = name.value;
+  if (main) s.main_game_id = +main.value;
+  s.members = s.members.filter(x => x !== m);
+  (s.disabled ||= []).push(m);
+  if (+s.main_game_id === gameId) s.main_game_id = s.members[0]?.game_id ?? null;
+  if (!s.members.some(x => !x.existing) || s.members.length < 2) {
+    const games = s.disabled.slice();
+    edSug.done[s.key] = {
+      text: tRaw('ed.disabled_result', { titles: games.map(x => x.title).join(', ') }),
+      undo: async () => {
+        for (const g of games) if (!(await edPost('set_game_active', { game_id: g.game_id, active: 1 })).ok) return { ok: false };
+        s.members.push(...games);
+        s.disabled = [];
+        return { ok: true };
+      },
+    };
+  }
+  return true;
+}
+
+/** Undo for one switched-off game in a card that's still open. */
+async function edEnableMember(i, gameId) {
+  const s = edSug.list[i];
+  const m = (s?.disabled || []).find(x => +x.game_id === gameId);
+  if (!m || !(await edPost('set_game_active', { game_id: gameId, active: 1 })).ok) return false;
+  s.disabled = s.disabled.filter(x => x !== m);
+  s.members.push(m);
+  return true;
+}
+
 async function edAfterChange() {
   edRenderSuggestions();
   await edRefreshList();
@@ -138,6 +191,8 @@ function edInitSuggestions() {
     b.disabled = true;
     if (b.dataset.link !== undefined)   { if (await edLinkSuggestion(+b.dataset.link)) await edAfterChange(); }
     if (b.dataset.ignore !== undefined) { if (await edIgnoreSuggestion(+b.dataset.ignore)) await edAfterChange(); }
+    if (b.dataset.disable !== undefined) { if (await edDisableMember(+b.dataset.disable, +b.dataset.game)) await edAfterChange(); }
+    if (b.dataset.enable !== undefined)  { if (await edEnableMember(+b.dataset.enable, +b.dataset.game)) await edAfterChange(); }
     if (b.dataset.undo !== undefined) {
       const s = edSug.list[+b.dataset.undo];
       const res = await edSug.done[s.key].undo();

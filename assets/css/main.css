@@ -488,6 +488,14 @@ tbody tr.is-owned-wished:hover { background:color-mix(in srgb,var(--green) 12%,t
 .ed-sug { border-radius:var(--radius); border:1px solid var(--border2); background:var(--surface2); padding:14px 16px; margin-top:12px; display:flex; flex-direction:column; gap:10px; }
 .ed-sug-top { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .ed-sug-name { flex:1; min-width:180px; }
+.comp-sug-items, .comp-dlg-items { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:4px; font-size:.76rem; }
+.comp-sug-items label { display:flex; align-items:center; gap:8px; cursor:pointer; }
+.comp-dlg-items li { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:4px 0; border-bottom:1px solid var(--border); }
+.comp-list-d { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:4px; font-size:.76rem; }
+.comp-list-d li { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.owned-check.comp-via-check { opacity:.6; border-style:dashed; }
+.chip.comp-via { white-space:nowrap; }
+.ed-sug-disabled { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:.72rem; color:var(--muted); }
 .ed-sug-add { font-size:.72rem; color:var(--wiiu); flex-basis:100%; }
 .ed-sug .admin-table input[type="text"] { width:100%; min-width:120px; }
 .ed-sug-actions { display:flex; justify-content:flex-end; gap:8px; flex-wrap:wrap; }

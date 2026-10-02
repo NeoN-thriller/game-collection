@@ -95,7 +95,7 @@ function editionSplitIgnored(array $games, array $ignored): array {
  *
  * Each suggestion: key, system_id, system_name, level (exact|similar|partial),
  * group_id (null = new group), group_title, title (default game name), main_game_id,
- * members: [{game_id, title, edition_label, cib_price, existing}] (existing = already in the group).
+ * members: [{game_id, title, edition_label, cib_price, pc_link, copies, existing}] (existing = already in the group).
  */
 function editionSuggestions(?int $systemId = null): array {
     $pdo = db();
@@ -109,8 +109,11 @@ function editionSuggestions(?int $systemId = null): array {
     if (!$systems) return [];
     $in = implode(',', array_map('intval', array_keys($systems)));
 
-    $games = $pdo->query("SELECT id, system_id, title, group_id, edition_label, edition_sort, cib_price, pc_link
-                          FROM games WHERE active=1 AND system_id IN ($in) ORDER BY id")->fetchAll();
+    $games = $pdo->query("SELECT g.id, g.system_id, g.title, g.group_id, g.edition_label, g.edition_sort, g.cib_price, g.pc_link,
+                                 (SELECT COUNT(*) FROM collection_entries ce WHERE ce.game_id = g.id) AS copies
+                          FROM games g WHERE g.active=1 AND g.system_id IN ($in)
+                            AND NOT EXISTS (SELECT 1 FROM compilation_items ci WHERE ci.compilation_id = g.id)   -- compilations aren't editions
+                          ORDER BY g.id")->fetchAll();
     $groups = [];
     foreach ($pdo->query("SELECT id, system_id, title, main_game_id FROM game_groups WHERE system_id IN ($in)") as $gr) {
         $groups[(int)$gr['id']] = $gr + ['members' => []];
@@ -242,6 +245,7 @@ function editionMemberOut(array $g, bool $existing): array {
         'edition_label' => $existing && ($g['edition_label'] ?? '') !== '' ? $g['edition_label'] : editionDefaultLabel($g['title']),
         'cib_price'     => $g['cib_price'] !== null ? (float)$g['cib_price'] : null,
         'pc_link'       => pcLinkSafe($g['pc_link'] ?? null),
+        'copies'        => (int)($g['copies'] ?? 0),   // rows in users' collections (owned or wishlisted)
         'existing'      => $existing,
     ];
 }

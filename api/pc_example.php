@@ -15,18 +15,18 @@ $rows = db()->query("SELECT s.short_name, g.title, g.pc_id, g.pc_link, g.loose_p
 if (!$rows) {
     // Empty catalogue: one placeholder row for the first system (the preview shows it as a new game)
     $short = db()->query("SELECT short_name FROM systems WHERE active = 1 ORDER BY sort_order LIMIT 1")->fetchColumn();
-    $rows = [['short_name' => $short ?: 'N64', 'title' => tRaw('pc.example_title'), 'pc_id' => '', 'pc_link' => '',
-              'loose_price' => '', 'cib_price' => '', 'new_price' => '']];
+    $rows = [['short_name' => $short ?: 'WiiU', 'title' => tRaw('pc.example_title'), 'pc_id' => '12345', 'pc_link' => 'https://...',
+              'loose_price' => '10', 'cib_price' => '20', 'new_price' => '40']];
 }
 
 header('Content-Type: text/csv; charset=utf-8');
 header('Content-Disposition: attachment; filename="pricecharting-example.csv"');
 header('Cache-Control: no-store');
 $out = fopen('php://output', 'w');
-fputcsv($out, ['console', 'name', 'data-product', 'link', 'loose', 'cib', 'new', 'coverArt', 'coverArtBase64'], ',', '"', '');
+fputcsv($out, ['console', 'name', 'data-product', 'link', 'loose', 'cib', 'new', 'coverArtBase64'], ',', '"', '');
 foreach ($rows as $r) {
     fputcsv($out, [$r['short_name'], $r['title'], $r['pc_id'] ?? '', $r['pc_link'] ?? '',
-                   $r['loose_price'] ?? '', $r['cib_price'] ?? '', $r['new_price'] ?? '', '', ''], ',', '"', '');
+                   $r['loose_price'] ?? '', $r['cib_price'] ?? '', $r['new_price'] ?? '', ''], ',', '"', '');
 }
 fclose($out);
 exit;

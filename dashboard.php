@@ -26,17 +26,24 @@ $editionMode = ($user['edition_mode'] ?? 'one') === 'every' ? 'every' : 'one';
 $unit = $editionMode === 'one' ? editionUnitSql('g') : 'g.id';
 $nGamesKey = $editionMode === 'one' ? 'dashboard.n_games' : 'ed.n_editions';
 
+// Compilations, "count the games inside" mode: a game counts as owned when the user owns a compilation
+// containing it, and compilations themselves are left out of the game totals. Otherwise nothing changes.
+$compContents = compilationMode($user) === 'contents';
+$gameUnit  = $compContents ? "CASE WHEN comp.compilation_id IS NULL THEN $unit END" : $unit;
+$ownedCond = $compContents ? '(ce.owned=1 OR via.game_id IS NOT NULL)' : 'ce.owned=1';
+$cibCond   = $compContents ? 'comp.compilation_id IS NULL' : '1';
+
 // Stats per system (all systems — cards always show their own %)
 $statsSt = db()->prepare("
     SELECT
         g.system_id,
-        COUNT(DISTINCT $unit)                                        AS total_games,
-        COUNT(DISTINCT CASE WHEN ce.owned=1 THEN $unit END)         AS owned,
-        COUNT(DISTINCT CASE WHEN ce.wishlist=1 THEN $unit END)      AS wishlisted,
+        COUNT(DISTINCT $gameUnit)                                    AS total_games,
+        COUNT(DISTINCT CASE WHEN $ownedCond THEN $gameUnit END)     AS owned,
+        COUNT(DISTINCT CASE WHEN ce.wishlist=1 THEN $gameUnit END)  AS wishlisted,
         COUNT(CASE WHEN ce.owned=1 THEN ce.id END)                  AS total_copies,
         COUNT(CASE WHEN ce.owned=1 AND ce.upgrade=1 THEN ce.id END) AS upgrades,
         COALESCE(SUM(CASE WHEN ce.owned=1 THEN ce.price_paid END),0) AS total_spent,
-        COALESCE(SUM(g.cib_price),0)                                      AS cib_total,
+        COALESCE(SUM(CASE WHEN $cibCond THEN g.cib_price END),0)    AS cib_total,
         COALESCE(SUM(CASE WHEN ce.owned=1 THEN
             CASE ce.value_price_type
                 WHEN 'loose' THEN g.loose_price
@@ -45,10 +52,11 @@ $statsSt = db()->prepare("
             END),0) AS owned_value
     FROM games g
     LEFT JOIN collection_entries ce ON ce.game_id=g.id AND ce.user_id=?
+    ".($compContents ? compilationCountJoins() : '')."
     WHERE g.active=1
     GROUP BY g.system_id
 ");
-$statsSt->execute([$user['id']]);
+$statsSt->execute($compContents ? [$user['id'], $user['id']] : [$user['id']]);
 $statsRaw = $statsSt->fetchAll();
 $stats = [];
 foreach ($statsRaw as $r) $stats[$r['system_id']] = $r + ['labels'=>[], 'avg_score'=>null, 'scored'=>0];

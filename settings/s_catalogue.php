@@ -1,6 +1,6 @@
 <?php
-/* SETTINGS › Catalogue (admin): PriceCharting import, edition suggestions, systems, game lists per system (&sys=)
-   with edition linking */
+/* SETTINGS › Catalogue (admin): PriceCharting import, edition suggestions, game lists per system (&sys=)
+   with edition linking, systems */
 if (!defined('IN_SETTINGS')) exit;
 
 $systems = db()->query("SELECT * FROM systems ORDER BY sort_order")->fetchAll();
@@ -41,12 +41,30 @@ foreach ($groups as $gid => $gr) {
 }
 $edSuggestSys = ($_GET['esys'] ?? '') === 'all' ? 0 : $viewSys;
 
+// Compilations (assets/js/compilations-admin.js): what each one contains, all systems, for the overview;
+// $compCount: compilation id → number of games inside, for the chips in this system's game list
+$compRows = db()->query("
+    SELECT c.id, c.title, c.active, s.name AS system_name, s.id AS system_id, g.title AS item_title
+    FROM compilation_items ci
+    JOIN games c   ON c.id = ci.compilation_id
+    JOIN games g   ON g.id = ci.game_id
+    JOIN systems s ON s.id = c.system_id
+    ORDER BY s.sort_order, c.sort_title, c.id, ci.sort_order
+")->fetchAll();
+$compList = [];
+foreach ($compRows as $r) {
+    $compList[(int)$r['id']] ??= ['id' => (int)$r['id'], 'title' => $r['title'], 'active' => (bool)$r['active'],
+                                   'system_name' => $r['system_name'], 'system_id' => (int)$r['system_id'], 'items' => []];
+    $compList[(int)$r['id']]['items'][] = $r['item_title'];
+}
+$compCount = array_map(fn($c) => count($c['items']), array_filter($compList, fn($c) => $c['system_id'] === $viewSys));
+
 /** One game row of the admin list. $member: shown inside a group; $isMain: the group's main release. */
-$gameRow = function (array $g, bool $member = false, bool $isMain = false) { ?>
+$gameRow = function (array $g, bool $member = false, bool $isMain = false) use ($compCount) { ?>
     <tr class="<?= $member ? 'ed-member-row' : '' ?>" data-game-id="<?= $g['id'] ?>" data-linked="<?= $member ? 1 : 0 ?>"<?= $member ? ' data-group-id="'.(int)$g['group_id'].'"' : '' ?> style="<?= !$g['active']?'opacity:.45':'' ?>">
       <td><input type="checkbox" class="ed-pick" value="<?= $g['id'] ?>" aria-label="<?= t('ed.pick') ?>: <?= htmlspecialchars($g['title']) ?>"></td>
       <td style="color:var(--muted);font-size:.7rem"><?= $g['sort_order'] ?></td>
-      <td class="ed-title"><?php if ($member): ?><span class="ed-indent" aria-hidden="true">└</span> <?php endif; ?><?php if ($pc = pcLinkSafe($g['pc_link'])): ?><a href="<?= htmlspecialchars($pc) ?>" target="_blank" rel="noopener" class="ed-pc-link" title="<?= t('ed.view_pc') ?>"><?= htmlspecialchars($g['title']) ?></a><?php else: ?><?= htmlspecialchars($g['title']) ?><?php endif; ?></td>
+      <td class="ed-title"><?php if ($member): ?><span class="ed-indent" aria-hidden="true">└</span> <?php endif; ?><?php if ($pc = pcLinkSafe($g['pc_link'])): ?><a href="<?= htmlspecialchars($pc) ?>" target="_blank" rel="noopener" class="ed-pc-link" title="<?= t('ed.view_pc') ?>"><?= htmlspecialchars($g['title']) ?></a><?php else: ?><?= htmlspecialchars($g['title']) ?><?php endif; ?><?php if (!empty($compCount[(int)$g['id']])): ?> <span class="chip chip-blue"><?= t('comp.chip', ['n' => fmtNum($compCount[(int)$g['id']])]) ?></span><?php endif; ?></td>
       <td><?php if ($member): ?><?= htmlspecialchars((string)$g['edition_label']) ?><?php if ($isMain): ?> <span class="chip chip-y"><?= t('ed.main_tag') ?></span><?php endif; ?><?php else: ?><span style="color:var(--muted)">—</span><?php endif; ?></td>
       <td>
         <?php if ($g['default_image']): ?>
@@ -75,6 +93,7 @@ $gameRow = function (array $g, bool $member = false, bool $isMain = false) { ?>
         <?php if ($member): ?>
         <button class="btn-icon" type="button" onclick="edRemoveMember(<?= $g['id'] ?>)"><?= t('ed.remove_member') ?></button>
         <?php endif; ?>
+        <button class="btn-icon" type="button" onclick="compOpenEditor(<?= $g['id'] ?>)" title="<?= t('comp.contents_title') ?>"><?= t('comp.contents_btn') ?></button>
       </td>
     </tr>
 <?php };
@@ -86,8 +105,8 @@ $gameRow = function (array $g, bool $member = false, bool $isMain = false) { ?>
     <span style="color:var(--orange)"><?= t('common.currency_note', ['symbol' => setting('currency_symbol')]) ?></span>
   </p>
   <textarea id="pc-csv" aria-label="<?= t('common.nav.pc_import') ?>" style="width:100%;height:130px;background:var(--surface);border:1px solid var(--border2);color:var(--text);font-family:var(--font-body);font-size:.7rem;padding:10px;resize:vertical;outline:none" placeholder="<?= t('pc.placeholder') ?>
-console,name,data-product,link,loose,cib,new,coverArt,coverArtBase64
-WiiU,007 Legends,63286,https://...,17.51,24.86,40.83,63286.jpg,data:image/jpeg;base64,..."></textarea>
+console,name,data-product,link,loose,cib,new,coverArtBase64
+WiiU,Example Game,12345,https://...,12.34,23.45,34.56,data:image/jpeg;base64..."></textarea>
   <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
     <button class="btn btn-sm" onclick="pcPreview()"><?= t('import.preview') ?> →</button>
     <a href="<?= BASE_URL ?>/pc_import.php" class="btn-outline" style="padding:8px 14px;font-size:.72rem"><?= t('admin.pc.full_page') ?> ↗</a>
@@ -114,53 +133,41 @@ WiiU,007 Legends,63286,https://...,17.51,24.86,40.83,63286.jpg,data:image/jpeg;b
   <div id="ed-sug-list" aria-live="polite"></div>
 </section>
 
-<section class="cp-card">
-  <h2><?= t('dashboard.systems') ?></h2>
-  <form method="POST" style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
-    <input type="hidden" name="csrf"   value="<?= csrf() ?>">
-    <input type="hidden" name="action" value="add_system">
-    <input type="text" name="name"       placeholder="<?= t('admin.sys.name_ph') ?>" aria-label="<?= t('admin.sys.name') ?>" style="width:260px">
-    <input type="text" name="short_name" placeholder="<?= t('admin.sys.short_ph') ?>" aria-label="<?= t('admin.sys.short') ?>" style="width:100px">
-    <select name="region" style="width:auto" title="<?= t('admin.site.region') ?>" aria-label="<?= t('admin.site.region') ?>">
-      <?php foreach (REGIONS as $r): ?><option value="<?= $r ?>" <?= setting('default_region') === $r ? 'selected' : '' ?>><?= $r === 'Mixed' ? t('admin.site.region_mixed') : $r ?></option><?php endforeach; ?>
+<section class="cp-card" id="compilations">
+  <div class="ed-sug-head">
+    <h2 style="margin:0"><?= t('comp.title') ?></h2>
+    <span class="cp-badge ed-count" id="comp-sug-count" hidden></span>
+    <select id="comp-sug-sys" aria-label="<?= t('common.col.system') ?>" style="width:auto;margin-left:auto">
+      <option value="0"<?= $edSuggestSys === 0 ? ' selected' : '' ?>><?= t('ed.sug_all_systems') ?></option>
+      <?php foreach ($systems as $sy): ?>
+      <option value="<?= $sy['id'] ?>"<?= (int)$sy['id'] === $edSuggestSys ? ' selected' : '' ?>><?= htmlspecialchars($sy['name']) ?></option>
+      <?php endforeach; ?>
     </select>
-    <button class="btn btn-sm" type="submit"><?= t('admin.sys.add') ?></button>
-  </form>
-  <table class="admin-table">
-    <thead><tr><th>#</th><th><?= t('admin.sys.icon') ?></th><th><?= t('admin.sys.name') ?></th><th><?= t('admin.sys.short') ?></th><th><?= t('admin.site.region') ?></th><th><?= t('admin.sys.active') ?></th><th><?= t('admin.sys.set_icon') ?></th></tr></thead>
-    <tbody>
-    <?php foreach ($systems as $sy): ?>
-    <tr>
-      <td style="color:var(--muted);font-size:.7rem"><?= $sy['sort_order'] ?></td>
-      <td><?php if (!empty($sy['icon_image'])): ?>
-        <img src="<?= BASE_URL ?>/uploads/icons/<?= htmlspecialchars($sy['icon_image']) ?>" alt="" style="width:28px;height:28px;object-fit:contain">
-      <?php else: ?><span style="color:var(--muted);font-size:.7rem">—</span><?php endif; ?></td>
-      <td><?= htmlspecialchars($sy['name']) ?></td>
-      <td style="color:var(--wiiu)"><?= htmlspecialchars($sy['short_name']) ?></td>
-      <td>
-        <form method="POST" style="display:inline">
-          <input type="hidden" name="csrf"      value="<?= csrf() ?>">
-          <input type="hidden" name="action"    value="set_system_region">
-          <input type="hidden" name="system_id" value="<?= $sy['id'] ?>">
-          <select name="region" onchange="this.form.requestSubmit()" aria-label="<?= t('admin.site.region') ?>" style="font-size:.68rem;padding:3px 6px;width:auto">
-            <?php foreach (REGIONS as $r): ?><option value="<?= $r ?>" <?= $sy['region'] === $r ? 'selected' : '' ?>><?= $r === 'Mixed' ? t('admin.site.region_mixed') : $r ?></option><?php endforeach; ?>
-          </select>
-        </form>
-      </td>
-      <td><span class="tag <?= $sy['active']?'tag-active':'tag-inactive' ?>"><?= t($sy['active'] ? 'admin.site.yes' : 'admin.site.no') ?></span></td>
-      <td>
-        <form method="POST" enctype="multipart/form-data" style="display:flex;gap:4px">
-          <input type="hidden" name="csrf" value="<?= csrf() ?>">
-          <input type="hidden" name="action" value="set_system_icon">
-          <input type="hidden" name="system_id" value="<?= $sy['id'] ?>">
-          <input type="file" name="icon_image" accept="image/*" aria-label="<?= t('admin.sys.icon') ?>" style="font-size:.65rem;width:140px">
-          <button class="btn-icon" type="submit"><?= t('admin.sys.set_icon') ?></button>
-        </form>
-      </td>
-    </tr>
-    <?php endforeach; ?>
-    </tbody>
-  </table>
+    <button class="btn-ghost btn-sm" type="button" id="comp-sug-scan"><?= t('ed.sug_scan') ?></button>
+  </div>
+  <p class="ga-desc" style="margin:10px 0 12px"><?= t('comp.intro') ?></p>
+  <div id="comp-sug-list" aria-live="polite"></div>
+
+  <div id="comp-existing">
+    <p class="section-label" style="margin-top:18px"><?= t('comp.existing', ['n' => fmtNum(count($compList))]) ?></p>
+    <?php if (!$compList): ?>
+    <p class="ga-desc" style="margin:0"><?= t('comp.none_yet') ?></p>
+    <?php else: ?>
+    <table class="admin-table">
+      <thead><tr><th><?= t('comp.col_compilation') ?></th><th><?= t('common.col.system') ?></th><th><?= t('comp.col_contains') ?></th><th></th></tr></thead>
+      <tbody>
+      <?php foreach ($compList as $c): ?>
+      <tr style="<?= $c['active'] ? '' : 'opacity:.45' ?>">
+        <td><?= htmlspecialchars($c['title']) ?></td>
+        <td style="font-size:.7rem;color:var(--muted)"><?= htmlspecialchars($c['system_name']) ?></td>
+        <td style="font-size:.72rem"><?= htmlspecialchars(implode(', ', $c['items'])) ?></td>
+        <td style="text-align:right"><button class="btn-icon" type="button" onclick="compOpenEditor(<?= $c['id'] ?>)"><?= t('common.edit') ?></button></td>
+      </tr>
+      <?php endforeach; ?>
+      </tbody>
+    </table>
+    <?php endif; ?>
+  </div>
 </section>
 
 <section class="cp-card" id="game-lists">
@@ -229,6 +236,55 @@ WiiU,007 Legends,63286,https://...,17.51,24.86,40.83,63286.jpg,data:image/jpeg;b
   </div>
 </section>
 
+<section class="cp-card">
+  <h2><?= t('dashboard.systems') ?></h2>
+  <form method="POST" style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+    <input type="hidden" name="csrf"   value="<?= csrf() ?>">
+    <input type="hidden" name="action" value="add_system">
+    <input type="text" name="name"       placeholder="<?= t('admin.sys.name_ph') ?>" aria-label="<?= t('admin.sys.name') ?>" style="width:260px">
+    <input type="text" name="short_name" placeholder="<?= t('admin.sys.short_ph') ?>" aria-label="<?= t('admin.sys.short') ?>" style="width:100px">
+    <select name="region" style="width:auto" title="<?= t('admin.site.region') ?>" aria-label="<?= t('admin.site.region') ?>">
+      <?php foreach (REGIONS as $r): ?><option value="<?= $r ?>" <?= setting('default_region') === $r ? 'selected' : '' ?>><?= $r === 'Mixed' ? t('admin.site.region_mixed') : $r ?></option><?php endforeach; ?>
+    </select>
+    <button class="btn btn-sm" type="submit"><?= t('admin.sys.add') ?></button>
+  </form>
+  <table class="admin-table">
+    <thead><tr><th>#</th><th><?= t('admin.sys.icon') ?></th><th><?= t('admin.sys.name') ?></th><th><?= t('admin.sys.short') ?></th><th><?= t('admin.site.region') ?></th><th><?= t('admin.sys.active') ?></th><th><?= t('admin.sys.set_icon') ?></th></tr></thead>
+    <tbody>
+    <?php foreach ($systems as $sy): ?>
+    <tr>
+      <td style="color:var(--muted);font-size:.7rem"><?= $sy['sort_order'] ?></td>
+      <td><?php if (!empty($sy['icon_image'])): ?>
+        <img src="<?= BASE_URL ?>/uploads/icons/<?= htmlspecialchars($sy['icon_image']) ?>" alt="" style="width:28px;height:28px;object-fit:contain">
+      <?php else: ?><span style="color:var(--muted);font-size:.7rem">—</span><?php endif; ?></td>
+      <td><?= htmlspecialchars($sy['name']) ?></td>
+      <td style="color:var(--wiiu)"><?= htmlspecialchars($sy['short_name']) ?></td>
+      <td>
+        <form method="POST" style="display:inline">
+          <input type="hidden" name="csrf"      value="<?= csrf() ?>">
+          <input type="hidden" name="action"    value="set_system_region">
+          <input type="hidden" name="system_id" value="<?= $sy['id'] ?>">
+          <select name="region" onchange="this.form.requestSubmit()" aria-label="<?= t('admin.site.region') ?>" style="font-size:.68rem;padding:3px 6px;width:auto">
+            <?php foreach (REGIONS as $r): ?><option value="<?= $r ?>" <?= $sy['region'] === $r ? 'selected' : '' ?>><?= $r === 'Mixed' ? t('admin.site.region_mixed') : $r ?></option><?php endforeach; ?>
+          </select>
+        </form>
+      </td>
+      <td><span class="tag <?= $sy['active']?'tag-active':'tag-inactive' ?>"><?= t($sy['active'] ? 'admin.site.yes' : 'admin.site.no') ?></span></td>
+      <td>
+        <form method="POST" enctype="multipart/form-data" style="display:flex;gap:4px">
+          <input type="hidden" name="csrf" value="<?= csrf() ?>">
+          <input type="hidden" name="action" value="set_system_icon">
+          <input type="hidden" name="system_id" value="<?= $sy['id'] ?>">
+          <input type="file" name="icon_image" accept="image/*" aria-label="<?= t('admin.sys.icon') ?>" style="font-size:.65rem;width:140px">
+          <button class="btn-icon" type="submit"><?= t('admin.sys.set_icon') ?></button>
+        </form>
+      </td>
+    </tr>
+    <?php endforeach; ?>
+    </tbody>
+  </table>
+</section>
+
 <!-- Link dialog (manual linking and editing a group) -->
 <div class="modal-backdrop" id="ed-dlg" role="dialog" aria-modal="true" aria-labelledby="ed-dlg-title">
   <div class="modal" style="max-width:640px">
@@ -250,6 +306,33 @@ WiiU,007 Legends,63286,https://...,17.51,24.86,40.83,63286.jpg,data:image/jpeg;b
     <div class="modal-footer">
       <button class="btn-ghost btn-sm" type="button" onclick="edCloseDialog()"><?= t('common.cancel') ?></button>
       <button class="btn btn-sm" type="button" id="ed-dlg-save"><?= t('ed.btn_link') ?></button>
+    </div>
+  </div>
+</div>
+
+<!-- Compilation editor: what a game contains (assets/js/compilations-admin.js) -->
+<div class="modal-backdrop" id="comp-dlg" role="dialog" aria-modal="true" aria-labelledby="comp-dlg-title">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-header">
+      <h3 id="comp-dlg-title"><?= t('comp.title') ?></h3>
+      <button class="btn-icon" type="button" onclick="compCloseEditor()" aria-label="<?= t('common.close') ?>">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="ga-desc" style="margin:0"><?= t('comp.dlg_note') ?></p>
+      <ul class="comp-dlg-items" id="comp-dlg-items"></ul>
+      <div class="field" style="margin:0">
+        <label for="comp-dlg-add"><?= t('comp.add_game') ?></label>
+        <div style="display:flex;gap:8px">
+          <input type="text" id="comp-dlg-add" list="comp-dlg-games" autocomplete="off" placeholder="<?= t('comp.add_placeholder') ?>" style="flex:1">
+          <button class="btn-ghost btn-sm" type="button" id="comp-dlg-add-btn"><?= t('comp.add') ?></button>
+        </div>
+        <datalist id="comp-dlg-games"></datalist>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-danger btn-sm" type="button" id="comp-dlg-clear" style="margin-right:auto" hidden><?= t('comp.not_compilation') ?></button>
+      <button class="btn-ghost btn-sm" type="button" onclick="compCloseEditor()"><?= t('common.cancel') ?></button>
+      <button class="btn btn-sm" type="button" id="comp-dlg-save"><?= t('common.save') ?></button>
     </div>
   </div>
 </div>

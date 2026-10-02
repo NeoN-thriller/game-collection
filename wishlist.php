@@ -100,6 +100,12 @@ if ($groupIds) {
     unset($g);
 }
 
+// Compilations: what each wishlisted game contains and which compilations it's in, with the owner's status.
+// A wished game stays on the wishlist when the owner has it in a compilation; the row only gets a mark.
+$compLinks = compilationLinksFor(array_keys($games), (int)$user['id']);
+foreach ($games as $gid => &$g) $g['comp'] = $compLinks[$gid] ?? ['contains' => [], 'also_in' => []];
+unset($g);
+
 // Print variants (the wishlist owner's)
 $trackVariants = !empty($user['track_variants']);
 $variantOpts   = [];
@@ -190,7 +196,7 @@ foreach ($entries as $e) {
   .d-empty { font-size:.7rem; color:var(--muted); font-style:italic; }
 </style>
 <?= csrfScript() ?>
-<?= appScript(['coll', 'drawer', 'grading', 'wish', 'ed', 'cr']) ?>
+<?= appScript(['coll', 'drawer', 'grading', 'wish', 'ed', 'cr', 'comp']) ?>
 </head>
 <body>
 
@@ -412,6 +418,9 @@ foreach ($entries as $e) {
 
       <div class="drawer-section" id="d-ed-others" hidden></div>
 
+      <!-- Compilations: what this game contains / which compilations it's in (assets/js/compilations-drawer.js) -->
+      <div class="drawer-section" id="d-comp" hidden></div>
+
       <div class="drawer-section">
         <div class="section-label"><?= t('common.col.notes') ?></div>
         <div class="field"><textarea id="d-notes" placeholder="<?= t('drawer.notes_ph') ?>"></textarea></div>
@@ -456,6 +465,7 @@ foreach ($entries as $e) {
 <script>window.GRADING = <?= gradingClientJson($canEdit ? $user : null) ?>;</script>
 <script src="<?= BASE_URL ?>/assets/js/grading.js?v=<?= @filemtime(__DIR__.'/assets/js/grading.js') ?>"></script>
 <script src="<?= BASE_URL ?>/assets/js/editions-drawer.js?v=<?= @filemtime(__DIR__.'/assets/js/editions-drawer.js') ?>"></script>
+<script src="<?= BASE_URL ?>/assets/js/compilations-drawer.js?v=<?= @filemtime(__DIR__.'/assets/js/compilations-drawer.js') ?>"></script>
 <script src="<?= BASE_URL ?>/assets/js/lightbox.js?v=<?= @filemtime(__DIR__.'/assets/js/lightbox.js') ?>"></script>
 <script src="<?= BASE_URL ?>/assets/js/vendor/qrcode.js?v=<?= @filemtime(__DIR__.'/assets/js/vendor/qrcode.js') ?>"></script>
 <script src="<?= BASE_URL ?>/assets/js/labels.js?v=<?= @filemtime(__DIR__.'/assets/js/labels.js') ?>"></script>
@@ -518,6 +528,13 @@ function wishEdition(gameId, e) {
   return { grp, any, fulfilledBy, cheapest: prices.length ? Math.min(...prices) : null };
 }
 
+/** Own wishlist only: "In your Arkane Collection" when the owner has this game in a compilation. */
+function compMark(g) {
+  const via = CAN_EDIT ? (g.comp?.also_in || []).filter(c => c.owned) : [];
+  if (!via.length) return '';
+  return ` <span class="chip chip-y comp-via" title="${esc(via.map(c => c.title).join(', '))}">${t('comp.in_your', {title: via[0].title})}${via.length > 1 ? ' +' + (via.length - 1) : ''}</span>`;
+}
+
 // ── ROW RENDERING ──
 function buildRow(entryId, gameId) {
   const g = GAMES[gameId];
@@ -565,7 +582,8 @@ function buildRow(entryId, gameId) {
   // Title: the game name with its edition ("any edition" or the label), and "owned (Platinum)" once found
   const titleHtml = !ed.grp ? esc(g.title)
     : `${esc(ed.grp.title)} <span class="chip chip-blue">${ed.any ? t('ed.any_edition') : esc(g.edition_label || '')}</span>`
-      + (ed.fulfilledBy ? ` <span class="chip chip-y">${t('ed.owned_as', {label: ed.fulfilledBy.edition_label || ed.fulfilledBy.title})}</span>` : '');
+      + (ed.fulfilledBy ? ` <span class="chip chip-y">${t('ed.owned_as', {label: ed.fulfilledBy.edition_label || ed.fulfilledBy.title})}</span>` : '')
+      + compMark(g);
   const noteText = e.notes || (upReason ? '↑ '+upReason : '—');
   const tagLabel = e.tag || '';
 
@@ -893,6 +911,9 @@ function openDrawer(gameId, entryId=null) {
   });
   linksList.innerHTML = links;
   document.getElementById('d-ext-links').style.display = 'block';
+
+  // Compilations: what this game contains, and which compilations it's in (open only games on this wishlist)
+  CompDrawer.load({ contains: g.comp?.contains || [], alsoIn: g.comp?.also_in || [], onOpen: id => openDrawer(id), canOpen: id => !!GAMES[id] });
 
   // Start on the copy whose row was clicked
   const start = entryId ? g.copies.find(c => c.id == entryId) : null;

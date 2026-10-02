@@ -44,6 +44,12 @@ try {
         ]);
     }
 
+    // How compilations count (exports from before compilations have none)
+    if (!empty($data['compilations']) && is_array($data['compilations'])) {
+        $pdo->prepare("UPDATE users SET compilation_mode=? WHERE id=?")
+            ->execute([($data['compilations']['mode'] ?? '') === 'contents' ? 'contents' : 'own', $user['id']]);
+    }
+
     $gst = $pdo->prepare("
         SELECT g.id FROM games g
         JOIN systems s ON s.id = g.system_id

@@ -76,6 +76,7 @@ $data = [
         'wishlist'       => $user['edition_wishlist'] ?? 'any',
         'track_variants' => !empty($user['track_variants']),
     ],
+    'compilations'         => ['mode' => compilationMode($user)],
     'grading'              => ['mode' => $user['grading_mode'] ?? 'simple', 'default' => $user['grading_default'] ?? 'simple'],
     'entries'              => $entries,
 ];

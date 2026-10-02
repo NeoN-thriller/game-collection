@@ -61,8 +61,8 @@ $user = requireAdmin();
     <div class="step-label"><?= t('import.step', ['n' => 1]) ?></div>
     <h3><?= t('pc.paste_csv') ?></h3>
     <textarea class="csv-input" id="csv-input" placeholder="<?= t('pc.placeholder') ?>
-console,name,data-product,link,loose,cib,new,coverArt,coverArtBase64
-WiiU,007 Legends,63286,https://www.pricecharting.com/game/pal-wii-u/007-legends,17.51,24.86,40.83,63286.jpg,data:image/jpeg;base64,..."></textarea>
+console,name,data-product,link,loose,cib,new,coverArtBase64
+WiiU,Example Game,12345,https://...,12.34,23.45,34.56,data:image/jpeg;base64..."></textarea>
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px">
       <span style="font-size:.7rem;color:var(--muted)"><a href="<?= BASE_URL ?>/api/pc_example.php" download>⬇ <?= t('pc.example') ?></a> — <?= t('pc.example_note') ?></span>
       <button class="btn" onclick="previewImport()"><?= t('pc.preview') ?> →</button>

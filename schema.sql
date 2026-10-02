@@ -218,6 +218,7 @@ CREATE TABLE `games` (
   `group_id` int(10) unsigned DEFAULT NULL,
   `edition_label` varchar(100) DEFAULT NULL,
   `edition_sort` smallint(6) NOT NULL DEFAULT 0,
+  `comp_dismissed` tinyint(1) NOT NULL DEFAULT 0,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`),
   KEY `idx_system` (`system_id`),
@@ -244,6 +245,20 @@ CREATE TABLE `game_groups` (
   KEY `main_game_id` (`main_game_id`),
   CONSTRAINT `game_groups_system_fk` FOREIGN KEY (`system_id`) REFERENCES `systems` (`id`) ON DELETE CASCADE,
   CONSTRAINT `game_groups_main_fk` FOREIGN KEY (`main_game_id`) REFERENCES `games` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- Compilations: a game that contains other games of the same system (Arkane Collection → Dishonored, Prey).
+-- A game can be in any number of compilations. games.comp_dismissed = "not a compilation" (no suggestions).
+DROP TABLE IF EXISTS `compilation_items`;
+CREATE TABLE `compilation_items` (
+  `compilation_id` int(10) unsigned NOT NULL,
+  `game_id` int(10) unsigned NOT NULL,
+  `sort_order` smallint(6) NOT NULL DEFAULT 0,
+  PRIMARY KEY (`compilation_id`,`game_id`),
+  KEY `game_id` (`game_id`),
+  CONSTRAINT `compilation_items_comp_fk` FOREIGN KEY (`compilation_id`) REFERENCES `games` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `compilation_items_game_fk` FOREIGN KEY (`game_id`) REFERENCES `games` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 
@@ -348,6 +363,7 @@ CREATE TABLE `users` (
   `edition_wishlist` enum('any','exact') NOT NULL DEFAULT 'any',
   `track_variants` tinyint(1) NOT NULL DEFAULT 0,
   `label_template_id` int(10) unsigned DEFAULT NULL,
+  `compilation_mode` enum('own','contents') NOT NULL DEFAULT 'own',
   PRIMARY KEY (`id`),
   UNIQUE KEY `username` (`username`),
   KEY `label_template_id` (`label_template_id`),
@@ -531,4 +547,5 @@ INSERT INTO `schema_migrations` (`filename`) VALUES
   ('003_languages_settings.sql'),
   ('004_editions.sql'),
   ('005_photo_backups.sql'),
-  ('006_condition_report.sql');
+  ('006_condition_report.sql'),
+  ('007_compilations.sql');

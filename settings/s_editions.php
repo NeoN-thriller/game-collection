@@ -1,10 +1,12 @@
 <?php
-/* SETTINGS › Editions & Variants: how editions count, the wishlist default, and optional print variants */
+/* SETTINGS › Editions & Variants: how editions count, the wishlist default, how compilations count,
+   and optional print variants */
 if (!defined('IN_SETTINGS')) exit;
 
 $edMode     = ($user['edition_mode'] ?? 'one') === 'every' ? 'every' : 'one';
 $edWishlist = ($user['edition_wishlist'] ?? 'any') === 'exact' ? 'exact' : 'any';
 $trackVar   = !empty($user['track_variants']);
+$compMode   = compilationMode($user);
 
 $varOpts = db()->prepare("SELECT label FROM user_variant_options WHERE user_id=? ORDER BY sort_order");
 $varOpts->execute([$user['id']]);
@@ -63,6 +65,25 @@ $preview = $prev->fetch();
     </select>
   </div>
   <div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn btn-sm" type="button" onclick="saveEditions()"><?= t('common.save') ?></button></div>
+</section>
+
+<section class="cp-card">
+  <h2><?= t('comp.count_title') ?></h2>
+  <p class="export-desc"><?= t('comp.count_intro') ?></p>
+  <div class="gm-cards ed-mode-cards" role="radiogroup" aria-label="<?= t('comp.count_title') ?>">
+    <label class="gm-card">
+      <input type="radio" name="compilation_mode" value="own" <?= $compMode === 'own' ? 'checked' : '' ?>>
+      <span class="gm-title"><span class="gm-dot"></span><?= t('comp.mode_own') ?></span>
+      <span class="gm-desc"><?= t('comp.mode_own_desc') ?></span>
+    </label>
+    <label class="gm-card">
+      <input type="radio" name="compilation_mode" value="contents" <?= $compMode === 'contents' ? 'checked' : '' ?>>
+      <span class="gm-title"><span class="gm-dot"></span><?= t('comp.mode_contents') ?></span>
+      <span class="gm-desc"><?= t('comp.mode_contents_desc') ?></span>
+    </label>
+  </div>
+  <p class="export-desc" style="margin-top:10px"><?= t('comp.wish_note') ?></p>
+  <div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn btn-sm" type="button" onclick="saveCompilationMode()"><?= t('common.save') ?></button></div>
 </section>
 
 <section class="cp-card">
