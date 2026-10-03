@@ -1,23 +1,58 @@
 -- ═══════════════════════════════════════════════════════════════════
---  Release migration 0.9.3
+--  Release migration 0.9.2
 --
 --  Run by Settings › Updates (or by hand, once, in number order).
---  Back up the database first. Needs 007_compilations.sql to have run.
+--  Back up the database first. Needs 006_condition_report.sql to have run.
 --
---  Everything since 0.9.2 in one file:
+--  Everything since 0.9.1 in one file:
+--  · compilation_items, games.comp_dismissed, users.compilation_mode:
+--    compilations (games that contain other games) and how they count
 --  · copy_photo_tags, copy_photo_tag_defects: which part unit and which
 --    of its defects a copy's photo shows (shared condition reports)
---  · grade_defects.description, grade_defect_photos: the ⓘ explanation
---    and example photos of a defect (admin), plus starter texts via
+--  · grade_defects.description, grade_defect_photos: the explanation and
+--    example photos of a defect (admin), plus starter texts via
 --    Settings › Grading System › "Fill empty explanations"
 --  · user_played_options.play_group, users.played_pct, users.show_played:
 --    the Completed / Started counters on the Collection page and dashboard
 --
 --  Every step checks first, so it is safe on a database that already has
---  some or all of it (e.g. a test site that ran the separate dev files).
+--  some or all of it (e.g. a test site that ran the separate files).
 -- ═══════════════════════════════════════════════════════════════════
 
 SET NAMES utf8mb4;
+
+-- ── Compilations (was 007_compilations.sql) ──
+
+CREATE TABLE IF NOT EXISTS `compilation_items` (
+  `compilation_id` int(10) unsigned NOT NULL,
+  `game_id` int(10) unsigned NOT NULL,
+  `sort_order` smallint(6) NOT NULL DEFAULT 0,
+  PRIMARY KEY (`compilation_id`,`game_id`),
+  KEY `game_id` (`game_id`),
+  CONSTRAINT `compilation_items_comp_fk` FOREIGN KEY (`compilation_id`) REFERENCES `games` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `compilation_items_game_fk` FOREIGN KEY (`game_id`) REFERENCES `games` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- games.comp_dismissed (skipped when the column is already there)
+SET @gc_add := (SELECT COUNT(*) = 0 FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'games' AND COLUMN_NAME = 'comp_dismissed');
+SET @gc_sql := IF(@gc_add,
+  'ALTER TABLE `games` ADD COLUMN `comp_dismissed` tinyint(1) NOT NULL DEFAULT 0 AFTER `edition_sort`',
+  'SET @gc_noop := 1');
+PREPARE gc_stmt FROM @gc_sql;
+EXECUTE gc_stmt;
+DEALLOCATE PREPARE gc_stmt;
+
+-- users.compilation_mode (skipped when the column is already there)
+SET @gc_add := (SELECT COUNT(*) = 0 FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'compilation_mode');
+SET @gc_sql := IF(@gc_add,
+  'ALTER TABLE `users` ADD COLUMN `compilation_mode` enum(''own'',''contents'') NOT NULL DEFAULT ''own'' AFTER `label_template_id`',
+  'SET @gc_noop := 1');
+PREPARE gc_stmt FROM @gc_sql;
+EXECUTE gc_stmt;
+DEALLOCATE PREPARE gc_stmt;
+
 
 -- ── Photo tags (which part, and which of its defects, a photo shows) (was dev/008_photo_tags.sql) ──
 

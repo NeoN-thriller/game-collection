@@ -592,10 +592,4 @@ INSERT INTO `schema_migrations` (`filename`) VALUES
   ('004_editions.sql'),
   ('005_photo_backups.sql'),
   ('006_condition_report.sql'),
-  ('007_compilations.sql'),
-  ('008_release_0.9.3.sql'),
-  ('dev/008_photo_tags.sql'),
-  ('dev/009_defect_info.sql'),
-  ('dev/010_played_groups.sql'),
-  ('dev/011_played_percentage.sql'),
-  ('dev/012_show_played.sql');
+  ('007_release_0.9.2.sql');
