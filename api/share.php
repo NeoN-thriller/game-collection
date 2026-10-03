@@ -41,7 +41,27 @@ function shareOut(?array $s): ?array {
         'graded_at' => $s['graded_at'],
         'graded_fmt'=> $s['graded_at'] ? fmtDate($s['graded_at']) : '',
         'label'     => $report ? labelDataFromReport($report, $s['token']) : null,
+        'tags_changed' => $s['mode'] === 'snapshot' && shareTagsChanged($s),
     ];
+}
+
+/** Snapshot mode: do the copy's photo tags differ from the ones in the snapshot? */
+function shareTagsChanged(array $s): bool {
+    $snap = json_decode((string)$s['snapshot'], true);
+    if (!is_array($snap)) return false;
+    $st = db()->prepare("SELECT grade_method FROM collection_entries WHERE id=?");
+    $st->execute([(int)$s['entry_id']]);
+    if ($st->fetchColumn() !== 'points') return false;
+    $ids = db()->prepare("SELECT id FROM copy_photos WHERE entry_id=? ORDER BY sort_order, id");
+    $ids->execute([(int)$s['entry_id']]);
+    $now  = photoTagsReportMap((int)$s['entry_id'], $ids->fetchAll(PDO::FETCH_COLUMN));
+    $then = [];
+    foreach ((array)($snap['photo_tags'] ?? []) as $pid => $t) {
+        $d = array_map('intval', (array)($t['defects'] ?? [])); sort($d);
+        $then[(int)$pid] = ['ref' => (string)($t['ref'] ?? ''), 'unit_no' => (int)($t['unit_no'] ?? 1), 'defects' => $d];
+    }
+    ksort($now); ksort($then);
+    return $now != $then;
 }
 
 function reloadShare(int $id): array {

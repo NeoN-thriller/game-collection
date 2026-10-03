@@ -1,6 +1,6 @@
 /* Theme:  Xbox
    Scheme: dark
-   Fonts:  https://fonts.googleapis.com/css2?family=Saira+Semi+Condensed:wght@500;600&family=Open+Sans:wght@400;500;600&display=swap
+   Fonts:  fonts/xbox.css
    About:  Carbon black with Xbox green and clean, slightly rounded tiles. */
 
 :root {
@@ -49,6 +49,7 @@
   --font-display:  'Saira Semi Condensed', sans-serif;
   --display-weight: 600;
   --display-case:  uppercase;
+  --stat-scale:    .88;               /* wider display font: smaller stat numbers */
 }
 
 .btn { letter-spacing:.06em; }

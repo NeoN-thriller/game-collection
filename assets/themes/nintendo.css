@@ -1,6 +1,6 @@
 /* Theme:  Nintendo
    Scheme: light
-   Fonts:  https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Nunito:wght@400;600;700&display=swap
+   Fonts:  fonts/nintendo.css
    About:  Light and friendly: white panels, Nintendo red, rounded corners. */
 
 :root {
@@ -55,6 +55,7 @@
   --font-display:  'Fredoka', 'Nunito', sans-serif;
   --display-weight: 600;
   --display-case:  none;
+  --stat-scale:    .85;               /* wider display font: smaller stat numbers */
 }
 
 /* Soft, raised panels instead of hard outlines */

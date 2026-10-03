@@ -39,6 +39,7 @@ function commitAndRespond(callable $fn, string $msg): never {
         if ($pdo->inTransaction()) $pdo->rollBack();
         jsonOut(['ok'=>false,'error'=>$e->getMessage()]);
     }
+    defectPhotoPurgeFiles();   // example photos of defects that were removed
     jsonOut(['ok'=>true,'msg'=>$msg,'config'=>adminConfig()] + $extra);
 }
 
@@ -280,6 +281,11 @@ case 'auto_assign':
     $assigned = applySystemPatterns(null, true);
     jsonOut(['ok'=>true,'msg'=>$assigned ? tRaw('gapi.assigned', ['list' => implode(', ', $assigned)]) : tRaw('gapi.none_assigned'),'config'=>adminConfig()]);
 
+// ── Defect explanations: fill the empty ones from the built-in texts (site language) ──
+case 'fill_descriptions':
+    $n = gradingFillDescriptions(setting('default_language'));
+    jsonOut(['ok'=>true, 'msg'=>tRaw('gapi.filled', ['n' => $n]), 'config'=>adminConfig()]);
+
 case 'recalc':
     $n = recalcAllScores();
     jsonOut(['ok'=>true,'msg'=>tRaw('gapi.recalculated', ['n' => $n]),'config'=>adminConfig()]);
@@ -292,6 +298,10 @@ case 'reset_defaults':
     $dry  = !empty($body['dry_run']);
     $report = importGradingConfig($data, $mode, $dry, !empty($body['delete_missing']));
     if (!$report['ok']) jsonOut(['ok'=>false,'error'=>implode(' ', $report['errors']),'report'=>$report]);
+    if (!$dry) {
+        if ($action === 'reset_defaults') gradingFillDescriptions(setting('default_language'));
+        defectPhotoPurgeFiles();
+    }
     jsonOut(['ok'=>true,'report'=>$report,'config'=>$dry ? null : adminConfig(),
              'msg'=>$dry ? tRaw('gapi.preview_ready') : tRaw('gapi.imported')]);
 

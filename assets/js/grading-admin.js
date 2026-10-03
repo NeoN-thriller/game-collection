@@ -20,6 +20,7 @@ let P = null, selP = null;       // working profile, selected profile id ('new' 
 let T = null, selT = null;       // working template
 let dirty = { labels: false, profile: false, template: false };
 let importData = null, importReport = null;
+let infoOpen = new Set();        // defects whose explanation panel is open ('ci.di')
 
 async function api(action, data = {}) {
   return fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, ...data }) })
@@ -315,6 +316,7 @@ function initProfiles() {
 // ══ COMPONENT TEMPLATES ═══════════════════
 function loadTemplate(id) {
   selT = id;
+  infoOpen = new Set();
   const src = C.templates.find(t => t.id === id);
   T = src ? clone(src) : (id === 'new' ? { id: null, name: tRaw('ga.new_template'), categories: [{ id: null, name: tRaw('common.col.quality'), max_points: 100, defects: [] }] } : null);
   dirty.template = id === 'new';
@@ -341,8 +343,10 @@ function renderTemplates() {
             ${d.kind === 'max' ? `<label class="ga-sm">${t('ga.max')} <input type="number" min="1" max="99" value="${esc(d.max_count ?? 1)}" data-df="max_count" class="ga-num" aria-label="${t('ga.max_count')}"></label>` : ''}
             ${d.kind === 'level' ? `<label class="ga-sm">${t('ga.group')} <input type="text" value="${esc(d.level_group ?? '')}" data-df="level_group" maxlength="50" class="ga-grp" aria-label="${t('ga.level_group')}" placeholder="${t('ga.group_ph')}"></label>` : ''}
             <label class="ga-sm">−<input type="number" min="0" max="100" value="${esc(d.penalty)}" data-df="penalty" class="ga-num" aria-label="${t('ga.deduction')}"></label>
+            <button type="button" class="ga-info-btn${(d.description || '').trim() || (d.photos || []).length ? ' on' : ''}" data-act="def-info"
+              aria-expanded="${infoOpen.has(ci + '.' + di)}" aria-label="${t('ga.info_btn')}" title="${t('ga.info_btn')}">ⓘ</button>
             <button type="button" class="btn-danger" data-act="def-rm" aria-label="${t('ga.remove_defect')}">✕</button>
-          </div>`).join('')}
+          </div>${infoOpen.has(ci + '.' + di) ? defectInfoHtml(d, di) : ''}`).join('')}
         <button type="button" class="gr-add" data-act="def-add">+ ${t('ga.add_defect')}</button>
       </div>`).join('');
     edit = `
@@ -363,7 +367,41 @@ function renderTemplates() {
         <button type="button" class="btn btn-sm" data-act="t-save"${total === 100 ? '' : ' disabled'}>${t('ga.save_template')}</button>
       </div>`;
   }
-  el.innerHTML = `<div class="ga-tabs">${tabs}</div>${edit}`;
+  el.innerHTML = `<div class="ga-actions ga-fill">
+      <button type="button" class="btn-ghost btn-sm" data-act="fill-desc">${t('ga.fill_desc')}</button>
+      <span class="ga-desc" style="margin:0">${t('ga.fill_desc_hint')}</span>
+    </div>
+    <div class="ga-tabs">${tabs}</div>${edit}`;
+}
+
+/** A defect's explanation panel: the text (saved with the template) and example photos (saved right away). */
+function defectInfoHtml(d, di) {
+  const photos = d.photos || [];
+  return `<div class="ga-def-info" data-di="${di}">
+    <div class="field" style="margin:0">
+      <label>${t('ga.description')}</label>
+      <textarea data-df="description" maxlength="500" rows="2" placeholder="${t('ga.description_ph')}">${esc(d.description || '')}</textarea>
+    </div>
+    <div class="section-label" style="margin:4px 0 0">${t('ga.photos_label', {n: 3})}</div>
+    ${d.id ? `<div class="ga-def-photos">
+        ${photos.map(p => `<span class="ga-def-photo"><img src="${esc(p.url)}" alt="">
+          <button type="button" class="btn-danger" data-act="dphoto-rm" data-pid="${p.id}" aria-label="${t('common.delete')}">✕</button></span>`).join('')}
+        ${photos.length < 3 ? `<label class="btn-ghost btn-sm ga-def-add">${t('ga.photo_add')}<input type="file" accept="image/*" data-dphoto="${d.id}" hidden></label>` : ''}
+      </div>`
+      : `<p class="ga-desc" style="margin:0">${t('ga.photo_save_first')}</p>`}
+  </div>`;
+}
+
+/** Puts a defect's new photo list in the working template and in the loaded config. */
+function setDefectPhotos(defectId, photos) {
+  [T, ...(C ? C.templates : [])].forEach(tp => tp && tp.categories.forEach(c => c.defects.forEach(d => { if (d.id === defectId) d.photos = photos; })));
+}
+
+async function defectPhotoCall(body, isUpload) {
+  return fetch(window.GA_BASE + '/api/defect_photos.php', isUpload
+      ? { method: 'POST', body }
+      : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    .then(r => r.json()).catch(e => ({ ok: false, error: e.message }));
 }
 
 function initTemplates() {
@@ -380,11 +418,23 @@ function initTemplates() {
     const cat = t.closest('.ga-cat'); if (!cat) return;
     const c = T.categories[+cat.dataset.ci];
     if (t.dataset.cf) { c[t.dataset.cf] = t.dataset.cf === 'max_points' ? parseInt(t.value, 10) || 0 : t.value; markDirty(); if (t.dataset.cf === 'max_points') updTotal(); return; }
-    const row = t.closest('.ga-def'), f = t.dataset.df;
+    const row = t.closest('.ga-def, .ga-def-info'), f = t.dataset.df;
     if (row && f && f !== 'kind') { c.defects[+row.dataset.di][f] = ['penalty', 'max_count'].includes(f) ? parseInt(t.value, 10) || 0 : t.value; markDirty(); }
   });
-  el.addEventListener('change', e => {
+  el.addEventListener('change', async e => {
     const t = e.target;
+    if (t.dataset.dphoto) {
+      const file = t.files[0];
+      if (!file) return;
+      const fd = new FormData();
+      fd.append('defect_id', t.dataset.dphoto);
+      fd.append('photo', file);
+      toast(tRaw('ga.photo_uploading'));
+      const res = await defectPhotoCall(fd, true);
+      toast(res.ok ? res.msg : err(res), res.ok);
+      if (res.ok) { setDefectPhotos(res.defect_id, res.photos); renderTemplates(); }
+      return;
+    }
     if (t.dataset.df !== 'kind') return;
     const c = T.categories[+t.closest('.ga-cat').dataset.ci], d = c.defects[+t.closest('.ga-def').dataset.di];
     d.kind = t.value;
@@ -414,7 +464,28 @@ function initTemplates() {
       const rows = el.querySelectorAll(`.ga-cat[data-ci="${ci}"] .ga-def input[data-df="name"]`); if (rows.length) rows[rows.length - 1].focus();
       return;
     }
-    if (act === 'def-rm') { T.categories[ci].defects.splice(+defEl.dataset.di, 1); markDirty(); return renderTemplates(); }
+    if (act === 'def-rm') { T.categories[ci].defects.splice(+defEl.dataset.di, 1); infoOpen = new Set(); markDirty(); return renderTemplates(); }
+    if (act === 'def-info') {
+      const k = ci + '.' + defEl.dataset.di;
+      infoOpen.has(k) ? infoOpen.delete(k) : infoOpen.add(k);
+      renderTemplates();
+      if (infoOpen.has(k)) el.querySelector(`.ga-cat[data-ci="${ci}"] .ga-def-info[data-di="${defEl.dataset.di}"] textarea`)?.focus();
+      return;
+    }
+    if (act === 'dphoto-rm') {
+      if (!confirm(tRaw('ga.confirm_photo_rm'))) return;
+      const res = await defectPhotoCall({ action: 'delete', photo_id: +b.dataset.pid });
+      toast(res.ok ? res.msg : err(res), res.ok);
+      if (res.ok) { setDefectPhotos(res.defect_id, res.photos); renderTemplates(); }
+      return;
+    }
+    if (act === 'fill-desc') {
+      if (dirty.template && !confirm(tRaw('ga.confirm_discard_template'))) return;
+      const res = await api('fill_descriptions');
+      toast(res.ok ? res.msg : err(res), res.ok);
+      if (res.ok) applyConfig(res.config, { profile: selP, template: selT });
+      return;
+    }
     if (act === 't-save') {
       const res = await apiConfirm('save_template', { template: T });
       toast(res.ok ? res.msg : err(res), res.ok);

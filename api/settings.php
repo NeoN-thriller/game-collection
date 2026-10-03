@@ -16,10 +16,22 @@ switch ($action) {
         break;
 
     case 'save_played':
-        $labels = array_filter(array_map('trim', $body['labels'] ?? []), fn($l)=>$l!=='');
+        // labels[] with groups[] in the same order (finished | started | none)
+        $labels = array_map(fn($l) => trim((string)$l), (array)($body['labels'] ?? []));
+        $groups = array_values((array)($body['groups'] ?? []));
         db()->prepare("DELETE FROM user_played_options WHERE user_id=?")->execute([$user['id']]);
-        $ins = db()->prepare("INSERT INTO user_played_options (user_id,label,sort_order) VALUES(?,?,?)");
-        foreach (array_values($labels) as $i => $l) $ins->execute([$user['id'],$l,$i]);
+        $ins = db()->prepare("INSERT INTO user_played_options (user_id,label,play_group,sort_order) VALUES(?,?,?,?)");
+        $n = 0; $seen = [];
+        foreach (array_values($labels) as $i => $l) {
+            if ($l === '' || isset($seen[mb_strtolower($l)])) continue;
+            $seen[mb_strtolower($l)] = true;
+            $g = in_array($groups[$i] ?? null, PLAY_GROUPS, true) ? $groups[$i] : playGroupOf($l);
+            $ins->execute([$user['id'], mb_substr($l, 0, 100), $g, $n++]);
+        }
+        if (isset($body['pct'])) {   // Finished / Started counters: of all games or of owned games, and shown or not
+            db()->prepare("UPDATE users SET played_pct=?, show_played=? WHERE id=?")
+                ->execute([$body['pct'] === 'owned' ? 'owned' : 'all', !empty($body['show']) ? 1 : 0, $user['id']]);
+        }
         jsonOut(['ok'=>true]);
         break;
 

@@ -57,7 +57,7 @@ $jsVer    = fn(string $f) => BASE_URL.'/assets/js/'.$f.'?v='.@filemtime(__DIR__.
 </head>
 <body>
 
-<header class="site-header">
+<header class="site-header site-header--sticky">
   <a href="<?= BASE_URL ?>/dashboard.php" class="site-logo" style="text-decoration:none"><?= siteLogoHtml() ?></a>
   <nav class="site-nav">
     <a href="<?= BASE_URL ?>/dashboard.php" class="nav-link"><?= t('common.nav.dashboard') ?></a>
@@ -67,6 +67,17 @@ $jsVer    = fn(string $f) => BASE_URL.'/assets/js/'.$f.'?v='.@filemtime(__DIR__.
     <a href="<?= BASE_URL ?>/api/logout.php" class="nav-link"><?= t('common.nav.sign_out') ?></a>
   </nav>
 </header>
+
+<script>
+// The sidebar sits under the fixed header: --head-h follows the header's height (it wraps on narrow screens)
+(() => {
+  const h = document.querySelector('.site-header');
+  const set = () => document.documentElement.style.setProperty('--head-h', (getComputedStyle(h).position === 'sticky' ? h.offsetHeight : 0) + 'px');
+  set();
+  if (window.ResizeObserver) new ResizeObserver(set).observe(h);
+  window.addEventListener('resize', set);
+})();
+</script>
 
 <div class="cp-wrap">
   <nav class="cp-side" aria-label="<?= t('common.nav.settings') ?>">

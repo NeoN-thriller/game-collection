@@ -23,10 +23,16 @@ try {
               'variant_options'      => 'user_variant_options'] as $key => $table) {
         if (empty($data[$key])) continue;
         $pdo->prepare("DELETE FROM $table WHERE user_id=?")->execute([$user['id']]);
-        $ins = $pdo->prepare("INSERT INTO $table (user_id, label, sort_order) VALUES (?,?,?)");
+        $played = $table === 'user_played_options';   // played statuses also carry their counter group
+        $ins = $pdo->prepare($played ? "INSERT INTO $table (user_id, label, play_group, sort_order) VALUES (?,?,?,?)"
+                                     : "INSERT INTO $table (user_id, label, sort_order) VALUES (?,?,?)");
         foreach ($data[$key] as $i => $opt) {
             $label = trim((string)($opt['label'] ?? ''));
-            if ($label !== '') $ins->execute([$user['id'], mb_substr($label, 0, 100), (int)($opt['sort_order'] ?? $i)]);
+            if ($label === '') continue;
+            $vals = [$user['id'], mb_substr($label, 0, 100)];
+            if ($played) $vals[] = in_array($opt['play_group'] ?? null, PLAY_GROUPS, true) ? $opt['play_group'] : null;
+            $vals[] = (int)($opt['sort_order'] ?? $i);
+            $ins->execute($vals);
         }
     }
     if (!empty($data['grading']['mode']) && in_array($data['grading']['mode'], ['simple','points','both'], true)) {
@@ -42,6 +48,14 @@ try {
             !empty($ed['track_variants']) ? 1 : 0,
             $user['id'],
         ]);
+    }
+
+    // Finished / Started counters: of all games or of owned games
+    if (isset($data['played_pct'])) {
+        $pdo->prepare("UPDATE users SET played_pct=? WHERE id=?")->execute([$data['played_pct'] === 'owned' ? 'owned' : 'all', $user['id']]);
+    }
+    if (isset($data['show_played'])) {
+        $pdo->prepare("UPDATE users SET show_played=? WHERE id=?")->execute([$data['show_played'] ? 1 : 0, $user['id']]);
     }
 
     // How compilations count (exports from before compilations have none)

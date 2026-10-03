@@ -84,4 +84,4 @@ $sortOrd = (int)$st->fetchColumn();
 db()->prepare("INSERT INTO copy_photos (entry_id, user_id, filename, sort_order) VALUES (?,?,?,?)")
     ->execute([$entryId, $user['id'], $user['id'].'/'.$filename, $sortOrd]);
 
-jsonOut(['ok'=>true,'filename'=>$user['id'].'/'.$filename]);
+jsonOut(['ok'=>true, 'filename'=>$user['id'].'/'.$filename, 'id'=>(int)db()->lastInsertId()]);

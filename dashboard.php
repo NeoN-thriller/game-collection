@@ -102,6 +102,14 @@ $totalUpgrade = array_sum(array_column($countStats, 'upgrades'));
 $totalWish    = array_sum(array_column($statsRaw,   'wishlisted'));
 $totalCibAll  = array_sum(array_column($statsRaw,   'cib_total'));
 $totalOwnedVal= array_sum(array_column($statsRaw,   'owned_value'));
+
+// Finished / Started (played statuses), when the user shows them: per system, and over the systems that count toward totals
+$showPlayed = showPlayedCounters($user);
+$play = $showPlayed ? playedCountersBySystem($user, $unit, $compContents) : [];
+$playTot = ['finished' => 0, 'started' => 0, 'base' => 0];
+foreach ($countSystemIds as $sid) foreach ($playTot as $k => $_) $playTot[$k] += $play[$sid][$k] ?? 0;
+$playPct = fn(array $p, string $k) => ($p['base'] ?? 0) > 0 ? (int)round(($p[$k] ?? 0) / $p['base'] * 100) : 0;
+$playTitle = fn(string $k) => t('dashboard.' . $k . '_title' . (($user['played_pct'] ?? 'all') === 'owned' ? '_owned' : ''));
 ?>
 <!DOCTYPE html>
 <html lang="<?= currentLang() ?>">
@@ -117,9 +125,9 @@ $totalOwnedVal= array_sum(array_column($statsRaw,   'owned_value'));
   .dash-sub   { font-size:.65rem; color:var(--muted); letter-spacing:.15em; text-transform:uppercase; margin-bottom:28px; }
 
   /* Overall stats */
+  /* Boxes are at least 110px and grow to fit a wide value; each row fills the width */
   .overall-grid {
-    display:grid;
-    grid-template-columns:repeat(auto-fill,minmax(110px,1fr));
+    display:flex; flex-wrap:wrap;
     gap:1px;
     background:var(--border);
     border:1px solid var(--border);
@@ -127,14 +135,14 @@ $totalOwnedVal= array_sum(array_column($statsRaw,   'owned_value'));
   }
   .overall-stat {
     background:var(--surface);
-    padding:14px 6px;
+    padding:14px 10px;
     text-align:center;
-    overflow:hidden;
-    min-width:0;
+    flex:1 1 110px;
+    min-width:max-content;
   }
   .overall-val {
     font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case);
-    font-size:1.7rem; line-height:1;
+    font-size:calc(1.7rem * var(--stat-scale)); line-height:1;
     color:var(--accent2);
     white-space:nowrap;
   }
@@ -161,6 +169,13 @@ $totalOwnedVal= array_sum(array_column($statsRaw,   'owned_value'));
     color:var(--text);
   }
   .sys-card:hover { border-color:var(--accent2); }
+  .sys-card { position:relative; }
+  .sys-card.dragging { opacity:.55; border-color:var(--accent2); }
+  /* The whole card can be dragged to reorder (see the script at the bottom) */
+  #sys-grid .sys-card { -webkit-user-drag:none; user-select:none; -webkit-touch-callout:none; }   /* no link preview on a long press */
+  #sys-grid .sys-card img { -webkit-user-drag:none; pointer-events:none; }
+  .sys-card.dragging { cursor:grabbing; box-shadow:0 10px 28px var(--shadow-color); z-index:3; }
+  .overall-pct, .sys-stat-pct { font-family:var(--font-body); font-size:.7rem; color:var(--muted); margin-left:4px; letter-spacing:0; }
   .sys-card.hidden-sys { opacity:.4; }
 
   .sys-card-header {
@@ -238,7 +253,7 @@ $totalOwnedVal= array_sum(array_column($statsRaw,   'owned_value'));
       <div class="overall-label"><?= t('dashboard.systems') ?></div>
     </div>
     <div class="overall-stat">
-      <div class="overall-val"><?= fmtNum($totalGames) ?></div>
+      <div class="overall-val orange"><?= fmtNum($totalGames) ?></div>
       <div class="overall-label"><?= t($editionMode === 'one' ? 'dashboard.total_games' : 'ed.total_editions') ?></div>
     </div>
     <div class="overall-stat">
@@ -270,9 +285,19 @@ $totalOwnedVal= array_sum(array_column($statsRaw,   'owned_value'));
       <div class="overall-label"><?= t('dashboard.cib_all') ?></div>
     </div>
     <div class="overall-stat">
-      <div class="overall-val green"><?= money($totalOwnedVal, 0) ?></div>
+      <div class="overall-val"><?= money($totalOwnedVal, 0) ?></div>
       <div class="overall-label"><?= t('dashboard.owned_value') ?></div>
     </div>
+    <?php if ($showPlayed): ?>
+    <div class="overall-stat" title="<?= $playTitle('finished') ?>">
+      <div class="overall-val green"><?= fmtNum($playTot['finished']) ?><span class="overall-pct"><?= $playPct($playTot, 'finished') ?>%</span></div>
+      <div class="overall-label"><?= t('coll.finished') ?></div>
+    </div>
+    <div class="overall-stat" title="<?= $playTitle('started') ?>">
+      <div class="overall-val orange"><?= fmtNum($playTot['started']) ?><span class="overall-pct"><?= $playPct($playTot, 'started') ?>%</span></div>
+      <div class="overall-label"><?= t('coll.started') ?></div>
+    </div>
+    <?php endif; ?>
     <?php if ($avgScoreAll !== null): $al = gradeLabelForScore($avgScoreAll); ?>
     <div class="overall-stat" title="<?= t('dashboard.avg_title', ['n' => $scoredTotal]) ?>">
       <div class="overall-val" style="color:<?= htmlspecialchars($al['color'] ?? 'var(--wiiu2)') ?>"><?= $avgScoreAll ?></div>
@@ -312,7 +337,17 @@ $totalOwnedVal= array_sum(array_column($statsRaw,   'owned_value'));
     $html .= '<div class="sys-stat"><div class="sys-stat-val g">'.(int)$st['total_copies'].'</div><div class="sys-stat-label">'.t('dashboard.copies').'</div></div>';
     $html .= '<div class="sys-stat"><div class="sys-stat-val b">'.(int)$st['wishlisted'].'</div><div class="sys-stat-label">'.t('common.nav.wishlist').'</div></div>';
     $html .= '<div class="sys-stat"><div class="sys-stat-val o">'.(int)$st['upgrades'].'</div><div class="sys-stat-label">'.t('dashboard.upgrade').'</div></div>';
-    $html .= '</div></div>';
+    $html .= '</div>';
+    // Finished / Started (when shown): count and percentage
+    if (isset($st['play'])) {
+      $p = $st['play'];
+      $pct = fn(string $k) => $p['base'] > 0 ? (int)round($p[$k] / $p['base'] * 100) : 0;
+      $html .= '<div class="sys-stat-row" style="border-top:1px solid var(--border);padding-top:8px;margin-top:8px">';
+      $html .= '<div class="sys-stat"><div class="sys-stat-val g">'.(int)$p['finished'].' <span class="sys-stat-pct">'.$pct('finished').'%</span></div><div class="sys-stat-label">'.t('coll.finished').'</div></div>';
+      $html .= '<div class="sys-stat"><div class="sys-stat-val o">'.(int)$p['started'].' <span class="sys-stat-pct">'.$pct('started').'%</span></div><div class="sys-stat-label">'.t('coll.started').'</div></div>';
+      $html .= '</div>';
+    }
+    $html .= '</div>';
     return $html;
   }
 
@@ -355,11 +390,12 @@ $totalOwnedVal= array_sum(array_column($statsRaw,   'owned_value'));
 
   <?php if ($visibleSystems): ?>
   <div class="section-head"><?= t('dashboard.active_systems') ?></div>
-  <div class="systems-grid" style="margin-bottom:32px">
+  <div class="systems-grid" id="sys-grid" style="margin-bottom:32px">
     <?php foreach ($visibleSystems as $s):
       $st = $stats[$s['id']] ?? ['total_games'=>0,'owned'=>0,'total_copies'=>0,'upgrades'=>0,'wishlisted'=>0,'total_spent'=>0,'owned_value'=>0,'cib_total'=>0,'labels'=>[],'avg_score'=>null,'scored'=>0];
+      if ($showPlayed) $st['play'] = $play[$s['id']] ?? ['finished' => 0, 'started' => 0, 'base' => 0];
     ?>
-    <a href="<?= BASE_URL ?>/collection.php?s=<?= $s['id'] ?>" class="sys-card">
+    <a href="<?= BASE_URL ?>/collection.php?s=<?= $s['id'] ?>" class="sys-card" data-sys="<?= (int)$s['id'] ?>" draggable="false">
       <?= sysCardHeader($s, $st, $showIcons) ?>
       <?= progressHtml($st) ?>
       <?= qualBarHtml($st) ?>
@@ -378,6 +414,7 @@ $totalOwnedVal= array_sum(array_column($statsRaw,   'owned_value'));
   <div class="systems-grid" id="hidden-systems" style="display:none">
     <?php foreach ($hiddenSystems as $s):
       $st = $stats[$s['id']] ?? ['total_games'=>0,'owned'=>0,'total_copies'=>0,'upgrades'=>0,'wishlisted'=>0,'total_spent'=>0,'owned_value'=>0,'cib_total'=>0,'labels'=>[],'avg_score'=>null,'scored'=>0];
+      if ($showPlayed) $st['play'] = $play[$s['id']] ?? ['finished' => 0, 'started' => 0, 'base' => 0];
     ?>
     <div class="sys-card hidden-sys" onclick="activateSystem(<?= $s['id'] ?>)" style="cursor:pointer" title="<?= t('dashboard.click_to_show') ?>">
       <?= sysCardHeader($s, $st, $showIcons) ?>
@@ -407,12 +444,79 @@ async function activateSystem(systemId) {
     system_id:  s.id,
     visible:    s.id == systemId ? true : s.visible,
     sort_order: s.user_sort_order ?? i,
+    count_for_totals: s.count_for_totals,   // keep it (the API would reset it to "counts")
   }));
   await fetch(`${DASH_BASE}/api/system_prefs.php`, {
     method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({prefs})
   });
   window.location.reload();
 }
+
+// ── Reorder systems by dragging a whole card (saved straight away). A plain click still opens the system.
+// Mouse: the drag starts once the pointer moves a few pixels. Touch: hold the card briefly, then drag
+// (a quick swipe still scrolls the page).
+(() => {
+  const grid = document.getElementById('sys-grid');
+  if (!grid) return;
+  let pending = null, card = null, holdTimer = null, justDragged = false;
+
+  const start = () => {
+    if (!pending) return;
+    card = pending.card;
+    card.classList.add('dragging');
+    try { card.setPointerCapture(pending.id); } catch { /* the pointer may be gone */ }
+  };
+  const cancel = () => { clearTimeout(holdTimer); pending = null; };
+
+  grid.addEventListener('pointerdown', e => {
+    const c = e.target.closest('.sys-card');
+    if (!c || e.button > 0) return;
+    pending = { card: c, id: e.pointerId, x: e.clientX, y: e.clientY, touch: e.pointerType !== 'mouse' };
+    if (pending.touch) holdTimer = setTimeout(start, 350);
+  });
+  grid.addEventListener('pointermove', e => {
+    if (!card) {
+      if (!pending) return;
+      const moved = Math.hypot(e.clientX - pending.x, e.clientY - pending.y);
+      if (pending.touch) { if (moved > 8) cancel(); return; }   // moved before the hold: it's a scroll
+      if (moved > 6) start();
+      if (!card) return;
+    }
+    const over = document.elementFromPoint(e.clientX, e.clientY)?.closest('#sys-grid .sys-card');
+    if (!over || over === card) return;
+    const cards = [...grid.querySelectorAll('.sys-card')];
+    grid.insertBefore(card, cards.indexOf(over) > cards.indexOf(card) ? over.nextSibling : over);
+  });
+  // While dragging on a touch screen the page must not scroll
+  grid.addEventListener('touchmove', e => { if (card) e.preventDefault(); }, { passive: false });
+  grid.addEventListener('contextmenu', e => { if (card || pending?.touch) e.preventDefault(); });
+  // The click that ends a drag must not open the system
+  grid.addEventListener('click', e => { if (justDragged) { e.preventDefault(); e.stopPropagation(); justDragged = false; } }, true);
+
+  const drop = async () => {
+    cancel();
+    if (!card) return;
+    card.classList.remove('dragging');
+    card = null;
+    justDragged = true;
+    setTimeout(() => { justDragged = false; }, 400);
+    // Visible systems in their new order, then the hidden ones as they were
+    const order = [...grid.querySelectorAll('.sys-card')].map(c => +c.dataset.sys);
+    const res = await fetch(`${DASH_BASE}/api/system_prefs.php`).then(r => r.json()).catch(() => ({ ok: false }));
+    if (!res.ok) return;
+    const rest = res.systems.filter(s => !order.includes(+s.id));
+    const prefs = [...order.map(id => res.systems.find(s => +s.id === id)).filter(Boolean), ...rest].map((s, i) => ({
+      system_id: s.id, visible: s.visible, sort_order: i, count_for_totals: s.count_for_totals,
+    }));
+    const ok = (await fetch(`${DASH_BASE}/api/system_prefs.php`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prefs }) })
+      .then(r => r.json()).catch(() => ({ ok: false }))).ok;
+    const tst = document.getElementById('dash-toast');
+    if (tst) { tst.textContent = tRaw(ok ? 'dashboard.order_saved' : 'common.error'); tst.classList.add('show'); setTimeout(() => tst.classList.remove('show'), 1800); }
+  };
+  grid.addEventListener('pointerup', drop);
+  grid.addEventListener('pointercancel', drop);
+})();
 </script>
+<div class="toast" id="dash-toast" role="status"></div>
 </body>
 </html>

@@ -196,11 +196,11 @@ foreach ($entries as $e) {
   .d-empty { font-size:.7rem; color:var(--muted); font-style:italic; }
 </style>
 <?= csrfScript() ?>
-<?= appScript(['coll', 'drawer', 'grading', 'wish', 'ed', 'cr', 'comp']) ?>
+<?= appScript(['coll', 'drawer', 'grading', 'wish', 'ed', 'cr', 'comp', 'di', 'crop']) ?>
 </head>
 <body>
 
-<header class="site-header">
+<header class="site-header site-header--sticky">
   <a href="<?= BASE_URL ?>/collection.php" class="site-logo" style="text-decoration:none"><?= siteLogoHtml() ?></a>
   <div class="hstats">
     <div class="hstat"><div class="hstat-val blue" id="hs-wish"><?= count($entries) ?></div><div class="hstat-label"><?= t('dashboard.wishlisted') ?></div></div>
@@ -463,10 +463,14 @@ foreach ($entries as $e) {
 <div class="toast" id="toast"></div>
 
 <script>window.GRADING = <?= gradingClientJson($canEdit ? $user : null) ?>;</script>
+<script src="<?= BASE_URL ?>/assets/js/defect-info.js?v=<?= @filemtime(__DIR__.'/assets/js/defect-info.js') ?>"></script>
 <script src="<?= BASE_URL ?>/assets/js/grading.js?v=<?= @filemtime(__DIR__.'/assets/js/grading.js') ?>"></script>
 <script src="<?= BASE_URL ?>/assets/js/editions-drawer.js?v=<?= @filemtime(__DIR__.'/assets/js/editions-drawer.js') ?>"></script>
 <script src="<?= BASE_URL ?>/assets/js/compilations-drawer.js?v=<?= @filemtime(__DIR__.'/assets/js/compilations-drawer.js') ?>"></script>
 <script src="<?= BASE_URL ?>/assets/js/lightbox.js?v=<?= @filemtime(__DIR__.'/assets/js/lightbox.js') ?>"></script>
+<link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/vendor/cropper.min.css?v=<?= @filemtime(__DIR__.'/assets/css/vendor/cropper.min.css') ?>">
+<script src="<?= BASE_URL ?>/assets/js/vendor/cropper.min.js?v=<?= @filemtime(__DIR__.'/assets/js/vendor/cropper.min.js') ?>"></script>
+<script src="<?= BASE_URL ?>/assets/js/photo-crop.js?v=<?= @filemtime(__DIR__.'/assets/js/photo-crop.js') ?>"></script>
 <script src="<?= BASE_URL ?>/assets/js/vendor/qrcode.js?v=<?= @filemtime(__DIR__.'/assets/js/vendor/qrcode.js') ?>"></script>
 <script src="<?= BASE_URL ?>/assets/js/labels.js?v=<?= @filemtime(__DIR__.'/assets/js/labels.js') ?>"></script>
 <script src="<?= BASE_URL ?>/assets/js/share-drawer.js?v=<?= @filemtime(__DIR__.'/assets/js/share-drawer.js') ?>"></script>
@@ -1174,26 +1178,39 @@ function openCoverLightbox() {
   Lightbox.open([{ src: `${BASE}/uploads/defaults/${g.default_image}` }], 0);
 }
 
-/** Opens the shared lightbox (assets/js/lightbox.js); photos of the owner's copy can be rotated. */
+/** Opens the shared lightbox (assets/js/lightbox.js); photos of the owner's copy can be rotated and cropped. */
 function openLightboxArr(photos, startIdx, entryId=null) {
   const names = (photos||[]).map(fn => fn.split('?')[0]);
+  // After a rotate or crop: new version of the photo in the drawer grid and the table row
+  const changed = (i, ts) => {
+    photoTs[names[i]] = ts;
+    const gid = Object.keys(GAMES).find(id => GAMES[id].copies.some(c => c.id == entryId));
+    if (gid) {
+      if (editGameId == gid) {
+        const c = findCopy(gid, x => x.copy_number == editCopy);
+        if (c) renderPhotoGrid(c.photos, c.primary_photo||'', c.id);
+      }
+      refreshGameRows(gid);
+    }
+    return photoUrl(names[i]);
+  };
   Lightbox.open(names.map(fn => ({ src: photoUrl(fn) })), startIdx, {
     onRotate: CAN_EDIT && entryId ? async (i, degrees) => {
       toast(tRaw('drawer.rotating'));
       const res = await apiFetch('/api/photo_rotate.php', {entry_id: entryId, filename: names[i], degrees});
       if (!res.ok) { toast(tRaw('drawer.rotate_failed', {error: res.error || ''}), true); return null; }
-      photoTs[names[i]] = res.ts;
-      // Refresh drawer grid + table row for the game that owns this entry
-      const gid = Object.keys(GAMES).find(id => GAMES[id].copies.some(c => c.id == entryId));
-      if (gid) {
-        if (editGameId == gid) {
-          const c = findCopy(gid, x => x.copy_number == editCopy);
-          if (c) renderPhotoGrid(c.photos, c.primary_photo||'', c.id);
-        }
-        refreshGameRows(gid);
-      }
       toast(tRaw('drawer.rotated'));
-      return photoUrl(names[i]);
+      return changed(i, res.ts);
+    } : null,
+    // Free crop (assets/js/photo-crop.js); replaces the photo, like rotating
+    onCrop: CAN_EDIT && entryId ? async (i, src) => {
+      const box = await PhotoCrop.open(src);
+      if (!box) return null;
+      toast(tRaw('crop.cropping'));
+      const res = await apiFetch('/api/photo_crop.php', {entry_id: entryId, filename: names[i], ...box});
+      if (!res.ok) { toast(tRaw('crop.failed', {error: res.error || ''}), true); return null; }
+      toast(tRaw('crop.done'));
+      return changed(i, res.ts);
     } : null,
   });
 }

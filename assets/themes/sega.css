@@ -1,6 +1,6 @@
 /* Theme:  Sega
    Scheme: dark
-   Fonts:  https://fonts.googleapis.com/css2?family=Russo+One&family=Share+Tech+Mono&display=swap
+   Fonts:  fonts/sega.css
    About:  16-bit Mega Drive: black casing, Sega blue, red stripe and CRT scanlines. */
 
 :root {
@@ -49,6 +49,7 @@
   --font-display:  'Russo One', sans-serif;
   --display-weight: 400;
   --display-case:  uppercase;
+  --stat-scale:    .76;               /* wider display font: smaller stat numbers */
 }
 
 /* Russo One is wider than Bebas Neue: tone the big numbers down a little */

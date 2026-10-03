@@ -101,6 +101,16 @@ function parseCSV(text) {
   return rows;
 }
 
+/** A CSV file chosen on this computer: read in the browser (never uploaded or stored), put in the box, then previewed. */
+async function pcFromFile(input, textareaId, next) {
+  const f = input.files && input.files[0];
+  input.value = '';
+  if (!f) return;
+  try { document.getElementById(textareaId).value = await f.text(); }
+  catch (e) { alert(tRaw('common.err_prefix', {error: e.message})); return; }
+  next();
+}
+
 async function pcPreview() {
   const csv = document.getElementById('pc-csv').value.trim();
   if (!csv) { alert(tRaw('pc.err_no_csv')); return; }

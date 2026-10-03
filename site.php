@@ -149,6 +149,68 @@ function defaultOptionList(string $setting, string $langKey): array {
     return array_values(array_unique(array_filter(array_map(fn($s) => mb_substr(trim($s), 0, 100), $list), 'strlen')));
 }
 
+// ── Played status groups ─────────────────
+// The Collection page counts games per group: finished (Finished, Cheated, 100% …) and started (Started, Stuck …).
+
+const PLAY_GROUPS = ['finished', 'started', 'none'];
+
+/** Group of a played status: the user's choice, else a guess from its name (English and Dutch). Mirror: playGroupGuess() in settings.js. */
+function playGroupOf(string $label, ?string $stored = null): string {
+    if (in_array($stored, PLAY_GROUPS, true)) return $stored;
+    $l = mb_strtolower($label);
+    if (preg_match('/finish|complet|100|cheat|beat|clear|done|platin|uitgespeeld|voltooid|valsgespeeld|gehaald|klaar/u', $l)) return 'finished';
+    if (preg_match('/start|stuck|playing|progress|begonnen|vastgelopen|vast|bezig|gestart/u', $l)) return 'started';
+    return 'none';
+}
+
+/** A user's played statuses in order: [{label, group}] (group guessed when not chosen yet). */
+function userPlayedOptions(int $userId): array {
+    $st = db()->prepare("SELECT label, play_group FROM user_played_options WHERE user_id=? ORDER BY sort_order");
+    $st->execute([$userId]);
+    return array_map(fn($r) => ['label' => $r['label'], 'group' => playGroupOf($r['label'], $r['play_group'])], $st->fetchAll());
+}
+
+function showPlayedCounters(array $user): bool { return (int)($user['show_played'] ?? 1) === 1; }
+
+/**
+ * Finished / Started counters per system for the dashboard, counted per game the same way as the
+ * Collection page: [system_id => ['finished' => n, 'started' => n, 'base' => n]], base = what the
+ * percentage is of (all games, or the owned ones with played_pct 'owned').
+ * $unit: SQL of the counting unit (editions); $compContents: compilations count their contents.
+ */
+function playedCountersBySystem(array $user, string $unit, bool $compContents): array {
+    $fin = []; $sta = [];
+    foreach (userPlayedOptions((int)$user['id']) as $o) {
+        if ($o['group'] === 'finished') $fin[] = $o['label'];
+        if ($o['group'] === 'started')  $sta[] = $o['label'];
+    }
+    $in = fn(array $l) => $l ? 'ce.played_status IN (' . implode(',', array_fill(0, count($l), '?')) . ')' : '0';
+    $owned = $compContents ? '(ce.owned = 1 OR via.game_id IS NOT NULL)' : 'ce.owned = 1';
+    $st = db()->prepare("
+        SELECT g.system_id, $unit AS u,
+               MAX(CASE WHEN $owned THEN 1 ELSE 0 END) AS o,
+               MAX(CASE WHEN {$in($fin)} THEN 1 ELSE 0 END) AS f,
+               MAX(CASE WHEN {$in($sta)} THEN 1 ELSE 0 END) AS s
+        FROM games g
+        LEFT JOIN collection_entries ce ON ce.game_id = g.id AND ce.user_id = ?
+        " . ($compContents ? compilationCountJoins() : '') . "
+        WHERE g.active = 1" . ($compContents ? ' AND comp.compilation_id IS NULL' : '') . "
+        GROUP BY g.system_id, u
+    ");
+    $st->execute(array_merge($fin, $sta, [$user['id']], $compContents ? [$user['id']] : []));
+    $ownedOnly = ($user['played_pct'] ?? 'all') === 'owned';
+    $out = [];
+    foreach ($st->fetchAll() as $r) {
+        $sid = (int)$r['system_id'];
+        $out[$sid] ??= ['finished' => 0, 'started' => 0, 'base' => 0];
+        if ($ownedOnly && !$r['o']) continue;
+        $out[$sid]['base']++;
+        if ($r['f']) $out[$sid]['finished']++;
+        elseif ($r['s']) $out[$sid]['started']++;
+    }
+    return $out;
+}
+
 /** Gives a new user their starting completeness and played options. */
 function seedUserOptions(int $userId): void {
     $ins = db()->prepare("INSERT INTO user_completeness_options (user_id, label, sort_order) VALUES (?,?,?)");

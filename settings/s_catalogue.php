@@ -108,6 +108,8 @@ $gameRow = function (array $g, bool $member = false, bool $isMain = false) use (
 console,name,data-product,link,loose,cib,new,coverArtBase64
 WiiU,Example Game,12345,https://...,12.34,23.45,34.56,data:image/jpeg;base64..."></textarea>
   <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+    <label class="btn-outline pc-file" style="padding:8px 14px;font-size:.72rem;cursor:pointer">⬆ <?= t('pc.choose_file') ?>
+      <input type="file" accept=".csv,text/csv" hidden onchange="pcFromFile(this, 'pc-csv', pcPreview)"></label>
     <button class="btn btn-sm" onclick="pcPreview()"><?= t('import.preview') ?> →</button>
     <a href="<?= BASE_URL ?>/pc_import.php" class="btn-outline" style="padding:8px 14px;font-size:.72rem"><?= t('admin.pc.full_page') ?> ↗</a>
     <a href="<?= BASE_URL ?>/api/pc_example.php" class="btn-outline" style="padding:8px 14px;font-size:.72rem" download>⬇ <?= t('pc.example') ?></a>

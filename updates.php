@@ -23,16 +23,25 @@ const LEGACY_MIGRATIONS = [
 // ── Database migrations ──────────────────
 // Each file in migrations/ runs once, in number order (001_, 002_, …), and is then recorded
 // in schema_migrations. schema.sql lists the ones it already includes, so fresh installs skip them.
+// Release migrations live in migrations/ (one per release, every step safe to run twice).
+// While a release is being built, each feature's migration lives in migrations/dev/ ('dev/…' in
+// schema_migrations); those only run on a site whose config.php sets DEV_MIGRATIONS to true (a test site).
+// At release time they are combined into one release file, which the test site then runs harmlessly.
 
 /**
  * Every migration file name, in the order they must run. Only numbered files (001_name.sql) count:
  * files left on the server under an old name (e.g. 2026-10_editions.sql) are ignored.
  */
 function migrationFiles(): array {
-    $files = array_filter(array_map('basename', glob(MIGRATIONS_DIR . '*.sql') ?: []),
-                          fn($f) => preg_match('/^\d{3}_[A-Za-z0-9_.-]+\.sql$/', $f));
-    usort($files, 'strnatcmp');
-    return $files;
+    $list = function (string $dir, string $prefix): array {
+        $files = array_filter(array_map('basename', glob(MIGRATIONS_DIR . $dir . '*.sql') ?: []),
+                              fn($f) => preg_match('/^\d{3}_[A-Za-z0-9_.-]+\.sql$/', $f));
+        usort($files, 'strnatcmp');
+        return array_map(fn($f) => $prefix . $f, $files);
+    };
+    // Releases first, then (test sites only) the development files that build on them
+    $dev = defined('DEV_MIGRATIONS') && DEV_MIGRATIONS ? $list('dev/', 'dev/') : [];
+    return array_merge($list('', ''), $dev);
 }
 
 /** File names recorded in schema_migrations (creating the table on an install from before the runner). */

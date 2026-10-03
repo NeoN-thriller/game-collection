@@ -1,6 +1,6 @@
 /* Theme:  PlayStation
    Scheme: dark
-   Fonts:  https://fonts.googleapis.com/css2?family=Exo+2:wght@500;600&family=Inter:wght@400;500;600&display=swap
+   Fonts:  fonts/playstation.css
    About:  Deep midnight blue with PlayStation blue and the four face-button colours. */
 
 :root {
@@ -50,6 +50,7 @@
   --font-display:  'Exo 2', sans-serif;
   --display-weight: 600;
   --display-case:  none;
+  --stat-scale:    .8;               /* wider display font: smaller stat numbers */
 }
 
 .btn { letter-spacing:.06em; }

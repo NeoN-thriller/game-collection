@@ -25,7 +25,7 @@ function shareNewToken(): string {
 }
 
 /**
- * Per-category breakdown of one unit (mirror of gradeUnitScore): [{name, max, score, defects:[{name, count, deduction}]}].
+ * Per-category breakdown of one unit (mirror of gradeUnitScore): [{name, max, score, defects:[{id, name, count, deduction}]}].
  */
 function gradeUnitBreakdown(array $tpl, array $counts): array {
     $out = [];
@@ -40,7 +40,7 @@ function gradeUnitBreakdown(array $tpl, array $counts): array {
                 case 'level': $ded = $d['penalty']; $g = $d['level_group'] ?? ''; $levels[$g] = max($levels[$g] ?? 0, $ded); break;
                 default:      $ded = $d['penalty'] * $n; $lost += $ded;
             }
-            $defects[] = ['name' => $d['name'], 'count' => $n, 'deduction' => $ded];
+            $defects[] = ['id' => (int)$d['id'], 'name' => $d['name'], 'count' => $n, 'deduction' => $ded];
         }
         $lost += array_sum($levels);
         $out[] = ['name' => $cat['name'], 'max' => $cat['max_points'], 'score' => max(0, $cat['max_points'] - $lost), 'defects' => $defects];
@@ -105,8 +105,9 @@ function conditionReport(int $entryId): ?array {
             return $p;
         }, $raw);
         $scored = gradeScoreParts($raw, $profileId);
+        $refs = photoPartRefs($scored['parts']);   // stable keys for photo tags
         $seenPc = [];
-        foreach ($scored['parts'] as $p) {
+        foreach ($scored['parts'] as $pi => $p) {
             $spec = gradePartSpec($p, $cfg);
             if (!$spec) continue;
             if ($p['pc']) $seenPc[(int)$p['pc']] = true;
@@ -114,18 +115,19 @@ function conditionReport(int $entryId): ?array {
             $units = [];
             foreach ($p['units'] as $i => $u) {
                 $units[] = [
+                    'unit_no'    => $i + 1,
                     'name'       => $p['qty'] > 1 ? $name . ' #' . ($i + 1) : $name,
                     'score'      => (int)$u['s'],
                     'categories' => gradeUnitBreakdown($spec['tpl'], $u['d']),
                 ];
             }
-            $parts[] = ['name' => $name, 'abbr' => $spec['abbr'], 'weight' => (int)$spec['weight'], 'qty' => (int)$p['qty'],
+            $parts[] = ['ref' => $refs[$pi], 'name' => $name, 'abbr' => $spec['abbr'], 'weight' => (int)$spec['weight'], 'qty' => (int)$p['qty'],
                         'included' => $p['qty'] > 0, 'units' => $units];
         }
         // Profile parts that were never added count as missing too
         foreach ($profile['components'] ?? [] as $c) {
             if (isset($seenPc[$c['id']])) continue;
-            $parts[] = ['name' => $c['label'], 'abbr' => $c['abbr'], 'weight' => (int)$c['weight'], 'qty' => 0, 'included' => false, 'units' => []];
+            $parts[] = ['ref' => 'c' . (int)$c['id'], 'name' => $c['label'], 'abbr' => $c['abbr'], 'weight' => (int)$c['weight'], 'qty' => 0, 'included' => false, 'units' => []];
         }
         // Weight share of each unit, the part score (average of its units) and the formula
         $totalW = array_sum(array_map(fn($p) => $p['included'] ? $p['weight'] : 0, $parts));
@@ -143,6 +145,16 @@ function conditionReport(int $entryId): ?array {
 
     $photoSt = db()->prepare("SELECT id FROM copy_photos WHERE entry_id=? ORDER BY sort_order, id");
     $photoSt->execute([$entryId]);
+    $photoIds = array_map('intval', $photoSt->fetchAll(PDO::FETCH_COLUMN));
+
+    // Photo tags (point grading only): {photo_id: {ref, unit_no, defects}}, ref '' = overview.
+    // Overview photos come first, then the owner's order.
+    $photoTags = [];
+    if ($method === 'points') {
+        $photoTags = photoTagsReportMap($entryId, $photoIds);
+        $first = array_values(array_filter($photoIds, fn($p) => ($photoTags[$p]['ref'] ?? null) === ''));
+        $photoIds = array_merge($first, array_values(array_diff($photoIds, $first)));
+    }
 
     return [
         'v'            => 1,
@@ -160,7 +172,8 @@ function conditionReport(int $entryId): ?array {
         'completeness' => (string)$e['completeness'],
         'parts'        => $parts,
         'formula'      => $method === 'points' && $score !== null ? ['terms' => $terms ?? [], 'total' => $totalW ?? 0, 'result' => $score] : null,
-        'photos'       => array_map('intval', $photoSt->fetchAll(PDO::FETCH_COLUMN)),
+        'photos'       => $photoIds,
+        'photo_tags'   => (object)$photoTags,
     ];
 }
 

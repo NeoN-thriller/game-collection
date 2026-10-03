@@ -8,9 +8,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Delete all existing and reinsert in order
     db()->prepare("DELETE FROM user_tag_options WHERE user_id=?")->execute([$user['id']]);
     $ins = db()->prepare("INSERT INTO user_tag_options (user_id, label, sort_order) VALUES (?,?,?)");
-    foreach ($tags as $i => $tag) {
-        $tag = trim($tag);
-        if ($tag) $ins->execute([$user['id'], $tag, $i]);
+    $n = 0; $seen = [];
+    foreach ((array)$tags as $tag) {
+        $tag = mb_substr(trim((string)$tag), 0, 100);
+        if ($tag === '' || isset($seen[mb_strtolower($tag)])) continue;   // a tag can only be in the list once
+        $seen[mb_strtolower($tag)] = true;
+        $ins->execute([$user['id'], $tag, $n++]);
     }
     jsonOut(['ok'=>true]);
 } else {

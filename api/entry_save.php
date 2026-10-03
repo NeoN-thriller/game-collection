@@ -78,6 +78,16 @@ try {
         saveEntryGrading((int)$entryId, (int)$user['id'], $body['grading']);
     }
 
+    // Photo tags {photo_id: {part_ref, unit_no, defects} | null}, checked against the grading just saved.
+    // A tag that doesn't fit (e.g. its part was removed in this save) is skipped, not an error.
+    if (isset($body['photo_tags']) && is_array($body['photo_tags'])) {
+        $valid = photoTagValidUnits((int)$entryId);
+        foreach ($body['photo_tags'] as $pid => $tag) {
+            try { photoTagSet((int)$entryId, (int)$user['id'], (int)$pid, is_array($tag) ? $tag : null, $valid); }
+            catch (DomainException) { /* skipped */ }
+        }
+    }
+
     if ($moveTo) {
         $next = $pdo->prepare("SELECT COALESCE(MAX(copy_number), 0) + 1 FROM collection_entries WHERE user_id=? AND game_id=? FOR UPDATE");
         $next->execute([$user['id'], $moveTo]);
@@ -107,5 +117,9 @@ $entry['wishlist_any'] = (bool)($entry['wishlist_any'] ?? false);
 $entry['photos']   = $entry['photos_raw'] ? explode('||', $entry['photos_raw']) : [];
 unset($entry['photos_raw']);
 $entry['grading']  = loadEntryGrading([$entry['id']])[(int)$entry['id']] ?? null;
+$photoD = entryPhotoData([(int)$entry['id']])[(int)$entry['id']] ?? [];
+$entry['photos']      = $photoD['photos'] ?? [];
+$entry['photo_items'] = $photoD['photo_items'] ?? [];
+$entry['photo_tags']  = (object)(photoTagsForEntries([(int)$entry['id']], [(int)$entry['id'] => $entry['grading'] ?? []])[(int)$entry['id']] ?? []);
 
 jsonOut(['ok'=>true, 'entry'=>$entry] + ($moveTo ? ['moved_from' => ['game_id' => $gameId, 'copy_number' => $copyNum]] : []));

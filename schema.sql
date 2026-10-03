@@ -62,10 +62,23 @@ CREATE TABLE `grade_defects` (
   `kind`        enum('each','once','max','level') NOT NULL DEFAULT 'each',
   `max_count`   tinyint(3) unsigned DEFAULT NULL,
   `level_group` varchar(50) DEFAULT NULL,
+  `description` varchar(500) DEFAULT NULL,                -- what the defect means (ⓘ while grading and on the report)
   `sort_order`  smallint(6) NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
   KEY `category_id` (`category_id`),
   CONSTRAINT `grade_defects_ibfk_1` FOREIGN KEY (`category_id`) REFERENCES `grade_categories` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Example photos of a defect (up to 3, files in uploads/defects/), admin-managed
+DROP TABLE IF EXISTS `grade_defect_photos`;
+CREATE TABLE `grade_defect_photos` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `defect_id` int(10) unsigned NOT NULL,
+  `filename` varchar(255) NOT NULL,
+  `sort_order` tinyint(3) unsigned NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  KEY `defect_id` (`defect_id`),
+  CONSTRAINT `grade_defect_photos_defect_fk` FOREIGN KEY (`defect_id`) REFERENCES `grade_defects` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 
@@ -194,6 +207,33 @@ CREATE TABLE `copy_photos` (
   KEY `user_id` (`user_id`),
   CONSTRAINT `copy_photos_ibfk_1` FOREIGN KEY (`entry_id`) REFERENCES `collection_entries` (`id`) ON DELETE CASCADE,
   CONSTRAINT `copy_photos_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- Photo tags: which part unit (and which of its defects) a photo shows. One tag per photo; no row = untagged.
+-- part_ref is stable across re-saves: 'c<profile component id>', 'o:<own item name>' ('~2' for a repeated name), '' = overview.
+DROP TABLE IF EXISTS `copy_photo_tags`;
+CREATE TABLE `copy_photo_tags` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `photo_id` int(10) unsigned NOT NULL,
+  `entry_id` int(10) unsigned NOT NULL,
+  `part_ref` varchar(160) NOT NULL DEFAULT '',
+  `unit_no` tinyint(3) unsigned NOT NULL DEFAULT 1,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_photo` (`photo_id`),
+  KEY `idx_entry` (`entry_id`),
+  CONSTRAINT `copy_photo_tags_photo_fk` FOREIGN KEY (`photo_id`) REFERENCES `copy_photos` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `copy_photo_tags_entry_fk` FOREIGN KEY (`entry_id`) REFERENCES `collection_entries` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+DROP TABLE IF EXISTS `copy_photo_tag_defects`;
+CREATE TABLE `copy_photo_tag_defects` (
+  `tag_id` int(10) unsigned NOT NULL,
+  `defect_id` int(10) unsigned NOT NULL,
+  PRIMARY KEY (`tag_id`,`defect_id`),
+  KEY `idx_defect` (`defect_id`),
+  CONSTRAINT `copy_photo_tag_defects_tag_fk` FOREIGN KEY (`tag_id`) REFERENCES `copy_photo_tags` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `copy_photo_tag_defects_defect_fk` FOREIGN KEY (`defect_id`) REFERENCES `grade_defects` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 
@@ -364,6 +404,8 @@ CREATE TABLE `users` (
   `track_variants` tinyint(1) NOT NULL DEFAULT 0,
   `label_template_id` int(10) unsigned DEFAULT NULL,
   `compilation_mode` enum('own','contents') NOT NULL DEFAULT 'own',
+  `played_pct` enum('all','owned') NOT NULL DEFAULT 'all',        -- Finished / Started counters: of all games, or of owned games
+  `show_played` tinyint(1) NOT NULL DEFAULT 1,                    -- show those counters on the Collection page and the dashboard
   PRIMARY KEY (`id`),
   UNIQUE KEY `username` (`username`),
   KEY `label_template_id` (`label_template_id`),
@@ -408,6 +450,7 @@ CREATE TABLE `user_played_options` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `user_id` int(10) unsigned NOT NULL,
   `label` varchar(100) NOT NULL,
+  `play_group` enum('finished','started','none') DEFAULT NULL,   -- Finished / Started counters; NULL = guessed from the label
   `sort_order` smallint(6) NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_user_label` (`user_id`,`label`),
@@ -533,7 +576,8 @@ INSERT INTO `label_templates` (`id`, `user_id`, `name`, `size_id`, `orientation`
 
 
 -- Database updates (migrations/) this schema already includes: Settings › Updates only runs the
--- files not listed here. Adding a migration? Make the same change in this file and add its name below.
+-- files not listed here. Adding a migration? Make the same change in this file and add its name below
+-- (development files as 'dev/<name>', release files by their name).
 DROP TABLE IF EXISTS `schema_migrations`;
 CREATE TABLE `schema_migrations` (
   `filename`   varchar(190) NOT NULL,
@@ -548,4 +592,10 @@ INSERT INTO `schema_migrations` (`filename`) VALUES
   ('004_editions.sql'),
   ('005_photo_backups.sql'),
   ('006_condition_report.sql'),
-  ('007_compilations.sql');
+  ('007_compilations.sql'),
+  ('008_release_0.9.3.sql'),
+  ('dev/008_photo_tags.sql'),
+  ('dev/009_defect_info.sql'),
+  ('dev/010_played_groups.sql'),
+  ('dev/011_played_percentage.sql'),
+  ('dev/012_show_played.sql');

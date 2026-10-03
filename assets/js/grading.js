@@ -10,6 +10,12 @@
 const G = window.GRADING || { labels: [], templates: {}, profiles: [], system_profiles: {}, own_weight: 5, max_qty: 9, mode: 'simple', default: 'simple' };
 const QTY_LCM = 2520; // divisible by every qty 1–9
 
+/**
+ * A defect's (or level group's) name: with an explanation (assets/js/defect-info.js) the whole name is the
+ * trigger for its hover card and popup; otherwise the plain name. (const globals aren't on window.)
+ */
+const infoName = (ids, name) => (typeof DefectInfo !== 'undefined' && DefectInfo.button(ids, tRaw('di.about', {name}), name)) || esc(name);
+
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 const profilesById = {}, componentsById = {}, labelsById = {};
@@ -99,6 +105,38 @@ const Core = {
     const tw = list.reduce((a, u) => a + u.weight, 0);
     list.forEach(u => { u.share = tw ? u.weight / tw * 100 : 0; });
     return { score: Core.overall(units), units: list };
+  },
+
+  /**
+   * Stable keys of parts for photo tags, in the same order: 'c<component id>', or 'o:<own item name>'
+   * ('~2', '~3' … for a repeated name). Mirror of photoPartRefs() in photo_tags.php.
+   */
+  partRefs(parts) {
+    const seen = {};
+    return (parts || []).map(p => {
+      if (p.pc) return 'c' + p.pc;
+      const base = 'o:' + String(p.name || '').trim().toLowerCase().slice(0, 150);
+      seen[base] = (seen[base] || 0) + 1;
+      return seen[base] > 1 ? base + '~' + seen[base] : base;
+    });
+  },
+
+  /**
+   * Point-graded units for photo tags: [{ref, unit_no, key ('pi.ui'), name, score, weight (share %),
+   * defects:[{id, name, deduction, count}]}]. Used for the drawer's current grading and for saved copies.
+   */
+  tagUnits(parts) {
+    if (!parts || !parts.length) return [];
+    const refs = Core.partRefs(parts);
+    return Core.score(parts).units.map(u => {
+      const defects = [];
+      u.tpl.categories.forEach(cat => cat.defects.forEach(def => {
+        const n = parseInt(u.d[def.id] || 0, 10);
+        if (n > 0) defects.push({ id: def.id, name: def.name, deduction: Core.deduction(def, n), count: n });
+      }));
+      return { ref: refs[u.pi], unit_no: u.ui + 1, key: u.pi + '.' + u.ui, name: u.name, score: u.s,
+               weight: Math.round(u.share * 10) / 10, defects };
+    });
   },
 
   /** How a copy shows: {label, score, method}. score is only set for point-graded copies. */
@@ -226,10 +264,14 @@ class GradingEditor {
    * opts.compField   — the page's Completeness .field (moved into the editor's top row)
    * opts.compSelect  — the Completeness <select> (for auto-suggest)
    * opts.readOnly    — public wishlist view
+   * opts.onChange    — optional; called after the grading body is drawn (the parts may have changed)
+   * opts.defectExtra — optional (ref, unitNo, defectId) → HTML shown under a recorded defect (photo tags)
    */
   constructor(opts) {
     this.root = opts.root;
     this.readOnly = !!opts.readOnly;
+    this.onChangeCb = opts.onChange || null;
+    this.defectExtra = opts.defectExtra || null;
     this.compSelect = opts.compSelect || null;
     this.root.classList.add('gr-editor');
     this.root.innerHTML = `
@@ -343,6 +385,23 @@ class GradingEditor {
     }
   }
 
+  /**
+   * The drawer's current (possibly unsaved) point-graded units, for photo tags:
+   * [{ref, unit_no, name, score, defects:[{id, name, deduction, count}]}]. Empty for simple grading.
+   */
+  units() {
+    if (this.view !== 'points' || !this.parts) return [];
+    return Core.tagUnits(this.parts);
+  }
+
+  /** Opens one unit's defects (key 'pi.ui') in the grading section and scrolls to it. */
+  openUnit(key) {
+    this.openKey = key;
+    this.renderBody();
+    const el = this.root.querySelector('.gr-unit.open');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   // ── payload for entry_save.php ──
   getPayload() {
     if (this.readOnly) return undefined;
@@ -394,10 +453,19 @@ class GradingEditor {
 
   renderBody() {
     const body = this.$('.gr-body');
-    if (this.view === 'simple') { body.innerHTML = this.simpleNote(); return; }
-    if (!this.parts) { body.innerHTML = this.startPanel(); return; }
-    const r = Core.score(this.parts);
-    body.innerHTML = this.scoreCard(r) + this.includedHtml() + this.unitsHtml(r);
+    if (this.view === 'simple') body.innerHTML = this.simpleNote();
+    else if (!this.parts) body.innerHTML = this.startPanel();
+    else {
+      this.refs = Core.partRefs(this.parts);
+      const r = Core.score(this.parts);
+      body.innerHTML = this.scoreCard(r) + this.includedHtml() + this.unitsHtml(r);
+    }
+    if (this.onChangeCb) this.onChangeCb();
+  }
+
+  /** Extra HTML under a recorded defect (photo tags), or ''. */
+  extraFor(u, defId) {
+    return this.defectExtra && !this.readOnly ? (this.defectExtra(this.refs[u.pi], u.ui + 1, defId) || '') : '';
   }
 
   simpleNote() {
@@ -507,22 +575,23 @@ class GradingEditor {
           const on = def ? picked && picked.id === def.id : !picked;
           return `<button type="button" data-act="level" data-key="${key}" data-ci="${ci}" data-gi="${gi}" data-def="${def ? def.id : 0}" aria-pressed="${!!on}" class="${on ? 'on' : ''}"${dis}>${text}</button>`;
         };
-        return `<div class="gr-level"><span class="gr-def-name">${esc(g.name)}</span>
-          <div class="gr-seg" role="group" aria-label="${esc(g.name)}">${opt(null, t('grading.none'))}${g.defs.map(def => opt(def, `${esc(def.name)} −${def.penalty}`)).join('')}</div></div>`;
+        return `<div class="gr-level"><span class="gr-def-name">${infoName(g.defs.map(x => x.id), g.name)}</span>
+          <div class="gr-seg" role="group" aria-label="${esc(g.name)}">${opt(null, t('grading.none'))}${g.defs.map(def => opt(def, `${esc(def.name)} −${def.penalty}`)).join('')}</div></div>`
+          + (picked ? this.extraFor(u, picked.id) : '');
       }).join('');
       const defRows = cat.defects.filter(def => def.kind !== 'level').map(def => {
         const n = parseInt(d[def.id] || 0, 10), ded = Core.deduction(def, n);
         const pen = def.kind === 'once' ? t('grading.pen_once', {n: def.penalty}) : def.kind === 'max' ? t('grading.pen_max', {n: def.penalty, max: def.max_count}) : t('grading.pen_each', {n: def.penalty});
         const cap = def.kind === 'once' ? 1 : def.kind === 'max' ? (def.max_count || 1) : 99;
         return `<div class="gr-def${n > 0 ? ' hit' : ''}">
-          <span class="gr-def-name">${esc(def.name)} <small>${pen}</small></span>
+          <span class="gr-def-name">${infoName(def.id, def.name)} <small>${pen}</small></span>
           <span class="gr-ded">${ded ? '−' + ded : ''}</span>
           <span class="gr-step">
             <button type="button" data-act="def" data-key="${key}" data-def="${def.id}" data-d="-1" aria-label="${t('grading.fewer', {name: def.name})}"${n <= 0 ? ' disabled' : dis}>−</button>
             <b>${n}</b>
             <button type="button" data-act="def" data-key="${key}" data-def="${def.id}" data-d="1" aria-label="${t('grading.more', {name: def.name})}"${n >= cap ? ' disabled' : dis}>+</button>
           </span>
-        </div>`;
+        </div>` + (n > 0 ? this.extraFor(u, def.id) : '');
       }).join('');
       return `<div class="gr-cat">
         <div class="gr-cat-head"><span>${esc(cat.name)}</span><b style="color:${esc(scoreColor(pct))}">${cs.score}<small>/${cat.max_points}</small></b></div>

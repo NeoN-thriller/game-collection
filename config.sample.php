@@ -27,6 +27,10 @@ define('DEFAULTS_URL',    BASE_URL . '/uploads/defaults/');
 define('MAX_FILE_SIZE',   8 * 1024 * 1024); // 8MB per image
 define('ALLOWED_TYPES',   ['image/jpeg','image/png','image/gif','image/webp']);
 
+// Test sites only: also run the development migrations in migrations/dev/ (Settings › Updates).
+// Leave this out on the live site; it gets one combined migration per release.
+// define('DEV_MIGRATIONS', true);
+
 // ─────────────────────────────────────────
 //  DO NOT EDIT BELOW THIS LINE
 // ─────────────────────────────────────────

@@ -46,4 +46,16 @@ foreach ($rows as &$row) {
 unset($row);
 attachEntryGrading($rows);
 
+// Photos with their ids (photo_items, same order as photos) and their tags (only valid ones)
+$ids    = array_map(fn($r) => (int)$r['id'], $rows);
+$photoD = entryPhotoData($ids);
+$tags   = photoTagsForEntries($ids, array_combine($ids, array_map(fn($r) => $r['grading'] ?? [], $rows)) ?: []);
+foreach ($rows as &$row) {
+    $id = (int)$row['id'];
+    $row['photos']      = $photoD[$id]['photos'] ?? [];
+    $row['photo_items'] = $photoD[$id]['photo_items'] ?? [];
+    $row['photo_tags']  = (object)($tags[$id] ?? []);
+}
+unset($row);
+
 jsonOut(['ok'=>true,'entries'=>$rows]);

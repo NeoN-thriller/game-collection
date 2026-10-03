@@ -24,15 +24,15 @@ $curSys = null;
 foreach ($systems as $s) { if ($s['id'] == $sysId) { $curSys = $s; break; } }
 if (!$curSys && $systems) { $curSys = $systems[0]; $sysId = $curSys['id']; }
 
-// Set cookie for last visited system
-setcookie('last_system', $sysId, time()+60*60*24*365, '/');
+// Remember the last visited system for this browser session only (no expiry date: gone when the browser closes)
+setcookie('last_system', (string)$sysId, ['expires' => 0, 'path' => '/', 'secure' => isHttps(), 'httponly' => false, 'samesite' => 'Lax']);
 
 // Load user options
 $compOpts = db()->prepare("SELECT label FROM user_completeness_options WHERE user_id=? ORDER BY sort_order");
 $compOpts->execute([$user['id']]); $compOpts = $compOpts->fetchAll(PDO::FETCH_COLUMN);
 
-$playedOpts = db()->prepare("SELECT label FROM user_played_options WHERE user_id=? ORDER BY sort_order");
-$playedOpts->execute([$user['id']]); $playedOpts = $playedOpts->fetchAll(PDO::FETCH_COLUMN);
+$playedRows = userPlayedOptions((int)$user['id']);   // [{label, group}] — group feeds the Finished / Started counters
+$playedOpts = array_column($playedRows, 'label');
 
 $tagOptsQ = db()->prepare("SELECT label FROM user_tag_options WHERE user_id=? ORDER BY sort_order");
 $tagOptsQ->execute([$user['id']]); $tagOpts = $tagOptsQ->fetchAll(PDO::FETCH_COLUMN);
@@ -57,20 +57,24 @@ if ($trackVariants) {
 <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/main.css?v=<?= @filemtime(__DIR__.'/assets/css/main.css') ?>">
 <?= themeHead($user) ?>
 <?= csrfScript() ?>
-<?= appScript(['coll', 'drawer', 'grading', 'ed', 'cr', 'comp']) ?>
+<?= appScript(['coll', 'drawer', 'grading', 'ed', 'cr', 'comp', 'pt', 'di', 'crop']) ?>
 </head>
 <body>
 
-<header class="site-header">
+<header class="site-header site-header--sticky">
   <a href="<?= BASE_URL ?>/collection.php" class="site-logo" style="text-decoration:none"><?= siteLogoHtml() ?></a>
   <div id="hstats" class="hstats">
     <div class="hstat"><div class="hstat-val blue"  id="st-owned">0</div><div class="hstat-label"><?= t('dashboard.owned') ?></div></div>
-    <div class="hstat"><div class="hstat-val"        id="st-pct">0%</div><div class="hstat-label"><?= t('coll.complete') ?></div></div>
+    <div class="hstat"><div class="hstat-val"        id="st-pct">0%</div><div class="hstat-label"><?= t('dashboard.completion') ?></div></div>
     <div class="hstat"><div class="hstat-val green"  id="st-copies">0</div><div class="hstat-label"><?= t('dashboard.copies') ?></div></div>
     <div class="hstat"><div class="hstat-val orange" id="st-upgrade">0</div><div class="hstat-label"><?= t('dashboard.upgrade') ?></div></div>
     <div class="hstat"><div class="hstat-val"        id="st-spent"><?= money(0, 0) ?></div><div class="hstat-label"><?= t('dashboard.spent') ?></div></div>
     <div class="hstat"><div class="hstat-val blue"   id="st-cib-all"><?= money(0, 0) ?></div><div class="hstat-label"><?= t('dashboard.cib_all') ?></div></div>
-    <div class="hstat"><div class="hstat-val green"  id="st-cib-owned"><?= money(0, 0) ?></div><div class="hstat-label"><?= t('dashboard.owned_value') ?></div></div>
+    <div class="hstat"><div class="hstat-val"        id="st-cib-owned"><?= money(0, 0) ?></div><div class="hstat-label"><?= t('dashboard.owned_value') ?></div></div>
+    <?php $pctOwned = ($user['played_pct'] ?? 'all') === 'owned'; if (showPlayedCounters($user)): ?>
+    <div class="hstat" title="<?= t($pctOwned ? 'coll.finished_title_owned' : 'coll.finished_title') ?>"><div class="hstat-val green" id="st-finished">0<span class="hstat-pct">0%</span></div><div class="hstat-label"><?= t('coll.finished') ?></div></div>
+    <div class="hstat" title="<?= t($pctOwned ? 'coll.started_title_owned' : 'coll.started_title') ?>"><div class="hstat-val orange" id="st-started">0<span class="hstat-pct">0%</span></div><div class="hstat-label"><?= t('coll.started') ?></div></div>
+    <?php endif; ?>
   </div>
   <nav class="site-nav">
     <span class="nav-user">👤 <?= htmlspecialchars($user['username']) ?></span>
@@ -315,12 +319,15 @@ if ($trackVariants) {
       </div>
 
       <div class="drawer-section">
-        <div class="section-label"><?= t('settings.photos') ?></div>
+        <div class="section-label pt-head"><span><?= t('settings.photos') ?></span><span class="pt-summary" id="d-pt-summary" hidden></span></div>
         <div class="img-upload-area">
           <input type="file" id="d-photos" accept="image/*" multiple onchange="uploadPhotos(event)">
           <div class="img-upload-text"><?= t('drawer.add_photos') ?></div>
         </div>
         <div class="img-preview-grid" id="d-photo-grid"></div>
+        <!-- Photo tags (assets/js/photo-tags.js): the tag editor for the selected photo, and defects without a photo -->
+        <div class="pt-card" id="d-pt-editor" hidden></div>
+        <div class="pt-missing-box" id="d-pt-missing" hidden></div>
         <div id="d-primary-wrap" style="display:none;margin-top:10px">
           <div class="section-label" style="margin-bottom:6px"><?= t('drawer.primary') ?></div>
           <select id="d-primary" style="font-size:.75rem;padding:6px 10px;width:100%">
@@ -343,10 +350,15 @@ if ($trackVariants) {
 <div class="toast" id="toast"></div>
 
 <script>window.GRADING = <?= gradingClientJson($user) ?>;</script>
+<script src="<?= BASE_URL ?>/assets/js/defect-info.js?v=<?= @filemtime(__DIR__.'/assets/js/defect-info.js') ?>"></script>
 <script src="<?= BASE_URL ?>/assets/js/grading.js?v=<?= @filemtime(__DIR__.'/assets/js/grading.js') ?>"></script>
+<script src="<?= BASE_URL ?>/assets/js/photo-tags.js?v=<?= @filemtime(__DIR__.'/assets/js/photo-tags.js') ?>"></script>
 <script src="<?= BASE_URL ?>/assets/js/editions-drawer.js?v=<?= @filemtime(__DIR__.'/assets/js/editions-drawer.js') ?>"></script>
 <script src="<?= BASE_URL ?>/assets/js/compilations-drawer.js?v=<?= @filemtime(__DIR__.'/assets/js/compilations-drawer.js') ?>"></script>
 <script src="<?= BASE_URL ?>/assets/js/lightbox.js?v=<?= @filemtime(__DIR__.'/assets/js/lightbox.js') ?>"></script>
+<link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/vendor/cropper.min.css?v=<?= @filemtime(__DIR__.'/assets/css/vendor/cropper.min.css') ?>">
+<script src="<?= BASE_URL ?>/assets/js/vendor/cropper.min.js?v=<?= @filemtime(__DIR__.'/assets/js/vendor/cropper.min.js') ?>"></script>
+<script src="<?= BASE_URL ?>/assets/js/photo-crop.js?v=<?= @filemtime(__DIR__.'/assets/js/photo-crop.js') ?>"></script>
 <script src="<?= BASE_URL ?>/assets/js/vendor/qrcode.js?v=<?= @filemtime(__DIR__.'/assets/js/vendor/qrcode.js') ?>"></script>
 <script src="<?= BASE_URL ?>/assets/js/labels.js?v=<?= @filemtime(__DIR__.'/assets/js/labels.js') ?>"></script>
 <script src="<?= BASE_URL ?>/assets/js/share-drawer.js?v=<?= @filemtime(__DIR__.'/assets/js/share-drawer.js') ?>"></script>
@@ -363,6 +375,8 @@ const TRACK_VARIANTS = <?= json_encode($trackVariants) ?>;
 const VARIANT_OPTS   = <?= json_encode($variantOpts, JSON_HEX_TAG | JSON_HEX_AMP) ?>;
 const EDITION_WISHLIST = <?= json_encode(($user['edition_wishlist'] ?? 'any') === 'exact' ? 'exact' : 'any') ?>;
 const COMP_MODE = <?= json_encode(compilationMode($user)) ?>;   // 'own' = a compilation is its own game · 'contents' = its games count as owned
+const PLAY_GROUPS = <?= json_encode((object)array_column($playedRows, 'group', 'label'), JSON_HEX_TAG | JSON_HEX_AMP) ?>;   // played status → finished | started | none
+const PLAY_PCT = <?= json_encode(($user['played_pct'] ?? 'all') === 'owned' ? 'owned' : 'all') ?>;   // Finished / Started: of all games, or of the owned ones
 window.USER_AUCTION_SITES = <?= json_encode(json_decode($user['auction_sites'] ?? '[]', true) ?: []) ?>;
 
 let allGames  = [];
@@ -376,7 +390,11 @@ const gradeEditor = new GradingUI.Editor({
   root:       document.getElementById('d-grading'),
   compField:  document.getElementById('d-completeness-field'),
   compSelect: document.getElementById('d-completeness'),
+  // Photo tags: keep the tag editor in step with the grading, and show each defect's photos
+  onChange:    () => PhotoTags.refresh(),
+  defectExtra: (ref, unitNo, defectId) => PhotoTags.defectExtra(ref, unitNo, defectId),
 });
+PhotoTags.init({ editor: gradeEditor, src: f => `${BASE}/uploads/users/${f}${photoTs[f] ? '?t=' + photoTs[f] : ''}` });
 
 // Column preferences
 const DEFAULT_COL_ORDER = ['img','owned','wishlist','upgrade','title','edition','variant','quality','completeness','played','copies','price_paid','buy_range','loose_price','cib_price','new_price','upgrade_reason','tag','notes'];
@@ -409,6 +427,8 @@ async function init() {
     activeCols = new Set(DEFAULT_COL_ORDER.filter(id => !DEFAULT_COL_OFF.has(id)));
   }
   if (!TRACK_VARIANTS) activeCols.delete('variant');   // variants switched off: no column
+  // Nothing owned in this system yet: show all its games instead of an empty "owned" list
+  if (!allItems().some(itemOwned)) { document.getElementById('tb-owned').value = 'all'; setOwnedButtons('all'); }
 
   applyColumnOrder();
   applyColumnVisibility();
@@ -886,6 +906,21 @@ function updateStats(filtered) {
   document.getElementById('st-owned').textContent   = ownedDisplay;
   document.getElementById('st-pct').textContent     = pctDisplay;
   document.getElementById('st-copies').textContent  = copiesDisplay;
+
+  // Played: games with a copy in a Finished-group status, else in a Started-group one.
+  // PLAY_PCT 'all': every game of the system counts (owned or not) · 'owned': only owned games, as a share of them
+  const playIn = (it, grp) => itemCopies(it).some(c => c.played_status && PLAY_GROUPS[c.played_status] === grp);
+  const playUnits = PLAY_PCT === 'owned' ? units.filter(itemOwned) : units;
+  const finishedN = playUnits.filter(it => playIn(it, 'finished')).length;
+  const startedN  = playUnits.filter(it => !playIn(it, 'finished') && playIn(it, 'started')).length;
+  const playStat = (id, n) => {
+    const el = document.getElementById(id);
+    if (!el) return;   // counters switched off in Settings
+    if (!SYS_COUNTS_TOTALS) { el.textContent = '—'; return; }
+    el.innerHTML = `${fmtNum(n)}<span class="hstat-pct">${playUnits.length ? Math.round(n / playUnits.length * 100) : 0}%</span>`;
+  };
+  playStat('st-finished', finishedN);
+  playStat('st-started', startedN);
   document.getElementById('st-upgrade').textContent = allCopies.filter(c=>c.upgrade).length;
   document.getElementById('st-spent').textContent   = money(allCopies.reduce((s,c)=>s+(parseFloat(c.price_paid)||0),0), 0);
   document.getElementById('prog-fill').style.width  = tot?(ownedN/tot*100)+'%':'0%';
@@ -1091,6 +1126,7 @@ function loadCopyIntoForm(copyNum) {
   document.getElementById('d-tag').value = c.tag||'';
   const vtype = c.value_price_type || FMT.valueType;
   document.querySelectorAll('input[name="d-value-type"]').forEach(r => r.checked = r.value === vtype);
+  PhotoTags.load(c);
   renderPhotoGrid(c.photos||[], c.primary_photo||'', c.id||null);
   const g = allGames.find(x=>x.id==editGameId);
   EdDrawer.load({
@@ -1128,7 +1164,7 @@ async function saveEntry() {
   };
   const grading = gradeEditor.getPayload();
   if (grading) payload.grading = grading;
-  Object.assign(payload, EdDrawer.payload());
+  Object.assign(payload, EdDrawer.payload(), PhotoTags.payload());
   const res = await apiFetch('/api/entry_save.php', payload);
   if (res.ok) {
     if (!entryMap[editGameId]) entryMap[editGameId]=[];
@@ -1162,6 +1198,8 @@ async function uploadPhotos(e) {
       const idx = entryMap[editGameId].findIndex(x => x.copy_number == editCopy);
       if (!entryMap[editGameId][idx].photos) entryMap[editGameId][idx].photos = [];
       entryMap[editGameId][idx].photos.push(res.filename);
+      (entryMap[editGameId][idx].photo_items ||= []).push({ id: res.id, file: res.filename });
+      PhotoTags.setItems(entryMap[editGameId][idx].photo_items);
       // Show the new photo immediately in the grid
       renderPhotoGrid(
         entryMap[editGameId][idx].photos,
@@ -1194,6 +1232,7 @@ function renderPhotoGrid(photos, primaryPhoto, entryId) {
       <img src="${escAttr(src)}"
            onclick="openLightboxArr(drawerPhotos,${i},${eid})"
            style="${isPrimary ? 'border-color:var(--accent2)' : ''}">
+      ${PhotoTags.tileHtml(i)}
       <div style="display:flex;gap:2px;margin-top:2px">
         <button class="img-del-btn" style="position:static;width:auto;padding:0 5px;font-size:.65rem" onclick="rotatePhoto(${i},-90)">↺</button>
         <button class="img-del-btn" style="position:static;width:auto;padding:0 5px;font-size:.65rem;color:var(--muted)" onclick="rotatePhoto(${i},90)">↻</button>
@@ -1229,6 +1268,7 @@ function renderPhotoGrid(photos, primaryPhoto, entryId) {
     wrap.style.display = 'none';
     sel.value = '';
   }
+  PhotoTags.refresh();   // fills the tag bars under the tiles
 }
 
 async function rotatePhoto(idx, degrees) {
@@ -1254,6 +1294,11 @@ async function deletePhoto(idx) {
   const res=await apiFetch('/api/photo_delete.php',{entry_id:c.id,filename:fn});
   if (res.ok) {
     c.photos.splice(idx,1);
+    if (c.photo_items) {
+      const gone = c.photo_items.splice(idx, 1)[0];
+      if (gone && c.photo_tags) delete c.photo_tags[gone.id];   // the server removed its tag with it
+      PhotoTags.setItems(c.photo_items);
+    }
     if (c.primary_photo===fn) c.primary_photo='';
     renderPhotoGrid(c.photos, c.primary_photo||'', c.id||null);
     render(); toast(tRaw('drawer.photo_removed'));
@@ -1267,21 +1312,36 @@ function lbPhotoSrc(fn) {
   return `${BASE}/uploads/users/${fn}${ts ? '?t='+ts : ''}`;
 }
 
-/** All photos of a game's copies, each rotatable on its own copy. */
+/** All photos of a game's copies, each rotatable on its own copy, with what each photo shows (saved tags). */
 function openLightboxGame(gameId) {
   const list = [];
-  (entryMap[gameId]||[]).forEach(c => (c.photos||[]).forEach(fn => list.push({ fn: fn.split('?')[0], entryId: c.id })));
+  (entryMap[gameId]||[]).forEach(c => {
+    const info = PhotoTags.savedViewerInfo(c);
+    (c.photos||[]).forEach((fn, i) => {
+      const pid = c.photo_items?.[i]?.id;
+      list.push({ fn: fn.split('?')[0], entryId: c.id, n: i + 1, info: pid ? info[pid] : null });
+    });
+  });
   openPhotoList(list, 0);
 }
 
+/** The drawer's photos: what each one shows comes from the drawer's current (unsaved) tags and grading. */
 function openLightboxArr(photos, startIdx, entryId=null) {
-  openPhotoList((photos||[]).map(fn => ({ fn: fn.split('?')[0], entryId })), startIdx);
+  const c = (entryMap[editGameId]||[]).find(x => x.copy_number == editCopy) || {};
+  openPhotoList((photos||[]).map((fn, i) => {
+    const pid = c.photo_items?.[i]?.id;
+    return { fn: fn.split('?')[0], entryId, n: i + 1, info: pid ? PhotoTags.viewerInfo(pid) : null };
+  }), startIdx);
 }
 
 /** Opens the shared lightbox (assets/js/lightbox.js) with rotate buttons for photos of a saved copy. */
 function openPhotoList(list, start) {
   if (!list.length) return;
-  Lightbox.open(list.map(p => ({ src: lbPhotoSrc(p.fn) })), start, {
+  Lightbox.open(list.map(p => ({
+    src: lbPhotoSrc(p.fn),
+    caption: p.n ? tRaw('pt.photo_n', {n: p.n}) + (p.info?.overview ? ' · ' + tRaw('pt.overview') : '') : '',
+    ...(p.info && !p.info.overview ? p.info : {}),
+  })), start, {
     onRotate: list.some(p => p.entryId) ? async (i, degrees) => {
       const p = list[i];
       if (!p.entryId) return null;
@@ -1295,6 +1355,24 @@ function openPhotoList(list, start) {
       }
       render();
       toast(tRaw('drawer.rotated'));
+      return `${BASE}/uploads/users/${p.fn}?t=${res.ts}`;
+    } : null,
+    // Free crop (assets/js/photo-crop.js); replaces the photo, like rotating
+    onCrop: list.some(p => p.entryId) ? async (i, src) => {
+      const p = list[i];
+      if (!p.entryId) return null;
+      const box = await PhotoCrop.open(src);
+      if (!box) return null;
+      toast(tRaw('crop.cropping'));
+      const res = await apiFetch('/api/photo_crop.php', {entry_id: p.entryId, filename: p.fn, ...box});
+      if (!res.ok) { toast(tRaw('crop.failed', {error: res.error||''}), true); return null; }
+      photoTs[p.fn] = res.ts;
+      if (editGameId) {
+        const c = (entryMap[editGameId]||[]).find(x => x.id == p.entryId);
+        if (c) renderPhotoGrid(c.photos, c.primary_photo || '', c.id || null);
+      }
+      render();
+      toast(tRaw('crop.done'));
       return `${BASE}/uploads/users/${p.fn}?t=${res.ts}`;
     } : null,
   });
@@ -1320,7 +1398,7 @@ window.gradingSwitchToPoints = (gameId, copyNo) => {
 
 // SYSTEM SWITCH
 function switchSystem(id) {
-  document.cookie=`last_system=${id};path=/;max-age=${60*60*24*365}`;
+  document.cookie=`last_system=${id};path=/;SameSite=Lax`;   // session cookie: no max-age
   window.location=`${BASE}/collection.php?s=${id}`;
 }
 
@@ -1338,10 +1416,13 @@ function toast(msg,err=false){const t=document.getElementById('toast');t.textCon
 // ── FILTER BUTTON HELPERS ──
 function setOwned(val) {
   document.getElementById('tb-owned').value = val;
+  setOwnedButtons(val);
+  render();
+}
+function setOwnedButtons(val) {
   document.getElementById('fbtn-owned-showall').className = 'filter-btn' + (val==='all'   ? ' active-notown'  : '');
   document.getElementById('fbtn-owned-yes').className     = 'filter-btn' + (val==='1'||val==='owned' ? ' active-owned' : '');
   document.getElementById('fbtn-owned-no').className      = 'filter-btn' + (val==='0'     ? ' active-notown'  : '');
-  render();
 }
 
 function setWishlist(val) {

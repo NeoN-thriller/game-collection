@@ -131,7 +131,7 @@ function rootColors(string $css): array {
     return $out;
 }
 
-/** Theme files: slug => [name, about, fonts URL, swatches]. */
+/** Theme files: slug => [name, about, fonts stylesheet (relative URL), swatches]. */
 function themeList(): array {
     $out = [];
     $base = rootColors((string)@file_get_contents(__DIR__ . '/assets/css/main.css'));
@@ -144,7 +144,8 @@ function themeList(): array {
         foreach (preg_split('/\R/', $m[1] ?? '') as $line) {
             if (preg_match('/^\s*([A-Za-z]+)\s*:\s*(.+?)\s*$/', $line, $kv)) $meta[strtolower($kv[1])] = $kv[2];
         }
-        $fonts = preg_match('~^https://fonts\.googleapis\.com/css2?\?[^"\'<>\s]+$~', $meta['fonts'] ?? '') ? $meta['fonts'] : '';
+        // Fonts hosted on this site: a stylesheet in assets/fonts/ (relative to install.php)
+        $fonts = preg_match('~^fonts/[a-z0-9-]+\.css$~', $meta['fonts'] ?? '') && is_file(__DIR__ . '/assets/' . $meta['fonts']) ? 'assets/' . $meta['fonts'] : '';
         // Theme colours on top of the defaults in main.css (a theme that overrides nothing uses those)
         $sw = rootColors($css) + $base;
         $out[$slug] = ['name' => $meta['theme'] ?? $slug, 'about' => $meta['about'] ?? '', 'fonts' => $fonts,

@@ -17,7 +17,8 @@ $rows = $st->fetchAll();
 
 // User option lists
 $optionList = function (string $table) use ($user): array {
-    $st = db()->prepare("SELECT label, sort_order FROM $table WHERE user_id=? ORDER BY sort_order");
+    $cols = $table === 'user_played_options' ? 'label, play_group, sort_order' : 'label, sort_order';   // played: also its counter group
+    $st = db()->prepare("SELECT $cols FROM $table WHERE user_id=? ORDER BY sort_order");
     $st->execute([$user['id']]);
     return $st->fetchAll();
 };
@@ -77,6 +78,8 @@ $data = [
         'track_variants' => !empty($user['track_variants']),
     ],
     'compilations'         => ['mode' => compilationMode($user)],
+    'played_pct'           => ($user['played_pct'] ?? 'all') === 'owned' ? 'owned' : 'all',
+    'show_played'          => showPlayedCounters($user),
     'grading'              => ['mode' => $user['grading_mode'] ?? 'simple', 'default' => $user['grading_default'] ?? 'simple'],
     'entries'              => $entries,
 ];

@@ -39,7 +39,7 @@ $user = requireAdmin();
 </head>
 <body>
 
-<header class="site-header">
+<header class="site-header site-header--sticky">
   <a href="<?= BASE_URL ?>/dashboard.php" class="site-logo" style="text-decoration:none"><?= siteLogoHtml() ?></a>
   <nav class="site-nav">
     <a href="<?= BASE_URL ?>/dashboard.php" class="nav-link"><?= t('common.nav.dashboard') ?></a>
@@ -65,7 +65,11 @@ console,name,data-product,link,loose,cib,new,coverArtBase64
 WiiU,Example Game,12345,https://...,12.34,23.45,34.56,data:image/jpeg;base64..."></textarea>
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px">
       <span style="font-size:.7rem;color:var(--muted)"><a href="<?= BASE_URL ?>/api/pc_example.php" download>⬇ <?= t('pc.example') ?></a> — <?= t('pc.example_note') ?></span>
-      <button class="btn" onclick="previewImport()"><?= t('pc.preview') ?> →</button>
+      <span style="display:flex;gap:8px;flex-wrap:wrap">
+        <label class="btn-ghost" style="cursor:pointer">⬆ <?= t('pc.choose_file') ?>
+          <input type="file" accept=".csv,text/csv" hidden onchange="pcFromFile(this, 'csv-input', previewImport)"></label>
+        <button class="btn" onclick="previewImport()"><?= t('pc.preview') ?> →</button>
+      </span>
     </div>
   </div>
 
@@ -137,6 +141,16 @@ function parseCSVLine(line) {
     else cur+=ch;
   }
   result.push(cur); return result;
+}
+
+/** A CSV file chosen on this computer: read in the browser (never uploaded or stored), put in the box, then previewed. */
+async function pcFromFile(input, textareaId, next) {
+  const f = input.files && input.files[0];
+  input.value = '';
+  if (!f) return;
+  try { document.getElementById(textareaId).value = await f.text(); }
+  catch (e) { alert(tRaw('common.err_prefix', {error: e.message})); return; }
+  next();
 }
 
 async function previewImport() {

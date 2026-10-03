@@ -6,6 +6,9 @@
 if (!defined('DB_HOST')) { http_response_code(403); exit; }
 
 const GRADING_DEFAULTS_FILE = __DIR__ . '/assets/grading-defaults.json';
+const GRADING_DESCRIPTIONS_FILE = __DIR__ . '/assets/grading-descriptions.json';   // starter explanations per language
+const DEFECT_PHOTO_DIR      = __DIR__ . '/uploads/defects/';
+const DEFECT_PHOTO_MAX      = 3;
 const GRADING_FORMAT        = 'game-collection-grading';
 const GRADE_MAX_QTY         = 9;
 const GRADE_QTY_LCM         = 2520; // divisible by every qty 1–9: keeps the weighted average in whole numbers
@@ -52,6 +55,7 @@ function ensureGradingSeeded(): void {
         $res  = importGradingConfig($data, 'replace', false);
         if (!$res['ok']) throw new RuntimeException('Seeding grading defaults failed: '.implode('; ', $res['errors']));
         convertLegacyQuality();
+        gradingFillDescriptions(setting('default_language'));
         setAppSetting('grading_seeded', date('c'));
     } finally {
         $pdo->query("SELECT RELEASE_LOCK('gc_grading_seed')")->fetchColumn();
@@ -125,12 +129,19 @@ function gradingConfig(bool $fresh = false): array {
         $cats[(int)$c['id']] = ['id' => (int)$c['id'], 'template_id' => (int)$c['template_id'], 'name' => $c['name'],
                                 'max_points' => (int)$c['max_points'], 'defects' => []];
     }
+    // Example photos per defect: [{id, url}]
+    $defPhotos = [];
+    foreach ($pdo->query("SELECT id, defect_id, filename FROM grade_defect_photos ORDER BY defect_id, sort_order, id")->fetchAll() as $ph) {
+        $defPhotos[(int)$ph['defect_id']][] = ['id' => (int)$ph['id'], 'url' => BASE_URL . '/uploads/defects/' . rawurlencode($ph['filename'])];
+    }
     foreach ($pdo->query("SELECT * FROM grade_defects ORDER BY sort_order, id")->fetchAll() as $d) {
         if (!isset($cats[(int)$d['category_id']])) continue;
         $cats[(int)$d['category_id']]['defects'][] = [
             'id' => (int)$d['id'], 'name' => $d['name'], 'penalty' => (int)$d['penalty'], 'kind' => $d['kind'],
             'max_count' => $d['max_count'] !== null ? (int)$d['max_count'] : null,
             'level_group' => $d['level_group'] !== null && $d['level_group'] !== '' ? $d['level_group'] : null,
+            'description' => ($d['description'] ?? '') !== '' ? $d['description'] : null,
+            'photos' => $defPhotos[(int)$d['id']] ?? [],
         ];
     }
     foreach ($cats as $c) {
@@ -413,14 +424,18 @@ function saveEntryGrading(int $entryId, int $userId, array $g): void {
         $profileId = isset($cfg['profiles'][(int)$g['profile_id']]) ? (int)$g['profile_id'] : null;
         $set[] = 'grade_profile_id=?'; $vals[] = $profileId;
     }
+    $partsWritten = false;
     if (array_key_exists('parts', $g) && is_array($g['parts'])) {
         $scored = gradeScoreParts($g['parts'], $profileId);
         writeEntryParts($entryId, $scored['parts']);
         $set[] = 'grade_score=?'; $vals[] = $scored['score'];
+        $partsWritten = true;
     }
     if (!$set) return;
     $vals[] = $entryId;
     db()->prepare("UPDATE collection_entries SET ".implode(', ', $set)." WHERE id=?")->execute($vals);
+    // Photo tags point at parts, units and defects by stable keys: drop the ones this save made invalid
+    if ($partsWritten) photoTagsPrune($entryId);
 }
 
 /** Recomputes cached unit and copy scores (after admin changes). Returns how many copies were checked. */
@@ -542,6 +557,7 @@ function exportGradingConfig(): array {
                     'name' => $d['name'], 'penalty' => $d['penalty'], 'kind' => $d['kind'],
                     'max_count' => $d['kind'] === 'max' ? $d['max_count'] : null,
                     'level_group' => $d['kind'] === 'level' ? $d['level_group'] : null,
+                    'description' => $d['description'] ?? null,
                 ], fn($v) => $v !== null), $c['defects']),
             ], $t['categories']),
         ], $cfg['templates'])),
@@ -653,19 +669,55 @@ function gradingInsertCategory(int $tid, array $c, int $sort): int {
     return $cid;
 }
 
-/** Inserts ($id null) or updates a defect row. */
+/**
+ * Inserts ($id null) or updates a defect row. The description is only changed when $d has the key,
+ * so importing an older file (without explanations) keeps the ones on the site.
+ */
 function gradingWriteDefect(int $cid, array $d, int $sort, ?int $id): void {
     $kind  = in_array($d['kind'] ?? 'each', GRADE_DEFECT_KINDS, true) ? $d['kind'] : 'each';
-    $vals  = [trim((string)$d['name']), max(0, min(100, (int)($d['penalty'] ?? 0))), $kind,
-              $kind === 'max' ? max(1, min(99, (int)($d['max_count'] ?? 1))) : null,
-              $kind === 'level' ? (trim((string)($d['level_group'] ?? '')) ?: 'Level') : null, $sort];
-    if ($id) {
-        $vals[] = $id;
-        db()->prepare("UPDATE grade_defects SET name=?, penalty=?, kind=?, max_count=?, level_group=?, sort_order=? WHERE id=?")->execute($vals);
-    } else {
-        array_unshift($vals, $cid);
-        db()->prepare("INSERT INTO grade_defects (category_id, name, penalty, kind, max_count, level_group, sort_order) VALUES (?,?,?,?,?,?,?)")->execute($vals);
+    $cols  = ['name' => trim((string)$d['name']), 'penalty' => max(0, min(100, (int)($d['penalty'] ?? 0))), 'kind' => $kind,
+              'max_count' => $kind === 'max' ? max(1, min(99, (int)($d['max_count'] ?? 1))) : null,
+              'level_group' => $kind === 'level' ? (trim((string)($d['level_group'] ?? '')) ?: 'Level') : null, 'sort_order' => $sort];
+    if (array_key_exists('description', $d) || !$id) {
+        $desc = trim(mb_substr((string)($d['description'] ?? ''), 0, 500));
+        $cols['description'] = $desc !== '' ? $desc : null;
     }
+    if ($id) {
+        db()->prepare("UPDATE grade_defects SET " . implode(', ', array_map(fn($c) => "$c=?", array_keys($cols))) . " WHERE id=?")
+            ->execute([...array_values($cols), $id]);
+    } else {
+        $cols = ['category_id' => $cid] + $cols;
+        db()->prepare("INSERT INTO grade_defects (" . implode(', ', array_keys($cols)) . ") VALUES (" . implode(',', array_fill(0, count($cols), '?')) . ")")
+            ->execute(array_values($cols));
+    }
+}
+
+/**
+ * Fills empty defect explanations from assets/grading-descriptions.json, in $lang (else English).
+ * Matches on 'Level group|Name' for pick-one levels, else on the name (not case-sensitive). Returns how many were filled.
+ */
+function gradingFillDescriptions(string $lang): int {
+    $all = json_decode((string)@file_get_contents(GRADING_DESCRIPTIONS_FILE), true);
+    if (!is_array($all)) return 0;
+    $texts = [];
+    foreach ([$all['en'] ?? [], $all[$lang] ?? []] as $set) foreach ((array)$set as $k => $v) $texts[mb_strtolower($k)] = (string)$v;
+    $upd = db()->prepare("UPDATE grade_defects SET description=? WHERE id=?");
+    $n = 0;
+    foreach (db()->query("SELECT id, name, kind, level_group FROM grade_defects WHERE description IS NULL OR description = ''")->fetchAll() as $d) {
+        $name = mb_strtolower(trim($d['name']));
+        $text = ($d['kind'] === 'level' ? ($texts[mb_strtolower(trim((string)$d['level_group'])) . '|' . $name] ?? null) : null) ?? $texts[$name] ?? null;
+        if ($text === null || $text === '') continue;
+        $upd->execute([$text, (int)$d['id']]);
+        $n++;
+    }
+    if ($n) gradingConfig(true);
+    return $n;
+}
+
+/** Deletes example photo files that no defect uses any more (after defects were removed). */
+function defectPhotoPurgeFiles(): void {
+    $used = array_flip(db()->query("SELECT filename FROM grade_defect_photos")->fetchAll(PDO::FETCH_COLUMN));
+    foreach (glob(DEFECT_PHOTO_DIR . '*.jpg') ?: [] as $f) if (!isset($used[basename($f)])) @unlink($f);
 }
 
 function gradingTemplateIdsByName(): array {

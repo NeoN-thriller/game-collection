@@ -13,7 +13,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($mode === 'login') {
         $username   = trim($_POST['username'] ?? '');
         $password   = $_POST['password'] ?? '';
-        $rememberMe = !empty($_POST['remember_me']);
+        $rememberMe = !empty($_POST['remember_me']);   // unticked by default: the 30-day cookie is the user's choice
         $keys = loginKeys($username);
         $st = db()->prepare("SELECT * FROM users WHERE username=?");
         $st->execute([$username]);
@@ -34,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 startUserSession($user);
                 db()->prepare("UPDATE users SET last_login=NOW() WHERE id=?")->execute([$user['id']]);
-                if ($rememberMe) issueRememberToken($user['id']);
+                if ($rememberMe) issueRememberToken($user['id']);   // 30 days after the last visit
                 header('Location: '.BASE_URL.'/dashboard.php'); exit;
             }
         } elseif (!$error) {

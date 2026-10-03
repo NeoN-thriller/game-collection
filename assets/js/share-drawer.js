@@ -86,7 +86,8 @@ const ShareDrawer = (() => {
       <div class="cr-share-update">
         <span class="d-hint">${t('cr.graded_on', { date: s.graded_fmt })}</span>
         <button type="button" class="btn-ghost btn-sm" data-act="update">${t('cr.update_report')}</button>
-      </div>` : ''}
+      </div>
+      ${s.tags_changed ? `<p class="d-hint" style="color:var(--orange)">${t('cr.tags_changed')}</p>` : ''}` : ''}
       <div class="cr-share-actions">
         <button type="button" class="btn-ghost btn-sm" data-act="regenerate">${t('cr.new_link')}</button>
         <button type="button" class="btn-danger btn-sm" data-act="revoke">${t('cr.stop_sharing')}</button>

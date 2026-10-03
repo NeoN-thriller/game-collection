@@ -18,7 +18,7 @@ Built with plain PHP, MySQL and vanilla JavaScript. No frameworks, no build step
   - Price paid, personal price, and a buy-range (min / max) for wishlist hunting
   - Which price tier (loose / CIB / new) counts toward your collection value
   - Custom tags, notes, and an "upgrade wanted" flag with a reason
-- **Photos** — upload photos per copy, rotate them, and choose a primary photo. Uploads are automatically resized and EXIF-rotated (size and quality configurable by the admin).
+- **Photos** — upload photos per copy, rotate and crop them (free crop, Cropper.js), and choose a primary photo. Uploads are automatically resized and EXIF-rotated (size and quality configurable by the admin).
 - **Filtering and search** — by title, condition (label, point / simple grades, minimum score), completeness, played status, tag, owned / not owned, wishlisted, and upgrade-wanted.
 - **Configurable columns** — choose which columns are visible in the collection and wishlist tables (saved per user).
 
@@ -136,7 +136,9 @@ Installs from before the database updater: the first time it runs, it records wh
 ### Publishing a release (for the maintainer)
 
 1. Bump `APP_VERSION` in `version.php`.
-2. Database change? Add `migrations/NNN_name.sql` (the next number), make the same change in `schema.sql`, and add the file name to the `INSERT INTO schema_migrations` at the end of `schema.sql`.
+2. Database changes:
+   - **While building:** each change gets its own file in `migrations/dev/` (`NNN_name.sql`, the next number). Make the same change in `schema.sql` and add `'dev/NNN_name.sql'` to the `INSERT INTO schema_migrations` at the end of `schema.sql`. Your test site runs these when its `config.php` has `define('DEV_MIGRATIONS', true);` (see `config.sample.php`); the live site ignores them.
+   - **At release:** combine the dev files into one `migrations/NNN_release_X.Y.Z.sql` (every step checks first, so it's safe to run again), add its name to the `INSERT` as well, and delete the dev files. The live site then runs that one file; the test site runs it too, harmlessly.
 3. Commit and push, then publish a GitHub release tagged `v` + the version (e.g. `v1.1.0`). Its description is shown as the release notes. Optionally attach your own `.zip`; otherwise GitHub's source zip is used.
 
 ---
@@ -200,7 +202,7 @@ The `console` value must match a system's **short name** (case-insensitive). Row
 
 ## Database
 
-`schema.sql` creates 31 tables, including:
+`schema.sql` creates 34 tables, including:
 
 | Table | Purpose |
 |---|---|
@@ -218,10 +220,12 @@ The `console` value must match a system's **short name** (case-insensitive). Row
 | `user_played_options` | Each user's played-status labels |
 | `user_tag_options` | Each user's tag labels |
 | `app_settings` | Site-wide key/value settings (e.g. the default weight of users' own items) |
+| `copy_photo_tags`, `copy_photo_tag_defects` | Which part unit and which of its defects a photo shows (for the condition report) |
 | `compilation_items` | What each compilation contains (compilation game → contained games) |
 | `schema_migrations` | Which files in `migrations/` this database already has |
 | `grade_labels` | Condition labels: name, short code, colour, and the score each one starts at |
-| `grade_templates`, `grade_categories`, `grade_defects` | How a part is graded: categories (max points) and defects (deductions) |
+| `grade_templates`, `grade_categories`, `grade_defects` | How a part is graded: categories (max points) and defects (deductions, with an optional explanation) |
+| `grade_defect_photos` | Example photos that show what a defect means (up to 3 per defect) |
 | `grade_profiles`, `grade_profile_components` | Format profiles: which parts a copy has, their template and weight |
 | `entry_parts`, `entry_part_units`, `entry_defects` | Per-copy point grading: included parts and quantities, one row per unit (cached score), and logged defects |
 
@@ -233,7 +237,7 @@ Foreign keys use `ON DELETE CASCADE`, so deleting a user, system or game also re
 
 - Prices are shown in **euros (€)**, and new systems default to the **PAL** region.
 - The app is built for small, trusted groups: there is no open sign-up, only invite codes.
-- Fonts are loaded from Google Fonts (Bebas Neue and DM Mono).
+- Fonts are hosted on the site itself (`assets/fonts/`, SIL Open Font License; licences next to the files). No page loads anything from Google or other font services.
 
 ## License
 

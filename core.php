@@ -57,12 +57,29 @@ function clearRememberCookie(): void {
     setcookie('remember_token', '', ['expires'=>time() - 3600, 'path'=>'/', 'secure'=>isHttps(), 'httponly'=>true, 'samesite'=>'Lax']);
 }
 
-/** Creates a 30-day remember-me token. Only its SHA-256 hash is stored in the DB. */
+// "Remember me" (the user ticks it at sign-in): signed in for REMEMBER_DAYS after the last visit; using the site renews it
+const REMEMBER_DAYS = 30;
+
+/** Creates a remember-me token for REMEMBER_DAYS. Only its SHA-256 hash is stored in the DB. */
 function issueRememberToken(int $userId): void {
     $token = bin2hex(random_bytes(32));
     db()->prepare("INSERT INTO remember_tokens (user_id, token, expires_at) VALUES (?,?,?)")
-        ->execute([$userId, hash('sha256', $token), date('Y-m-d H:i:s', time()+60*60*24*30)]);
-    setRememberCookie($token, time()+60*60*24*30);
+        ->execute([$userId, hash('sha256', $token), date('Y-m-d H:i:s', time() + 86400 * REMEMBER_DAYS)]);
+    setRememberCookie($token, time() + 86400 * REMEMBER_DAYS);
+    $_SESSION['rm_renewed'] = time();
+}
+
+/**
+ * Using the site moves a remembered sign-in's end date to REMEMBER_DAYS from now (at most once a day per session).
+ * Only when the user chose "Remember me" (there is a token): nothing is created otherwise.
+ */
+function renewRememberToken(int $userId): void {
+    $token = $_COOKIE['remember_token'] ?? '';
+    if (!is_string($token) || $token === '' || time() - (int)($_SESSION['rm_renewed'] ?? 0) < 86400) return;
+    $st = db()->prepare("UPDATE remember_tokens SET expires_at=? WHERE token=? AND user_id=? AND expires_at > NOW()");
+    $st->execute([date('Y-m-d H:i:s', time() + 86400 * REMEMBER_DAYS), hash('sha256', $token), $userId]);
+    if ($st->rowCount()) setRememberCookie($token, time() + 86400 * REMEMBER_DAYS);
+    $_SESSION['rm_renewed'] = time();
 }
 
 /** Fingerprint of the password hash: sessions die when the password changes. */
@@ -83,7 +100,8 @@ function setPassword(int $userId, string $plain): void {
     db()->prepare("DELETE FROM remember_tokens WHERE user_id=?")->execute([$userId]);
     if (($_SESSION['user_id'] ?? null) == $userId) {
         $_SESSION['pw_sig'] = pwSig(['password'=>$hash]); // keep the current session alive
-        clearRememberCookie();
+        // This device stays remembered if it was (the old tokens are gone with the password change)
+        if (!empty($_COOKIE['remember_token'])) issueRememberToken($userId); else clearRememberCookie();
     }
 }
 
@@ -92,7 +110,7 @@ function auth(): array|false {
         $st = db()->prepare("SELECT * FROM users WHERE id=? AND status='active'");
         $st->execute([$_SESSION['user_id']]);
         $u = $st->fetch();
-        if ($u && hash_equals(pwSig($u), $_SESSION['pw_sig'] ?? '')) return $u;
+        if ($u && hash_equals(pwSig($u), $_SESSION['pw_sig'] ?? '')) { renewRememberToken((int)$u['id']); return $u; }
         unset($_SESSION['user_id'], $_SESSION['pw_sig']);
     }
     $token = $_COOKIE['remember_token'] ?? '';
@@ -102,6 +120,7 @@ function auth(): array|false {
         $st->execute([hash('sha256', $token)]);
         if ($u = $st->fetch()) {
             startUserSession($u);
+            renewRememberToken((int)$u['id']);
             return $u;
         }
         clearRememberCookie();
@@ -267,7 +286,7 @@ function sanitizeFilename(string $name): string {
 // variables of main.css. Its header comment holds the metadata:
 //   /* Theme:  Nintendo
 //      Scheme: light
-//      Fonts:  https://fonts.googleapis.com/css2?family=...   (optional)
+//      Fonts:  fonts/nintendo.css    (optional: @font-face rules in assets/fonts/, files hosted on this site)
 //      About:  one line for the picker                         (optional) */
 const THEME_DIR     = __DIR__ . '/assets/themes/';
 const DEFAULT_THEME = 'arcade-gold';
@@ -303,17 +322,19 @@ function availableThemes(): array {
                 if (preg_match('/^\s*([A-Za-z]+)\s*:\s*(.+?)\s*$/', $line, $kv)) $meta[strtolower($kv[1])] = $kv[2];
             }
         }
-        $fonts = $meta['fonts'] ?? '';
-        // Only Google Fonts: it's the only font host the Content-Security-Policy allows
-        if (!preg_match('~^https://fonts\.googleapis\.com/css2?\?[^"\'<>\s]+$~', $fonts)) $fonts = '';
-        preg_match_all('/family=([^:&]+)/', $fonts, $fam);
+        // Fonts: only a stylesheet in assets/fonts/ (fonts hosted here; nothing loaded from other servers)
+        $fontsFile = $meta['fonts'] ?? '';
+        $fontsPath = preg_match('~^fonts/[a-z0-9-]+\.css$~', $fontsFile) ? __DIR__ . '/assets/' . $fontsFile : '';
+        if ($fontsPath && !is_file($fontsPath)) $fontsPath = '';
+        $fonts = $fontsPath ? BASE_URL . '/assets/' . $fontsFile . '?v=' . @filemtime($fontsPath) : '';
+        preg_match_all("/font-family:\s*'([^']+)'/", $fontsPath ? (string)@file_get_contents($fontsPath) : '', $fam);
         $vars = themeRootVars($css) + $base;
         $themes[$slug] = [
             'slug'     => $slug,
             'name'     => $meta['theme'] ?? ucwords(str_replace('-', ' ', $slug)),
             'scheme'   => strtolower($meta['scheme'] ?? '') === 'light' ? 'light' : 'dark',
             'fonts'    => $fonts,
-            'font_names' => array_map(fn($f) => urldecode(str_replace('+', ' ', $f)), $fam[1]),
+            'font_names' => array_values(array_unique($fam[1])),
             'about'    => $meta['about'] ?? '',
             'swatches' => array_map(fn($k) => $vars[$k] ?? '#888888', THEME_SWATCH_VARS),
         ];
@@ -350,11 +371,7 @@ function themeHead(?array $user = null): string {
     if (!$t) return '';
     $h = fn(string $s) => htmlspecialchars($s, ENT_QUOTES);
     $out = '<meta name="color-scheme" content="'.$t['scheme'].'">'."\n";
-    if ($t['fonts']) {
-        $out .= '<link rel="preconnect" href="https://fonts.googleapis.com">'."\n"
-              . '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'."\n"
-              . '<link id="theme-fonts" href="'.$h($t['fonts']).'" rel="stylesheet">'."\n";
-    }
+    if ($t['fonts']) $out .= '<link id="theme-fonts" href="'.$h($t['fonts']).'" rel="stylesheet">'."\n";
     $file = THEME_DIR . $t['slug'] . '.css';
     $out .= '<link id="theme-css" rel="stylesheet" href="'.$h(BASE_URL.'/assets/themes/'.$t['slug'].'.css?v='.@filemtime($file)).'">'."\n";
     return $out;
@@ -405,6 +422,7 @@ require_once __DIR__ . '/grading.php';
 require_once __DIR__ . '/editions.php';
 require_once __DIR__ . '/compilations.php';
 require_once __DIR__ . '/condition_report.php';
+require_once __DIR__ . '/photo_tags.php';
 require_once __DIR__ . '/version.php';
 require_once __DIR__ . '/updates.php';
 
