@@ -1,0 +1,51 @@
+{
+  "_help": "Systems offered by install.php (step 5), grouped by maker. Makers are shown in alphabetical order; systems in the order listed here, which is also the order they are created in. Per system: short (unique, shown in the system bar), name, and optionally us_short / us_name, used when the region is NTSC-U. Only used for new installs: on a running site, add systems on the admin page.",
+  "Atari": [
+    { "short": "2600",    "name": "Atari 2600" },
+    { "short": "5200",    "name": "Atari 5200" },
+    { "short": "7800",    "name": "Atari 7800" },
+    { "short": "XEGS",    "name": "Atari XE Game System" },
+    { "short": "LYNX",    "name": "Atari Lynx" },
+    { "short": "JAG",     "name": "Atari Jaguar" },
+    { "short": "JAGCD",   "name": "Atari Jaguar CD" }
+  ],
+  "Microsoft": [
+    { "short": "XBOX",    "name": "Xbox" },
+    { "short": "X360",    "name": "Xbox 360" },
+    { "short": "XONE",    "name": "Xbox One" },
+    { "short": "XSX",     "name": "Xbox Series X|S" }
+  ],
+  "Nintendo": [
+    { "short": "NES",     "name": "Nintendo Entertainment System" },
+    { "short": "SNES",    "name": "Super Nintendo" },
+    { "short": "N64",     "name": "Nintendo 64" },
+    { "short": "GC",      "name": "Nintendo GameCube" },
+    { "short": "WII",     "name": "Nintendo Wii" },
+    { "short": "WIIU",    "name": "Nintendo Wii U" },
+    { "short": "SWITCH",  "name": "Nintendo Switch" },
+    { "short": "SWITCH2", "name": "Nintendo Switch 2" },
+    { "short": "GB",      "name": "Game Boy" },
+    { "short": "GBC",     "name": "Game Boy Color" },
+    { "short": "GBA",     "name": "Game Boy Advance" },
+    { "short": "DS",      "name": "Nintendo DS" },
+    { "short": "3DS",     "name": "Nintendo 3DS" }
+  ],
+  "Sega": [
+    { "short": "SMS",     "name": "Sega Master System" },
+    { "short": "MD",      "name": "Sega Mega Drive", "us_short": "GEN", "us_name": "Sega Genesis" },
+    { "short": "MCD",     "name": "Sega Mega-CD",    "us_short": "SCD", "us_name": "Sega CD" },
+    { "short": "32X",     "name": "Sega 32X" },
+    { "short": "SAT",     "name": "Sega Saturn" },
+    { "short": "DC",      "name": "Sega Dreamcast" },
+    { "short": "GG",      "name": "Sega Game Gear" }
+  ],
+  "Sony": [
+    { "short": "PS1",     "name": "PlayStation" },
+    { "short": "PS2",     "name": "PlayStation 2" },
+    { "short": "PS3",     "name": "PlayStation 3" },
+    { "short": "PS4",     "name": "PlayStation 4" },
+    { "short": "PS5",     "name": "PlayStation 5" },
+    { "short": "PSP",     "name": "PlayStation Portable" },
+    { "short": "VITA",    "name": "PlayStation Vita" }
+  ]
+}

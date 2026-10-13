@@ -1,0 +1,753 @@
+-- Game Collection — database schema
+-- Import into an EMPTY database created with the utf8mb4 character set.
+-- WARNING: every table is dropped and recreated. Never run this on a database with data you want to keep.
+
+SET time_zone = '+00:00';
+SET foreign_key_checks = 0;
+SET sql_mode = 'NO_AUTO_VALUE_ON_ZERO';
+
+SET NAMES utf8mb4;
+
+-- Grading defaults (labels, templates, profiles) are seeded by the app on first use,
+-- from assets/grading-defaults.json.
+
+DROP TABLE IF EXISTS `app_settings`;
+CREATE TABLE `app_settings` (
+  `name`  varchar(64) NOT NULL,
+  `value` text DEFAULT NULL,
+  PRIMARY KEY (`name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+DROP TABLE IF EXISTS `grade_labels`;
+CREATE TABLE `grade_labels` (
+  `id`         int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `name`       varchar(50) NOT NULL,
+  `short`      varchar(6) NOT NULL DEFAULT '',
+  `min_score`  tinyint(3) unsigned NOT NULL DEFAULT 0,
+  `color`      char(7) NOT NULL DEFAULT '#b0a898',
+  `sort_order` smallint(6) NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+DROP TABLE IF EXISTS `grade_templates`;
+CREATE TABLE `grade_templates` (
+  `id`         int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `name`       varchar(100) NOT NULL,
+  `sort_order` smallint(6) NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+DROP TABLE IF EXISTS `grade_categories`;
+CREATE TABLE `grade_categories` (
+  `id`          int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `template_id` int(10) unsigned NOT NULL,
+  `name`        varchar(100) NOT NULL,
+  `max_points`  tinyint(3) unsigned NOT NULL DEFAULT 0,
+  `sort_order`  smallint(6) NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  KEY `template_id` (`template_id`),
+  CONSTRAINT `grade_categories_ibfk_1` FOREIGN KEY (`template_id`) REFERENCES `grade_templates` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+DROP TABLE IF EXISTS `grade_defects`;
+CREATE TABLE `grade_defects` (
+  `id`          int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `category_id` int(10) unsigned NOT NULL,
+  `name`        varchar(100) NOT NULL,
+  `penalty`     tinyint(3) unsigned NOT NULL DEFAULT 1,
+  `kind`        enum('each','once','max','level') NOT NULL DEFAULT 'each',
+  `max_count`   tinyint(3) unsigned DEFAULT NULL,
+  `level_group` varchar(50) DEFAULT NULL,
+  `description` varchar(500) DEFAULT NULL,                -- what the defect means (ⓘ while grading and on the report)
+  `sort_order`  smallint(6) NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  KEY `category_id` (`category_id`),
+  CONSTRAINT `grade_defects_ibfk_1` FOREIGN KEY (`category_id`) REFERENCES `grade_categories` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Example photos of a defect (up to 3, files in uploads/defects/), admin-managed
+DROP TABLE IF EXISTS `grade_defect_photos`;
+CREATE TABLE `grade_defect_photos` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `defect_id` int(10) unsigned NOT NULL,
+  `filename` varchar(255) NOT NULL,
+  `sort_order` tinyint(3) unsigned NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  KEY `defect_id` (`defect_id`),
+  CONSTRAINT `grade_defect_photos_defect_fk` FOREIGN KEY (`defect_id`) REFERENCES `grade_defects` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+DROP TABLE IF EXISTS `grade_profiles`;
+CREATE TABLE `grade_profiles` (
+  `id`         int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `name`       varchar(100) NOT NULL,
+  `sort_order` smallint(6) NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+DROP TABLE IF EXISTS `grade_profile_components`;
+CREATE TABLE `grade_profile_components` (
+  `id`          int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `profile_id`  int(10) unsigned NOT NULL,
+  `template_id` int(10) unsigned NOT NULL,
+  `label`       varchar(100) NOT NULL,
+  `abbr`        varchar(8) NOT NULL DEFAULT '',
+  `weight`      tinyint(3) unsigned NOT NULL DEFAULT 0,
+  `default_qty` tinyint(3) unsigned NOT NULL DEFAULT 1,
+  `sort_order`  smallint(6) NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  KEY `profile_id` (`profile_id`),
+  KEY `template_id` (`template_id`),
+  CONSTRAINT `grade_profile_components_ibfk_1` FOREIGN KEY (`profile_id`)  REFERENCES `grade_profiles` (`id`)  ON DELETE CASCADE,
+  CONSTRAINT `grade_profile_components_ibfk_2` FOREIGN KEY (`template_id`) REFERENCES `grade_templates` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+DROP TABLE IF EXISTS `entry_parts`;
+CREATE TABLE `entry_parts` (
+  `id`                   int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `entry_id`             int(10) unsigned NOT NULL,
+  `profile_component_id` int(10) unsigned DEFAULT NULL,  -- set for admin-defined parts
+  `custom_name`          varchar(100) DEFAULT NULL,      -- set for own items
+  `template_id`          int(10) unsigned DEFAULT NULL,  -- set for own items
+  `custom_weight`        tinyint(3) unsigned DEFAULT NULL, -- set for own items
+  `qty`                  tinyint(3) unsigned NOT NULL DEFAULT 1, -- 0 = missing
+  `sort_order`           smallint(6) NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  KEY `entry_id` (`entry_id`),
+  KEY `profile_component_id` (`profile_component_id`),
+  KEY `template_id` (`template_id`),
+  CONSTRAINT `entry_parts_ibfk_1` FOREIGN KEY (`entry_id`)             REFERENCES `collection_entries` (`id`)       ON DELETE CASCADE,
+  CONSTRAINT `entry_parts_ibfk_2` FOREIGN KEY (`profile_component_id`) REFERENCES `grade_profile_components` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `entry_parts_ibfk_3` FOREIGN KEY (`template_id`)          REFERENCES `grade_templates` (`id`)          ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+DROP TABLE IF EXISTS `entry_part_units`;
+CREATE TABLE `entry_part_units` (
+  `id`            int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `entry_part_id` int(10) unsigned NOT NULL,
+  `unit_no`       tinyint(3) unsigned NOT NULL DEFAULT 1,
+  `score`         tinyint(3) unsigned NOT NULL DEFAULT 100,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_part_unit` (`entry_part_id`,`unit_no`),
+  CONSTRAINT `entry_part_units_ibfk_1` FOREIGN KEY (`entry_part_id`) REFERENCES `entry_parts` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+DROP TABLE IF EXISTS `entry_defects`;
+CREATE TABLE `entry_defects` (
+  `unit_id`   int(10) unsigned NOT NULL,
+  `defect_id` int(10) unsigned NOT NULL,
+  `count`     tinyint(3) unsigned NOT NULL DEFAULT 1,
+  PRIMARY KEY (`unit_id`,`defect_id`),
+  KEY `defect_id` (`defect_id`),
+  CONSTRAINT `entry_defects_ibfk_1` FOREIGN KEY (`unit_id`)   REFERENCES `entry_part_units` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `entry_defects_ibfk_2` FOREIGN KEY (`defect_id`) REFERENCES `grade_defects` (`id`)    ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+DROP TABLE IF EXISTS `collection_entries`;
+CREATE TABLE `collection_entries` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` int(10) unsigned NOT NULL,
+  `game_id` int(10) unsigned NOT NULL,
+  `copy_number` tinyint(3) unsigned NOT NULL DEFAULT 1,
+  `owned` tinyint(1) NOT NULL DEFAULT 0,
+  `completeness` varchar(100) NOT NULL DEFAULT '',
+  `played_status` varchar(100) NOT NULL DEFAULT '',
+  `variant` varchar(100) NOT NULL DEFAULT '',
+  `wishlist` tinyint(1) NOT NULL DEFAULT 0,
+  `wishlist_any` tinyint(1) NOT NULL DEFAULT 0,
+  `upgrade` tinyint(1) NOT NULL DEFAULT 0,
+  `upgrade_reason` text DEFAULT NULL,
+  `price_paid` decimal(8,2) DEFAULT NULL,
+  `chart_price` decimal(8,2) DEFAULT NULL,
+  `price_min` decimal(8,2) DEFAULT NULL,
+  `price_max` decimal(8,2) DEFAULT NULL,
+  `notes` text DEFAULT NULL,
+  `tag` varchar(100) DEFAULT NULL,
+  `value_price_type` enum('loose','cib','new') NOT NULL DEFAULT 'cib',
+  `primary_photo` varchar(255) DEFAULT NULL,
+  `grade_method` enum('simple','points') DEFAULT NULL,
+  `grade_label_id` int(10) unsigned DEFAULT NULL,
+  `grade_profile_id` int(10) unsigned DEFAULT NULL,
+  `grade_score` tinyint(3) unsigned DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_user_game_copy` (`user_id`,`game_id`,`copy_number`),
+  KEY `game_id` (`game_id`),
+  KEY `idx_user_game` (`user_id`,`game_id`),
+  KEY `grade_label_id` (`grade_label_id`),
+  KEY `grade_profile_id` (`grade_profile_id`),
+  CONSTRAINT `collection_entries_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `collection_entries_ibfk_2` FOREIGN KEY (`game_id`) REFERENCES `games` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `collection_entries_grade_label_fk` FOREIGN KEY (`grade_label_id`) REFERENCES `grade_labels` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `collection_entries_grade_profile_fk` FOREIGN KEY (`grade_profile_id`) REFERENCES `grade_profiles` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+DROP TABLE IF EXISTS `copy_photos`;
+CREATE TABLE `copy_photos` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `entry_id` int(10) unsigned NOT NULL,
+  `user_id` int(10) unsigned NOT NULL,
+  `filename` varchar(255) NOT NULL,
+  `sort_order` tinyint(3) unsigned NOT NULL DEFAULT 0,
+  `uploaded_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `entry_id` (`entry_id`),
+  KEY `user_id` (`user_id`),
+  CONSTRAINT `copy_photos_ibfk_1` FOREIGN KEY (`entry_id`) REFERENCES `collection_entries` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `copy_photos_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- Photo tags: which part unit (and which of its defects) a photo shows. One tag per photo; no row = untagged.
+-- part_ref is stable across re-saves: 'c<profile component id>', 'o:<own item name>' ('~2' for a repeated name), '' = overview.
+DROP TABLE IF EXISTS `copy_photo_tags`;
+CREATE TABLE `copy_photo_tags` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `photo_id` int(10) unsigned NOT NULL,
+  `entry_id` int(10) unsigned NOT NULL,
+  `part_ref` varchar(160) NOT NULL DEFAULT '',
+  `unit_no` tinyint(3) unsigned NOT NULL DEFAULT 1,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_photo` (`photo_id`),
+  KEY `idx_entry` (`entry_id`),
+  CONSTRAINT `copy_photo_tags_photo_fk` FOREIGN KEY (`photo_id`) REFERENCES `copy_photos` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `copy_photo_tags_entry_fk` FOREIGN KEY (`entry_id`) REFERENCES `collection_entries` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+DROP TABLE IF EXISTS `copy_photo_tag_defects`;
+CREATE TABLE `copy_photo_tag_defects` (
+  `tag_id` int(10) unsigned NOT NULL,
+  `defect_id` int(10) unsigned NOT NULL,
+  PRIMARY KEY (`tag_id`,`defect_id`),
+  KEY `idx_defect` (`defect_id`),
+  CONSTRAINT `copy_photo_tag_defects_tag_fk` FOREIGN KEY (`tag_id`) REFERENCES `copy_photo_tags` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `copy_photo_tag_defects_defect_fk` FOREIGN KEY (`defect_id`) REFERENCES `grade_defects` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+DROP TABLE IF EXISTS `games`;
+CREATE TABLE `games` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `system_id` int(10) unsigned NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `sort_title` varchar(255) NOT NULL,
+  `default_image` varchar(255) DEFAULT NULL,
+  `cover_source` enum('uploaded','igdb') DEFAULT NULL,             -- NULL: the site default (Settings › IGDB › Covers)
+  `external_id` varchar(20) DEFAULT NULL,
+  `price_link` varchar(255) DEFAULT NULL,
+  `cib_price` decimal(8,2) DEFAULT NULL,
+  `loose_price` decimal(8,2) DEFAULT NULL,
+  `loose_price_updated_at` timestamp NULL DEFAULT NULL,
+  `loose_price_prev` decimal(8,2) DEFAULT NULL,            -- the price before the last price import that changed it
+  `new_price` decimal(8,2) DEFAULT NULL,
+  `new_price_updated_at` timestamp NULL DEFAULT NULL,
+  `new_price_prev` decimal(8,2) DEFAULT NULL,              -- the price before the last price import that changed it
+  `cib_price_updated_at` timestamp NULL DEFAULT NULL,
+  `cib_price_prev` decimal(8,2) DEFAULT NULL,              -- the price before the last price import that changed it
+  `notes_admin` text DEFAULT NULL,
+  `sort_order` int(10) unsigned NOT NULL DEFAULT 0,
+  `active` tinyint(1) NOT NULL DEFAULT 1,
+  `group_id` int(10) unsigned DEFAULT NULL,
+  `edition_label` varchar(100) DEFAULT NULL,
+  `edition_sort` smallint(6) NOT NULL DEFAULT 0,
+  `comp_dismissed` tinyint(1) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_system` (`system_id`),
+  KEY `idx_sort` (`system_id`,`sort_title`),
+  KEY `idx_external_id` (`external_id`),
+  KEY `idx_group` (`group_id`),
+  CONSTRAINT `games_ibfk_1` FOREIGN KEY (`system_id`) REFERENCES `systems` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `games_group_fk` FOREIGN KEY (`group_id`) REFERENCES `game_groups` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- IGDB game info shown in the drawer (Settings › IGDB): one row per game that has been looked up, site-wide.
+DROP TABLE IF EXISTS `game_igdb`;
+CREATE TABLE `game_igdb` (
+  `game_id` int(10) unsigned NOT NULL,
+  `status` enum('auto','confirmed','review','none') NOT NULL,     -- auto/confirmed: matched · review: an admin must pick · none: not on IGDB
+  `igdb_id` int(10) unsigned DEFAULT NULL,
+  `slug` varchar(255) DEFAULT NULL,                               -- igdb.com/games/<slug>
+  `name` varchar(255) DEFAULT NULL,                               -- the game's name at IGDB
+  `developers` varchar(500) DEFAULT NULL,
+  `publishers` varchar(500) DEFAULT NULL,
+  `genres` varchar(500) DEFAULT NULL,
+  `release_date` date DEFAULT NULL,
+  `release_prec` enum('day','month','quarter','year') DEFAULT NULL,
+  `release_region` varchar(20) DEFAULT NULL,                      -- IGDB region name (europe, north_america, worldwide, …)
+  `release_kind` enum('own','worldwide','other') DEFAULT NULL,    -- own: the system's region · other: shown with its region
+  `rating` decimal(5,2) DEFAULT NULL,                             -- IGDB users, 0–100
+  `rating_count` int(10) unsigned DEFAULT NULL,
+  `critic_rating` decimal(5,2) DEFAULT NULL,                      -- critics, 0–100
+  `critic_count` int(10) unsigned DEFAULT NULL,
+  `cover_id` varchar(64) DEFAULT NULL,                            -- IGDB cover image id (images.igdb.com)
+  `cover_region` varchar(20) DEFAULT NULL,                        -- the cover's region; NULL = IGDB's main cover
+  `candidates` text DEFAULT NULL,                                 -- review: JSON [{id, name, slug, year}] found by the search
+  `fetched_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`game_id`),
+  KEY `idx_status` (`status`),
+  KEY `idx_igdb` (`igdb_id`),
+  CONSTRAINT `game_igdb_game_fk` FOREIGN KEY (`game_id`) REFERENCES `games` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- Editions: games that the price source lists separately (original, [Platinum], …) linked into one group.
+-- Admin-managed and site-wide; every edition keeps its own games row, prices and external_id.
+DROP TABLE IF EXISTS `game_groups`;
+CREATE TABLE `game_groups` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `system_id` int(10) unsigned NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `sort_title` varchar(255) NOT NULL,
+  `main_game_id` int(10) unsigned DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_system` (`system_id`,`sort_title`),
+  KEY `main_game_id` (`main_game_id`),
+  CONSTRAINT `game_groups_system_fk` FOREIGN KEY (`system_id`) REFERENCES `systems` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `game_groups_main_fk` FOREIGN KEY (`main_game_id`) REFERENCES `games` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- Compilations: a game that contains other games of the same system (Arkane Collection → Dishonored, Prey).
+-- A game can be in any number of compilations. games.comp_dismissed = "not a compilation" (no suggestions).
+DROP TABLE IF EXISTS `compilation_items`;
+CREATE TABLE `compilation_items` (
+  `compilation_id` int(10) unsigned NOT NULL,
+  `game_id` int(10) unsigned NOT NULL,
+  `sort_order` smallint(6) NOT NULL DEFAULT 0,
+  PRIMARY KEY (`compilation_id`,`game_id`),
+  KEY `game_id` (`game_id`),
+  CONSTRAINT `compilation_items_comp_fk` FOREIGN KEY (`compilation_id`) REFERENCES `games` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `compilation_items_game_fk` FOREIGN KEY (`game_id`) REFERENCES `games` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- Edition suggestions the admin rejected, stored per pair of games (game_a < game_b);
+-- a rejected pair is never suggested together again.
+DROP TABLE IF EXISTS `edition_ignores`;
+CREATE TABLE `edition_ignores` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `system_id` int(10) unsigned NOT NULL,
+  `game_a` int(10) unsigned NOT NULL,
+  `game_b` int(10) unsigned NOT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_pair` (`game_a`,`game_b`),
+  KEY `system_id` (`system_id`),
+  KEY `game_b` (`game_b`),
+  CONSTRAINT `edition_ignores_system_fk` FOREIGN KEY (`system_id`) REFERENCES `systems` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `edition_ignores_a_fk` FOREIGN KEY (`game_a`) REFERENCES `games` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `edition_ignores_b_fk` FOREIGN KEY (`game_b`) REFERENCES `games` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+DROP TABLE IF EXISTS `invite_codes`;
+CREATE TABLE `invite_codes` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `code` varchar(64) NOT NULL,
+  `created_by` int(10) unsigned NOT NULL,
+  `used_by` int(10) unsigned DEFAULT NULL,
+  `used_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `code` (`code`),
+  KEY `created_by` (`created_by`),
+  KEY `used_by` (`used_by`),
+  CONSTRAINT `invite_codes_ibfk_1` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`),
+  CONSTRAINT `invite_codes_ibfk_2` FOREIGN KEY (`used_by`) REFERENCES `users` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+DROP TABLE IF EXISTS `login_attempts`;
+CREATE TABLE `login_attempts` (
+  `attempt_key` varchar(120) NOT NULL,
+  `fail_count` int(10) unsigned NOT NULL DEFAULT 0,
+  `last_fail_at` timestamp NULL DEFAULT NULL,
+  `locked_until` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`attempt_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+DROP TABLE IF EXISTS `remember_tokens`;
+CREATE TABLE `remember_tokens` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` int(10) unsigned NOT NULL,
+  `token` varchar(64) NOT NULL,
+  `expires_at` timestamp NOT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `token` (`token`),
+  KEY `user_id` (`user_id`),
+  KEY `idx_token` (`token`),
+  CONSTRAINT `remember_tokens_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+DROP TABLE IF EXISTS `systems`;
+CREATE TABLE `systems` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `name` varchar(100) NOT NULL,
+  `short_name` varchar(30) NOT NULL,
+  `icon_image` varchar(255) DEFAULT NULL,                         -- icon for dark themes (and the fallback)
+  `icon_image_light` varchar(255) DEFAULT NULL,                   -- icon for light themes (falls back to icon_image)
+  `region` varchar(20) NOT NULL DEFAULT 'PAL',
+  `igdb_platform_id` int(10) unsigned DEFAULT NULL,                 -- the system's platform at IGDB (Settings › IGDB)
+  `sort_order` smallint(6) NOT NULL DEFAULT 0,
+  `active` tinyint(1) NOT NULL DEFAULT 1,
+  `grade_profile_id` int(10) unsigned DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `grade_profile_id` (`grade_profile_id`),
+  CONSTRAINT `systems_grade_profile_fk` FOREIGN KEY (`grade_profile_id`) REFERENCES `grade_profiles` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+DROP TABLE IF EXISTS `users`;
+CREATE TABLE `users` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `username` varchar(50) NOT NULL,
+  `password` varchar(255) NOT NULL,
+  `role` enum('admin','user') NOT NULL DEFAULT 'user',
+  `status` enum('active','inactive','banned') NOT NULL DEFAULT 'active',
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `last_login` timestamp NULL DEFAULT NULL,
+  `wishlist_public` tinyint(1) NOT NULL DEFAULT 0,
+  `wishlist_token` varchar(32) DEFAULT NULL,
+  `column_prefs_collection` text DEFAULT NULL,
+  `column_prefs_wishlist` text DEFAULT NULL,
+  `show_system_icons` tinyint(1) NOT NULL DEFAULT 1,
+  `auction_sites` text DEFAULT NULL,
+  `grading_mode` enum('simple','points','both') NOT NULL DEFAULT 'simple',
+  `grading_default` enum('simple','points') NOT NULL DEFAULT 'simple',
+  `theme` varchar(50) DEFAULT NULL,
+  `language` varchar(10) DEFAULT NULL,
+  `edition_mode` enum('one','every') NOT NULL DEFAULT 'one',
+  `edition_wishlist` enum('any','exact') NOT NULL DEFAULT 'any',
+  `track_variants` tinyint(1) NOT NULL DEFAULT 0,
+  `label_template_id` int(10) unsigned DEFAULT NULL,
+  `compilation_mode` enum('own','contents') NOT NULL DEFAULT 'own',
+  `played_pct` enum('all','owned') NOT NULL DEFAULT 'all',        -- Finished / Started counters: of all games, or of owned games
+  `show_played` tinyint(1) NOT NULL DEFAULT 1,                    -- show those counters on the Collection page and the dashboard
+  `show_value_graph` tinyint(1) NOT NULL DEFAULT 1,               -- show the collection value graphs on the dashboard
+  `value_graph_collapsed` tinyint(1) NOT NULL DEFAULT 0,          -- the dashboard's value graph card folded away (Hide graphs)
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `username` (`username`),
+  KEY `label_template_id` (`label_template_id`),
+  CONSTRAINT `users_label_template_fk` FOREIGN KEY (`label_template_id`) REFERENCES `label_templates` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+DROP TABLE IF EXISTS `user_backups`;
+CREATE TABLE `user_backups` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` int(10) unsigned NOT NULL,
+  `system_id` int(10) unsigned NOT NULL,
+  `token` varchar(32) NOT NULL,
+  `filename` varchar(255) NOT NULL,
+  `file_size` int(10) unsigned DEFAULT NULL,
+  `status` enum('generating','ready','failed') NOT NULL DEFAULT 'generating',
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `expires_at` timestamp NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `token` (`token`),
+  UNIQUE KEY `uq_user_system` (`user_id`,`system_id`),
+  KEY `system_id` (`system_id`),
+  CONSTRAINT `user_backups_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `user_backups_ibfk_2` FOREIGN KEY (`system_id`) REFERENCES `systems` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- Barcodes (scan.php, Settings › Barcodes): shared by all users; unknown = scanned but not linked yet (barcodes.php)
+DROP TABLE IF EXISTS `game_barcodes`;
+CREATE TABLE `game_barcodes` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `barcode` varchar(13) NOT NULL,
+  `game_id` int(10) unsigned NOT NULL,
+  `variant` varchar(100) NOT NULL DEFAULT '',
+  `note` varchar(200) DEFAULT NULL,
+  `added_by` int(10) unsigned DEFAULT NULL,
+  `added_username` varchar(50) NOT NULL DEFAULT '',
+  `source` enum('user','import') NOT NULL DEFAULT 'user',
+  `flagged_by` int(10) unsigned DEFAULT NULL,
+  `flagged_username` varchar(50) NOT NULL DEFAULT '',
+  `flag_reason` varchar(200) DEFAULT NULL,
+  `flagged_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_barcode_game` (`barcode`,`game_id`),
+  KEY `idx_game` (`game_id`),
+  KEY `idx_flagged` (`flagged_at`),
+  KEY `added_by` (`added_by`),
+  KEY `flagged_by` (`flagged_by`),
+  CONSTRAINT `game_barcodes_game_fk` FOREIGN KEY (`game_id`) REFERENCES `games` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `game_barcodes_user_fk` FOREIGN KEY (`added_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `game_barcodes_flag_fk` FOREIGN KEY (`flagged_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+DROP TABLE IF EXISTS `barcode_unknown`;
+CREATE TABLE `barcode_unknown` (
+  `barcode` varchar(13) NOT NULL,
+  `times` int(10) unsigned NOT NULL DEFAULT 1,
+  `first_user_id` int(10) unsigned DEFAULT NULL,
+  `first_username` varchar(50) NOT NULL DEFAULT '',
+  `last_username` varchar(50) NOT NULL DEFAULT '',
+  `first_seen` timestamp NULL DEFAULT current_timestamp(),
+  `last_seen` timestamp NULL DEFAULT current_timestamp(),
+  `dismissed` tinyint(1) NOT NULL DEFAULT 0,
+  PRIMARY KEY (`barcode`),
+  KEY `idx_last_seen` (`last_seen`),
+  KEY `first_user_id` (`first_user_id`),
+  CONSTRAINT `barcode_unknown_user_fk` FOREIGN KEY (`first_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- Activity log (Settings › Activity log): one row per change, texts made at read time (activity.php)
+DROP TABLE IF EXISTS `activity_log`;
+CREATE TABLE `activity_log` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `user_id` int(10) unsigned DEFAULT NULL,
+  `username` varchar(50) NOT NULL DEFAULT '',
+  `category` enum('collection','catalogue','sharing','accounts','system') NOT NULL,
+  `action` varchar(60) NOT NULL,
+  `is_admin` tinyint(1) NOT NULL DEFAULT 0,
+  `is_warning` tinyint(1) NOT NULL DEFAULT 0,
+  `subject_type` varchar(30) DEFAULT NULL,
+  `subject_id` int(10) unsigned DEFAULT NULL,
+  `target_user_id` int(10) unsigned DEFAULT NULL,
+  `target_username` varchar(50) DEFAULT NULL,
+  `ip` varchar(45) DEFAULT NULL,
+  `data` text DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_created` (`created_at`),
+  KEY `idx_user` (`user_id`,`created_at`),
+  KEY `idx_type` (`category`,`created_at`),
+  KEY `idx_admin` (`is_admin`,`created_at`),
+  KEY `idx_subject` (`subject_type`,`subject_id`,`created_at`),
+  KEY `idx_target` (`target_user_id`),
+  CONSTRAINT `activity_log_user_fk` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `activity_log_target_fk` FOREIGN KEY (`target_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- Full site backups (Settings › Site Backup): one row per zip in uploads/backups/site/
+DROP TABLE IF EXISTS `site_backups`;
+CREATE TABLE `site_backups` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `filename` varchar(100) NOT NULL,
+  `parts` varchar(30) NOT NULL,                 -- db,photos,site
+  `trigger_type` enum('manual','schedule','update') NOT NULL DEFAULT 'manual',
+  `status` enum('running','ready','failed') NOT NULL DEFAULT 'running',
+  `file_count` int(10) unsigned NOT NULL DEFAULT 0,
+  `missing_count` int(10) unsigned NOT NULL DEFAULT 0,
+  `file_size` bigint(20) unsigned DEFAULT NULL,
+  `error` varchar(500) DEFAULT NULL,
+  `app_version` varchar(20) NOT NULL DEFAULT '',
+  `created_by` int(10) unsigned DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `finished_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `filename` (`filename`),
+  KEY `created_by` (`created_by`),
+  CONSTRAINT `site_backups_user_fk` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+DROP TABLE IF EXISTS `user_completeness_options`;
+CREATE TABLE `user_completeness_options` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` int(10) unsigned NOT NULL,
+  `label` varchar(100) NOT NULL,
+  `sort_order` smallint(6) NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_user_label` (`user_id`,`label`),
+  CONSTRAINT `user_completeness_options_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+DROP TABLE IF EXISTS `user_played_options`;
+CREATE TABLE `user_played_options` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` int(10) unsigned NOT NULL,
+  `label` varchar(100) NOT NULL,
+  `play_group` enum('finished','started','none') DEFAULT NULL,   -- Finished / Started counters; NULL = guessed from the label
+  `sort_order` smallint(6) NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_user_label` (`user_id`,`label`),
+  CONSTRAINT `user_played_options_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+DROP TABLE IF EXISTS `user_system_prefs`;
+CREATE TABLE `user_system_prefs` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` int(10) unsigned NOT NULL,
+  `system_id` int(10) unsigned NOT NULL,
+  `visible` tinyint(1) NOT NULL DEFAULT 1,
+  `user_sort_order` smallint(6) NOT NULL DEFAULT 0,
+  `count_for_totals` tinyint(1) NOT NULL DEFAULT 1,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_user_sys` (`user_id`,`system_id`),
+  KEY `system_id` (`system_id`),
+  CONSTRAINT `user_system_prefs_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `user_system_prefs_ibfk_2` FOREIGN KEY (`system_id`) REFERENCES `systems` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+DROP TABLE IF EXISTS `user_tag_options`;
+CREATE TABLE `user_tag_options` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` int(10) unsigned NOT NULL,
+  `label` varchar(100) NOT NULL,
+  `sort_order` smallint(6) NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_user_tag` (`user_id`,`label`),
+  CONSTRAINT `user_tag_options_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- Print variants (UK, Benelux, …): optional per user, starts empty (no seed)
+DROP TABLE IF EXISTS `user_variant_options`;
+CREATE TABLE `user_variant_options` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` int(10) unsigned NOT NULL,
+  `label` varchar(100) NOT NULL,
+  `sort_order` smallint(6) NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_user_label` (`user_id`,`label`),
+  CONSTRAINT `user_variant_options_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- Condition reports: one public share per copy (a copy can be re-shared with a new token; old rows stay revoked)
+DROP TABLE IF EXISTS `copy_shares`;
+CREATE TABLE `copy_shares` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `entry_id` int(10) unsigned NOT NULL,
+  `user_id` int(10) unsigned NOT NULL,
+  `token` char(32) NOT NULL,
+  `active` tinyint(1) NOT NULL DEFAULT 1,
+  `mode` enum('snapshot','live') NOT NULL DEFAULT 'snapshot',
+  `snapshot` mediumtext DEFAULT NULL,
+  `for_sale` tinyint(1) NOT NULL DEFAULT 0,
+  `graded_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `revoked_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_token` (`token`),
+  KEY `entry_id` (`entry_id`),
+  KEY `user_id` (`user_id`),
+  CONSTRAINT `copy_shares_entry_fk` FOREIGN KEY (`entry_id`) REFERENCES `collection_entries` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `copy_shares_user_fk` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- Sticker sizes. user_id NULL = site-wide (added by the admin); otherwise a user's own size.
+DROP TABLE IF EXISTS `label_sizes`;
+CREATE TABLE `label_sizes` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` int(10) unsigned DEFAULT NULL,
+  `name` varchar(100) NOT NULL,
+  `width_mm` decimal(5,1) NOT NULL,
+  `height_mm` decimal(5,1) NOT NULL,
+  `sort_order` smallint(6) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `user_id` (`user_id`),
+  CONSTRAINT `label_sizes_user_fk` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT INTO `label_sizes` (`id`, `user_id`, `name`, `width_mm`, `height_mm`, `sort_order`) VALUES
+  (1, NULL, 'Dymo 99012',       89.0,  36.0, 1),
+  (2, NULL, 'Brother DK-11209', 62.0,  29.0, 2),
+  (3, NULL, 'Brother DK-11202', 62.0, 100.0, 3),
+  (4, NULL, 'A4 sheet 3×8',     70.0,  37.0, 4);
+
+
+-- Label templates. user_id NULL = site template (the admin edits it; everyone can use it);
+-- otherwise a user's own template, optionally shared (read-only) with everyone.
+DROP TABLE IF EXISTS `label_templates`;
+CREATE TABLE `label_templates` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` int(10) unsigned DEFAULT NULL,
+  `name` varchar(100) NOT NULL,
+  `size_id` int(10) unsigned DEFAULT NULL,
+  `orientation` enum('landscape','portrait') NOT NULL DEFAULT 'landscape',
+  `layout` enum('horizontal','stacked') NOT NULL DEFAULT 'horizontal',
+  `fields` text NOT NULL,
+  `colour` tinyint(1) NOT NULL DEFAULT 1,
+  `cut_line` tinyint(1) NOT NULL DEFAULT 1,
+  `shared` tinyint(1) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `user_id` (`user_id`),
+  KEY `shared` (`shared`),
+  KEY `size_id` (`size_id`),
+  CONSTRAINT `label_templates_user_fk` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `label_templates_size_fk` FOREIGN KEY (`size_id`) REFERENCES `label_sizes` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- The site's default template: every user without a default of their own uses the first site template
+INSERT INTO `label_templates` (`id`, `user_id`, `name`, `size_id`, `orientation`, `layout`, `fields`, `colour`, `cut_line`, `shared`) VALUES
+  (1, NULL, 'Default', 1, 'landscape', 'horizontal',
+   '[{"id":"score","on":true,"scale":1},{"id":"cond","on":true,"scale":1},{"id":"qr","on":true,"scale":1},{"id":"title","on":true,"scale":1},{"id":"meta","on":true,"scale":1},{"id":"date","on":true,"scale":1},{"id":"id","on":true,"scale":1}]',
+   1, 1, 0);
+
+
+-- Database updates (migrations/) this schema already includes: Settings › Updates only runs the
+-- files not listed here. Adding a migration? Make the same change in this file and add its name below
+-- (development files as 'dev/<name>', release files by their name).
+DROP TABLE IF EXISTS `value_history`;
+CREATE TABLE `value_history` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` int(10) unsigned NOT NULL,
+  `system_id` int(10) unsigned NOT NULL,
+  `recorded_at` datetime NOT NULL,
+  `value` decimal(10,2) NOT NULL,                                 -- owned value of this system at that moment
+  `source` enum('start','import','collection','price') NOT NULL,
+  `run` varchar(40) DEFAULT NULL,                                 -- import run id (shared by all batches of one import)
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_run` (`user_id`,`system_id`,`run`),
+  KEY `idx_user_time` (`user_id`,`recorded_at`),
+  KEY `idx_user_sys` (`user_id`,`system_id`,`recorded_at`),
+  KEY `system_id` (`system_id`),
+  CONSTRAINT `value_history_user_fk` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `value_history_system_fk` FOREIGN KEY (`system_id`) REFERENCES `systems` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+DROP TABLE IF EXISTS `schema_migrations`;
+CREATE TABLE `schema_migrations` (
+  `filename`   varchar(190) NOT NULL,
+  `applied_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`filename`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT INTO `schema_migrations` (`filename`) VALUES
+  ('001_point_grading.sql'),
+  ('002_themes.sql'),
+  ('003_languages_settings.sql'),
+  ('004_editions.sql'),
+  ('005_photo_backups.sql'),
+  ('006_condition_report.sql'),
+  ('007_release_0.9.2.sql'),
+  ('008_release_0.9.3.sql'),
+  ('009_release_0.9.5.sql'),
+  ('010_release_0.9.6.sql'),
+  ('011_release_0.9.7.sql'),
+  ('012_release_0.9.8.sql');

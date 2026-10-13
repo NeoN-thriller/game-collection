@@ -1,0 +1,327 @@
+<?php
+require_once __DIR__ . '/boot.php';
+$user = requireAdmin();
+?>
+<!DOCTYPE html>
+<html lang="<?= currentLang() ?>">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title><?= pageTitle(tRaw('common.nav.price_import')) ?></title>
+<link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/main.css?v=<?= @filemtime(__DIR__.'/assets/css/main.css') ?>">
+<?= themeHead($user) ?>
+<style>
+  .prices-wrap { max-width:960px; margin:36px auto; padding:0 20px 60px; }
+  .prices-wrap h1 { font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case); font-size:2rem; color:var(--accent); letter-spacing:.06em; margin-bottom:6px; }
+  .prices-wrap p.desc { font-size:.75rem; color:var(--muted); margin-bottom:28px; line-height:1.7; }
+  .step { background:var(--surface); border:1px solid var(--border2); padding:22px 24px; margin-bottom:16px; }
+  .step-label { font-size:.58rem; letter-spacing:.25em; text-transform:uppercase; color:var(--muted); margin-bottom:6px; }
+  .step h3 { font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case); font-size:1.2rem; color:var(--accent2); letter-spacing:.06em; margin-bottom:12px; }
+  textarea.csv-input { width:100%; height:160px; font-size:.7rem; line-height:1.6; padding:10px; resize:vertical; }
+  .preview-table { width:100%; border-collapse:collapse; font-size:.71rem; margin-top:12px; }
+  .preview-table th { padding:7px 10px; font-size:.58rem; letter-spacing:.15em; text-transform:uppercase; color:var(--muted); text-align:left; border-bottom:1px solid var(--border2); }
+  .preview-table td { padding:7px 10px; border-bottom:1px solid var(--border); vertical-align:middle; }
+  .tag-match  { background:color-mix(in srgb,var(--green) 12%,transparent); color:var(--green);  border:1px solid color-mix(in srgb,var(--green) 30%,transparent); padding:1px 6px; font-size:.6rem; }
+  .tag-new    { background:color-mix(in srgb,var(--wiiu) 10%,transparent);   color:var(--wiiu);   border:1px solid color-mix(in srgb,var(--wiiu) 30%,transparent);  padding:1px 6px; font-size:.6rem; }
+  .tag-nosy   { background:color-mix(in srgb,var(--red) 10%,transparent);   color:var(--red);    border:1px solid color-mix(in srgb,var(--red) 30%,transparent);  padding:1px 6px; font-size:.6rem; }
+  .tag-skip   { background:color-mix(in srgb,var(--muted) 10%,transparent);  color:var(--muted);  border:1px solid var(--border);       padding:1px 6px; font-size:.6rem; }
+  .tag-update { background:color-mix(in srgb,var(--orange) 10%,transparent);  color:var(--orange); border:1px solid color-mix(in srgb,var(--orange) 30%,transparent); padding:1px 6px; font-size:.6rem; }
+  .s-chip { padding:4px 12px; font-size:.68rem; }
+  .summary-chips { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+  .thumb { width:30px; height:30px; object-fit:cover; border:1px solid var(--border2); display:block; }
+  #preview-wrap { display:none; }
+  .result-box { background:var(--surface2); border:1px solid var(--border2); padding:16px 20px; margin-top:16px; font-size:.78rem; line-height:2; display:none; }
+  .result-box.show { display:block; }
+  .ok   { color:var(--green); } .warn { color:var(--orange); } .err { color:var(--red); }
+  .prices-opts { display:flex; flex-direction:column; gap:6px; margin-top:14px; font-size:.72rem; color:var(--text2); }
+  .prices-opts label { display:flex; align-items:center; gap:8px; cursor:pointer; }
+  .prices-opts label.off { opacity:.45; cursor:default; }
+</style>
+<?= csrfScript() ?>
+<?= appScript(['prices', 'import', 'ed']) ?>
+</head>
+<body>
+
+<header class="site-header site-header--sticky">
+  <a href="<?= BASE_URL ?>/dashboard.php" class="site-logo" style="text-decoration:none"><?= siteLogoHtml() ?></a>
+  <?= siteNav($user, 'settings') ?>
+</header>
+
+<div class="prices-wrap">
+  <h1><?= t('common.nav.price_import') ?></h1>
+  <p class="desc">
+    <?= t('prices.intro') ?><br>
+    <span style="color:var(--orange)"><?= t('common.currency_note', ['symbol' => setting('currency_symbol')]) ?></span>
+  </p>
+
+  <div class="step">
+    <div class="step-label"><?= t('import.step', ['n' => 1]) ?></div>
+    <h3><?= t('prices.paste_csv') ?></h3>
+    <textarea class="csv-input" id="csv-input" placeholder="<?= t('prices.placeholder') ?>
+console,name,external_id,link,loose,cib,new,coverArtBase64
+WiiU,Example Game,12345,https://...,12.34,23.45,34.56,data:image/jpeg;base64..."></textarea>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px">
+      <span style="font-size:.7rem;color:var(--muted)"><a href="<?= BASE_URL ?>/api/price_example.php" download="price-import-example.csv">⬇ <?= t('prices.example') ?></a> — <?= t('prices.example_note') ?></span>
+      <span style="display:flex;gap:8px;flex-wrap:wrap">
+        <label class="btn-ghost" style="cursor:pointer">⬆ <?= t('prices.choose_file') ?>
+          <input type="file" accept=".csv,text/csv" hidden onchange="priceFromFile(this, 'csv-input', previewImport)"></label>
+        <button class="btn" onclick="previewImport()"><?= t('prices.preview') ?> →</button>
+      </span>
+    </div>
+    <div class="prices-opts">
+      <label><input type="checkbox" id="opt-update-only" onchange="priceImportOpts()"> <?= t('prices.opt_update_only') ?></label>
+      <label id="opt-new-hidden-wrap"><input type="checkbox" id="opt-new-hidden" onchange="priceImportOpts()"> <?= t('prices.opt_new_hidden') ?></label>
+    </div>
+  </div>
+
+  <div id="preview-wrap">
+    <div class="step">
+      <div class="step-label"><?= t('import.step', ['n' => 2]) ?></div>
+      <h3><?= t('import.review') ?></h3>
+      <div class="summary-chips" id="summary-chips"></div>
+      <table class="preview-table">
+        <thead>
+          <tr>
+            <th><?= t('prices.col_art') ?></th><th><?= t('prices.col_console') ?></th><th><?= t('prices.col_csv_name') ?></th><th><?= t('prices.col_matched') ?></th>
+            <th><?= t('common.price.loose') ?></th><th><?= t('common.price.cib') ?></th><th><?= t('common.price.new') ?></th><th><?= t('prices.col_updated') ?></th><th><?= t('prices.col_art') ?></th><th><?= t('import.col_status') ?></th>
+          </tr>
+        </thead>
+        <tbody id="preview-body"></tbody>
+      </table>
+      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px">
+        <button class="btn-ghost" onclick="reset()">← <?= t('import.start_over') ?></button>
+        <button class="btn" id="btn-confirm" onclick="confirmImport()"><?= t('prices.import') ?></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="result-box" id="result-box"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const BASE = <?= json_encode(BASE_URL) ?>;
+let parsedRows = [];
+let previewData = [];
+
+/** A price from the CSV: "12.99", "$12.99", "€ 12,99", "1,234.50" or "1.234,50"; empty or unreadable → null. */
+function csvPrice(v) {
+  let s = String(v ?? '').replace(/[^0-9.,-]/g, '');
+  if (s === '') return null;
+  const c = s.lastIndexOf(','), d = s.lastIndexOf('.');
+  if (c > -1 && d > -1) s = c > d ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, '');      // 1.234,50 / 1,234.50
+  else if (c > -1) s = /^-?[1-9]\d{0,2}(,\d{3})+$/.test(s) ? s.replace(/,/g, '') : s.replace(',', '.');  // 1,234 / 12,99
+  const n = parseFloat(s);
+  return isFinite(n) ? n : null;
+}
+
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  if (lines.length < 2) return [];
+  const header = parseCSVLine(lines[0]);
+  const idx = {};
+  header.forEach((h,i) => idx[h.trim()] = i);
+  if (idx['external_id'] === undefined && idx['data-product'] !== undefined) idx['external_id'] = idx['data-product'];   // files made before the rename
+  const required = ['console','name','external_id','link','cib','coverArtBase64'];
+  for (const r of required) {
+    if (idx[r] === undefined) { toast(tRaw('prices.err_column', {column: r}), true); return []; }
+  }
+  const rows = [];
+  for (let i=1;i<lines.length;i++) {
+    const line = lines[i].trim(); if (!line) continue;
+    const cols = parseCSVLine(line);
+    rows.push({
+      console:    (cols[idx['console']]||'').trim().toUpperCase(),
+      name:       (cols[idx['name']]||'').trim(),
+      external_id:      (cols[idx['external_id']]||'').trim(),
+      link:       (cols[idx['link']]||'').trim(),
+      cib:        idx['cib']   !== undefined ? csvPrice(cols[idx['cib']])   : null,
+      loose:      idx['loose'] !== undefined ? csvPrice(cols[idx['loose']]) : null,
+      new:        idx['new']   !== undefined ? csvPrice(cols[idx['new']])   : null,
+      artBase64:  (cols[idx['coverArtBase64']]||'').trim(),
+    });
+  }
+  return rows;
+}
+
+function parseCSVLine(line) {
+  const result=[]; let cur='',inQ=false;
+  for (let i=0;i<line.length;i++) {
+    const ch=line[i];
+    if (ch==='"') inQ=!inQ;
+    else if (ch===','&&!inQ) { result.push(cur); cur=''; }
+    else cur+=ch;
+  }
+  result.push(cur); return result;
+}
+
+/** A CSV file chosen on this computer: read in the browser (never uploaded or stored), put in the box, then previewed. */
+async function priceFromFile(input, textareaId, next) {
+  const f = input.files && input.files[0];
+  input.value = '';
+  if (!f) return;
+  try { document.getElementById(textareaId).value = await f.text(); }
+  catch (e) { alert(tRaw('common.err_prefix', {error: e.message})); return; }
+  next();
+}
+
+async function previewImport() {
+  const csv = document.getElementById('csv-input').value.trim();
+  if (!csv) { toast(tRaw('prices.err_no_csv'), true); return; }
+  parsedRows = parseCSV(csv);
+  if (!parsedRows.length) { toast(tRaw('prices.err_no_rows'), true); return; }
+
+  const res = await fetch(`${BASE}/api/price_preview.php`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({rows: parsedRows.map(r=>({console:r.console,external_id:r.external_id,name:r.name,cib:r.cib,loose:r.loose,new:r.new,hasArt:!!r.artBase64}))})
+  }).then(r=>r.json());
+
+  if (!res.ok) { toast(tRaw('import.err_preview', {error: res.error}), true); return; }
+  previewData = res.items;
+  renderPreview();
+}
+
+/** The two import options; "only update" means nothing is added, so "add as hidden" doesn't apply. */
+function priceImportOptions() {
+  const updateOnly = document.getElementById('opt-update-only').checked;
+  return {update_only: updateOnly, new_inactive: !updateOnly && document.getElementById('opt-new-hidden').checked};
+}
+function priceImportOpts() {
+  const updateOnly = document.getElementById('opt-update-only').checked;
+  document.getElementById('opt-new-hidden').disabled = updateOnly;
+  document.getElementById('opt-new-hidden-wrap').classList.toggle('off', updateOnly);
+  if (previewData.length) renderPreview();
+}
+
+function renderPreview() {
+  const opts = priceImportOptions();
+  const tbody = document.getElementById('preview-body');
+  tbody.innerHTML = '';
+  let cntMatch=0, cntNew=0, cntNoSys=0, cntSkipNew=0, cntArtSet=0, cntArtSkip=0, cntPriceUpdate=0;
+
+  previewData.forEach((item,i) => {
+    const row = parsedRows[i];
+    const tr  = document.createElement('tr');
+
+    let statusTag='', matchCell='', artTag='', lastUpd='—';
+    let looseCell='—', cibCell='—', newCell='—';
+
+    const thumb = row.artBase64
+      ? `<img class="thumb" src="${row.artBase64.substring(0,500)}" onerror="this.style.display='none'">`
+      : '—';
+
+    if (item.status === 'match') {
+      cntMatch++;
+      statusTag  = `<span class="tag-match">✓ ${t(item.match_type==='external_id' ? 'prices.match_id' : 'prices.match_title')}</span>`;
+      matchCell  = esc(item.game_title);
+      lastUpd    = item.last_updated ? fmtDate(item.last_updated) : '—';
+      artTag     = item.art_action==='set' ? `<span class="tag-update">${t('prices.art_set')}</span>` :
+                   item.art_action==='skip'? `<span class="tag-skip">${t('prices.art_keep')}</span>` :
+                                             `<span class="tag-skip">${t('prices.art_none')}</span>`;
+      if (item.art_action==='set') cntArtSet++;
+      if (item.art_action==='skip') cntArtSkip++;
+      if (item.price_changed) cntPriceUpdate++;
+    } else if (item.status === 'new') {
+      if (opts.update_only) {
+        cntSkipNew++;
+        statusTag = `<span class="tag-skip">${t('prices.not_added')}</span>`;
+        matchCell = `<span style="color:var(--muted)">${t('prices.not_added_note')}</span>`;
+        artTag = '—';
+      } else if (item.system_ok) {
+        cntNew++;
+        statusTag = `<span class="tag-new">+ ${t(opts.new_inactive ? 'prices.new_game_hidden' : 'prices.new_game')}</span>`;
+        matchCell = `<span style="color:var(--muted)">${t('prices.will_create')}</span>`;
+        artTag    = row.artBase64 ? `<span class="tag-update">${t('prices.art_set')}</span>` : `<span class="tag-skip">${t('prices.art_none')}</span>`;
+      } else {
+        cntNoSys++;
+        statusTag = `<span class="tag-nosy">✗ ${t('prices.unknown_system', {console: row.console})}</span>`;
+        matchCell = `<span style="color:var(--red)">${t('prices.system_not_found')}</span>`;
+        artTag = '—';
+      }
+    }
+
+    // Price cells — always show from CSV
+    looseCell = row.loose != null ? `<span style="color:var(--muted)${item.loose_changed?' ;font-weight:bold':''}">${money(row.loose)}${item.loose_changed?' ↑':''}</span>` : '—';
+    cibCell   = row.cib   != null ? `<span style="color:var(--wiiu)${item.cib_changed?' ;font-weight:bold':''}">${money(row.cib)}${item.cib_changed?' ↑':''}</span>` : '—';
+    newCell   = row.new   != null ? `<span style="color:var(--green)${item.new_changed?' ;font-weight:bold':''}">${money(row.new)}${item.new_changed?' ↑':''}</span>` : '—';
+
+    tr.innerHTML = `
+      <td>${thumb}</td>
+      <td style="color:var(--wiiu);font-size:.65rem">${esc(row.console)}</td>
+      <td style="color:var(--text2)">${esc(row.name)}</td>
+      <td>${matchCell}</td>
+      <td>${looseCell}</td>
+      <td>${cibCell}</td>
+      <td>${newCell}</td>
+      <td style="color:var(--muted);font-size:.65rem">${lastUpd}</td>
+      <td>${artTag}</td>
+      <td>${statusTag}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('summary-chips').innerHTML = `
+    <span class="s-chip tag-match">${t('prices.sum_matched', {n: cntMatch})}</span>
+    ${opts.update_only ? `<span class="s-chip tag-skip">${t('prices.sum_not_added', {n: cntSkipNew})}</span>`
+                       : `<span class="s-chip tag-new">${t(opts.new_inactive ? 'prices.sum_new_hidden' : 'prices.sum_new', {n: cntNew})}</span>`}
+    ${cntNoSys ? `<span class="s-chip tag-nosy">${t('prices.sum_nosys', {n: cntNoSys})}</span>` : ''}
+    <span class="s-chip tag-update">${t('prices.sum_prices', {n: cntPriceUpdate})}</span>
+    <span class="s-chip tag-update">${t('prices.sum_art_set', {n: cntArtSet})}</span>
+    ${cntArtSkip ? `<span class="s-chip tag-skip">${t('prices.sum_art_kept', {n: cntArtSkip})}</span>` : ''}
+  `;
+
+  const total = cntMatch + cntNew;
+  document.getElementById('btn-confirm').textContent = tnRaw('prices.import_n', total);
+  document.getElementById('btn-confirm').disabled = total === 0;
+  document.getElementById('preview-wrap').style.display='block';
+  document.getElementById('preview-wrap').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+async function confirmImport() {
+  const btn = document.getElementById('btn-confirm');
+  btn.disabled = true;
+  const BATCH = 20;
+  let imported=0, updated=0, skippedArt=0, skippedNew=0, errors=0;
+  const sysIds = [];
+  const opts = priceImportOptions();
+  const run = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);   // one activity log line for the whole import
+
+  for (let i=0; i<parsedRows.length; i+=BATCH) {
+    const batch = parsedRows.slice(i, i+BATCH);
+    btn.textContent = tRaw('prices.importing', {done: Math.min(i+BATCH,parsedRows.length), total: parsedRows.length});
+    const res = await fetch(`${BASE}/api/price_import.php`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({rows: batch, run, ...opts})
+    }).then(r=>r.json());
+    if (res.ok) { imported+=res.imported||0; updated+=res.updated||0; skippedArt+=res.skipped_art||0; skippedNew+=res.skipped_new||0; errors+=res.errors||0; sysIds.push(...(res.system_ids||[])); }
+    else errors++;
+  }
+
+  const box = document.getElementById('result-box');
+  box.classList.add('show');
+  box.innerHTML = `
+    <div class="ok">✓ ${t('prices.done')}</div>
+    ${imported ? `<div class="ok">• ${tn(opts.new_inactive ? 'prices.res_added_hidden' : 'prices.res_added', imported)}</div>` : ''}
+    ${updated  ? `<div class="ok">• ${tn('prices.res_updated', updated)}</div>` : ''}
+    ${skippedNew ? `<div class="warn">• ${tn('prices.res_not_added', skippedNew)}</div>` : ''}
+    ${skippedArt ? `<div class="warn">• ${tn('prices.res_art_skipped', skippedArt)}</div>` : ''}
+    ${errors   ? `<div class="err">• ${tn('prices.res_errors', errors)}</div>` : ''}
+  `;
+  document.getElementById('preview-wrap').style.display='none';
+  toast(tRaw('import.done_toast'));
+  edImportNotice(box, sysIds);
+}
+
+function reset() {
+  document.getElementById('preview-wrap').style.display='none';
+  document.getElementById('result-box').classList.remove('show');
+  parsedRows=[]; previewData=[];
+}
+
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function toast(msg,err=false){const t=document.getElementById('toast');t.textContent=msg;t.style.borderColor=err?'var(--red)':'var(--accent2)';t.style.color=err?'var(--red)':'var(--accent)';t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
+</script>
+<script src="<?= BASE_URL ?>/assets/js/editions-admin.js?v=<?= @filemtime(__DIR__.'/assets/js/editions-admin.js') ?>"></script>
+</body>
+</html>

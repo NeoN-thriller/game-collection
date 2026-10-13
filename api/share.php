@@ -1,0 +1,155 @@
+<?php
+// Condition report sharing for one of the user's own copies (drawer › "Share condition report").
+// POST JSON {action, entry_id | share_id, …}; CSRF is checked for every /api/* POST in core.php.
+require_once __DIR__ . '/../boot.php';
+$user = requireAuth();
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonOut(['ok'=>false,'error'=>tRaw('cr.err_action')], 405);
+
+$body   = json_decode(file_get_contents('php://input'), true) ?? [];
+$action = (string)($body['action'] ?? '');
+$pdo    = db();
+$uid    = (int)$user['id'];
+
+/** The user's own copy, or an error. */
+function ownEntry(int $entryId, int $uid): array {
+    $st = db()->prepare("SELECT id, owned FROM collection_entries WHERE id=? AND user_id=?");
+    $st->execute([$entryId, $uid]);
+    $e = $st->fetch();
+    if (!$e) jsonOut(['ok'=>false,'error'=>tRaw('cr.err_entry')], 404);
+    return $e;
+}
+
+/** The user's own active share, or an error. */
+function ownShare(int $shareId, int $uid): array {
+    $st = db()->prepare("SELECT * FROM copy_shares WHERE id=? AND user_id=? AND active=1");
+    $st->execute([$shareId, $uid]);
+    $s = $st->fetch();
+    if (!$s) jsonOut(['ok'=>false,'error'=>tRaw('cr.err_share')], 404);
+    return $s;
+}
+
+/** What the drawer shows for a share, with the data for its label preview (assets/js/labels.js). */
+function shareOut(?array $s): ?array {
+    if (!$s) return null;
+    $report = shareReport($s);
+    return [
+        'id'        => (int)$s['id'],
+        'url'       => shareUrl($s['token']),
+        'report_id' => shareReportId($s['token']),
+        'mode'      => $s['mode'],
+        'for_sale'  => (bool)$s['for_sale'],
+        'graded_at' => $s['graded_at'],
+        'graded_fmt'=> $s['graded_at'] ? fmtDate($s['graded_at']) : '',
+        'label'     => $report ? labelDataFromReport($report, $s['token']) : null,
+        'tags_changed' => $s['mode'] === 'snapshot' && shareTagsChanged($s),
+    ];
+}
+
+/** Snapshot mode: do the copy's photo tags differ from the ones in the snapshot? */
+function shareTagsChanged(array $s): bool {
+    $snap = json_decode((string)$s['snapshot'], true);
+    if (!is_array($snap)) return false;
+    $st = db()->prepare("SELECT grade_method FROM collection_entries WHERE id=?");
+    $st->execute([(int)$s['entry_id']]);
+    if ($st->fetchColumn() !== 'points') return false;
+    $ids = db()->prepare("SELECT id FROM copy_photos WHERE entry_id=? ORDER BY sort_order, id");
+    $ids->execute([(int)$s['entry_id']]);
+    $now  = photoTagsReportMap((int)$s['entry_id'], $ids->fetchAll(PDO::FETCH_COLUMN));
+    $then = [];
+    foreach ((array)($snap['photo_tags'] ?? []) as $pid => $t) {
+        $d = array_map('intval', (array)($t['defects'] ?? [])); sort($d);
+        $then[(int)$pid] = ['ref' => (string)($t['ref'] ?? ''), 'unit_no' => (int)($t['unit_no'] ?? 1), 'defects' => $d];
+    }
+    ksort($now); ksort($then);
+    return $now != $then;
+}
+
+/** A sharing event about a copy's report link (shows in the copy's History too). */
+function shareLog(string $action, int $entryId, array $extra = [], array $changes = []): void {
+    global $user;
+    logEvent('sharing', $action, ['actor' => $user, 'subject' => ['copy', $entryId],
+        'params' => activityCopyParams($entryId) + $extra, 'changes' => $changes]);
+}
+
+function reloadShare(int $id): array {
+    $st = db()->prepare("SELECT * FROM copy_shares WHERE id=?");
+    $st->execute([$id]);
+    return $st->fetch();
+}
+
+switch ($action) {
+
+// ── The copy's active share + the label templates for "Print label" ──
+case 'get':
+    ownEntry((int)($body['entry_id'] ?? 0), $uid);
+    $st = $pdo->prepare("SELECT * FROM copy_shares WHERE entry_id=? AND user_id=? AND active=1 ORDER BY id DESC LIMIT 1");
+    $st->execute([(int)$body['entry_id'], $uid]);
+    $templates = labelTemplatesFor($user);
+    jsonOut(['ok'=>true, 'share'=>shareOut($st->fetch() ?: null),
+             'templates'=>array_map(fn($t) => array_intersect_key($t, array_flip(
+                 ['id', 'name', 'width_mm', 'height_mm', 'orientation', 'layout', 'fields', 'colour', 'cut_line'])), $templates),
+             'default_template_id'=>labelDefaultTemplateId($user, $templates)]);
+
+// ── New share: live (follows the current grading); the snapshot is stored too, for switching live off ──
+case 'create':
+    $e = ownEntry((int)($body['entry_id'] ?? 0), $uid);
+    if (!$e['owned']) jsonOut(['ok'=>false,'error'=>tRaw('cr.err_not_owned')], 400);
+    $st = $pdo->prepare("SELECT * FROM copy_shares WHERE entry_id=? AND user_id=? AND active=1 LIMIT 1");
+    $st->execute([(int)$e['id'], $uid]);
+    if ($existing = $st->fetch()) jsonOut(['ok'=>true, 'share'=>shareOut($existing)]);
+    $report = conditionReport((int)$e['id']);
+    $pdo->prepare("INSERT INTO copy_shares (entry_id, user_id, token, mode, snapshot, for_sale, graded_at) VALUES (?,?,?,'live',?,0,NOW())")
+        ->execute([(int)$e['id'], $uid, shareNewToken(), json_encode($report, JSON_UNESCAPED_UNICODE)]);
+    $newId = (int)$pdo->lastInsertId();
+    shareLog('share.create', (int)$e['id'], [], [activityChange('mode', null, 'live', 'enum')]);
+    jsonOut(['ok'=>true, 'share'=>shareOut(reloadShare($newId))]);
+
+// ── Rewrite the snapshot (same token, same QR) ──
+case 'update_snapshot':
+    $s = ownShare((int)($body['share_id'] ?? 0), $uid);
+    $report = conditionReport((int)$s['entry_id']);
+    $pdo->prepare("UPDATE copy_shares SET snapshot=?, graded_at=NOW() WHERE id=?")
+        ->execute([json_encode($report, JSON_UNESCAPED_UNICODE), (int)$s['id']]);
+    shareLog('share.update', (int)$s['entry_id']);
+    jsonOut(['ok'=>true, 'share'=>shareOut(reloadShare((int)$s['id']))]);
+
+case 'set_mode':
+    $s = ownShare((int)($body['share_id'] ?? 0), $uid);
+    $mode = ($body['mode'] ?? '') === 'live' ? 'live' : 'snapshot';
+    $pdo->prepare("UPDATE copy_shares SET mode=? WHERE id=?")->execute([$mode, (int)$s['id']]);
+    if ($mode !== $s['mode']) shareLog('share.mode', (int)$s['entry_id'], [], [activityChange('mode', $s['mode'], $mode, 'enum')]);
+    jsonOut(['ok'=>true, 'share'=>shareOut(reloadShare((int)$s['id']))]);
+
+case 'set_for_sale':
+    $s = ownShare((int)($body['share_id'] ?? 0), $uid);
+    $pdo->prepare("UPDATE copy_shares SET for_sale=? WHERE id=?")->execute([!empty($body['for_sale']) ? 1 : 0, (int)$s['id']]);
+    if ((int)!empty($body['for_sale']) !== (int)$s['for_sale']) shareLog('share.for_sale', (int)$s['entry_id'], ['v' => !empty($body['for_sale']) ? 'on' : 'off']);
+    jsonOut(['ok'=>true, 'share'=>shareOut(reloadShare((int)$s['id']))]);
+
+// ── New link: a new token (and row); the old link, its photos and its QR stickers stop working ──
+case 'regenerate':
+    $s = ownShare((int)($body['share_id'] ?? 0), $uid);
+    $pdo->beginTransaction();
+    try {
+        $pdo->prepare("UPDATE copy_shares SET active=0, revoked_at=NOW() WHERE id=?")->execute([(int)$s['id']]);
+        $pdo->prepare("INSERT INTO copy_shares (entry_id, user_id, token, mode, snapshot, for_sale, graded_at) VALUES (?,?,?,?,?,?,?)")
+            ->execute([(int)$s['entry_id'], $uid, shareNewToken(), $s['mode'], $s['snapshot'], (int)$s['for_sale'], $s['graded_at']]);
+        $newId = (int)$pdo->lastInsertId();
+        $pdo->commit();
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        jsonOut(['ok'=>false,'error'=>$e->getMessage()], 500);
+    }
+    shareLog('share.regenerate', (int)$s['entry_id']);
+    jsonOut(['ok'=>true, 'share'=>shareOut(reloadShare($newId))]);
+
+// ── Stop sharing ──
+case 'revoke':
+    $s = ownShare((int)($body['share_id'] ?? 0), $uid);
+    $pdo->prepare("UPDATE copy_shares SET active=0, revoked_at=NOW() WHERE id=?")->execute([(int)$s['id']]);
+    shareLog('share.revoke', (int)$s['entry_id']);
+    jsonOut(['ok'=>true, 'share'=>null]);
+
+default:
+    jsonOut(['ok'=>false,'error'=>tRaw('cr.err_action')], 400);
+}

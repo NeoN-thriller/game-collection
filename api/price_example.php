@@ -1,0 +1,32 @@
+<?php
+/* Example CSV for the price import (admins): the columns the import reads, filled with a few
+   games from this site's own catalogue (their current ID, link and prices). The console column holds the
+   site's system short names, which is what the import matches on, so importing the file unchanged
+   matches existing games and changes nothing. */
+require_once __DIR__ . '/../boot.php';
+requireAdmin();
+
+// Games that already have a price source ID first: they show every column filled in
+$rows = db()->query("SELECT s.short_name, g.title, g.external_id, g.price_link, g.loose_price, g.cib_price, g.new_price
+                     FROM games g JOIN systems s ON s.id = g.system_id
+                     WHERE s.active = 1 AND g.active = 1
+                     ORDER BY (g.external_id IS NULL OR g.external_id = ''), s.sort_order, g.sort_title
+                     LIMIT 3")->fetchAll();
+if (!$rows) {
+    // Empty catalogue: one placeholder row for the first system (the preview shows it as a new game)
+    $short = db()->query("SELECT short_name FROM systems WHERE active = 1 ORDER BY sort_order LIMIT 1")->fetchColumn();
+    $rows = [['short_name' => $short ?: 'WiiU', 'title' => tRaw('prices.example_title'), 'external_id' => '12345', 'price_link' => 'https://...',
+              'loose_price' => '10', 'cib_price' => '20', 'new_price' => '40']];
+}
+
+header('Content-Type: text/csv; charset=utf-8');
+header('Content-Disposition: attachment; filename="price-import-example.csv"');
+header('Cache-Control: no-store');
+$out = fopen('php://output', 'w');
+fputcsv($out, ['console', 'name', 'external_id', 'link', 'loose', 'cib', 'new', 'coverArtBase64'], ',', '"', '');
+foreach ($rows as $r) {
+    fputcsv($out, [$r['short_name'], $r['title'], $r['external_id'] ?? '', $r['price_link'] ?? '',
+                   $r['loose_price'] ?? '', $r['cib_price'] ?? '', $r['new_price'] ?? '', ''], ',', '"', '');
+}
+fclose($out);
+exit;
