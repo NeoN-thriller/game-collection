@@ -29,8 +29,16 @@ $igSystems = db()->query("SELECT id, name FROM systems WHERE active = 1 ORDER BY
 define('IGDB_CLIENT_SECRET', '…');</pre>
   <p class="ga-desc" style="margin:0"><?= t('igdb.setup_terms') ?></p>
 </section>
-<?php else: ?>
+<p class="sb-sub"><?= t('igdb.credit') ?> <a href="https://www.igdb.com" target="_blank" rel="noopener">IGDB.com</a></p>
+<?php
+    // Not connected: only the instructions above (the systems and games below need IGDB, and so does their script)
+    $sec['scripts'] = [];
+    return;
+endif; ?>
+
 <p class="ga-desc" style="margin:0 0 14px"><?= t('igdb.intro') ?></p>
+<?php if ($igPending = igdbPendingCount()): ?>
+<div class="cp-msg" style="margin-bottom:14px"><?= tn('igdb.pending_notice', $igPending) ?></div>
 <?php endif; ?>
 
 <section class="cp-card">

@@ -283,7 +283,7 @@ async function confirmImport() {
   btn.disabled = true;
   const BATCH = 20;
   let imported=0, updated=0, skippedArt=0, skippedNew=0, errors=0;
-  const sysIds = [];
+  const sysIds = [], priceSysIds = [];
   const opts = priceImportOptions();
   const run = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);   // one activity log line for the whole import
 
@@ -292,10 +292,18 @@ async function confirmImport() {
     btn.textContent = tRaw('prices.importing', {done: Math.min(i+BATCH,parsedRows.length), total: parsedRows.length});
     const res = await fetch(`${BASE}/api/price_import.php`, {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({rows: batch, run, ...opts})
+      body: JSON.stringify({rows: batch, run, defer: true, ...opts})
     }).then(r=>r.json());
-    if (res.ok) { imported+=res.imported||0; updated+=res.updated||0; skippedArt+=res.skipped_art||0; skippedNew+=res.skipped_new||0; errors+=res.errors||0; sysIds.push(...(res.system_ids||[])); }
+    if (res.ok) { imported+=res.imported||0; updated+=res.updated||0; skippedArt+=res.skipped_art||0; skippedNew+=res.skipped_new||0; errors+=res.errors||0; sysIds.push(...(res.system_ids||[])); priceSysIds.push(...(res.price_system_ids||[])); }
     else errors++;
+  }
+  // Once for the whole import: the value graph point
+  if (priceSysIds.length) {
+    btn.textContent = tRaw('import.importing');
+    await fetch(`${BASE}/api/price_import.php`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({finish: true, run, price_system_ids: [...new Set(priceSysIds)]})
+    }).catch(() => {});
   }
 
   const box = document.getElementById('result-box');

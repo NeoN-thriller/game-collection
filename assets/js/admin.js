@@ -172,11 +172,13 @@ async function priceConfirm() {
   res.textContent = tRaw('import.importing');
   const opts = priceImportOptions();
   const run = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);   // one activity log line for the whole import
-  const BATCH=20; let imported=0,updated=0,skippedNew=0,errors=0; const sysIds=[];
+  const BATCH=20; let imported=0,updated=0,skippedNew=0,errors=0; const sysIds=[],priceSysIds=[];
   for(let i=0;i<rows.length;i+=BATCH){
-    const r=await fetch(ADMIN_BASE+'/api/price_import.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rows:rows.slice(i,i+BATCH),run,...opts})}).then(r=>r.json());
-    if(r.ok){imported+=r.imported||0;updated+=r.updated||0;skippedNew+=r.skipped_new||0;errors+=r.errors||0;sysIds.push(...(r.system_ids||[]));}else errors++;
+    const r=await fetch(ADMIN_BASE+'/api/price_import.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rows:rows.slice(i,i+BATCH),run,defer:true,...opts})}).then(r=>r.json());
+    if(r.ok){imported+=r.imported||0;updated+=r.updated||0;skippedNew+=r.skipped_new||0;errors+=r.errors||0;sysIds.push(...(r.system_ids||[]));priceSysIds.push(...(r.price_system_ids||[]));}else errors++;
   }
+  // Once for the whole import: the value graph point
+  if(priceSysIds.length) await fetch(ADMIN_BASE+'/api/price_import.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({finish:true,run,price_system_ids:[...new Set(priceSysIds)]})}).catch(()=>{});
   res.innerHTML=`<span style="color:var(--green)">✓ ${t('admin.prices.done', {added: imported, updated})}${opts.new_inactive&&imported?` (${t('prices.hidden')})`:''}${skippedNew?`, <span style="color:var(--orange)">${tn('prices.res_not_added', skippedNew)}</span>`:''}${errors?`, <span style="color:var(--red)">${tn('prices.res_errors', errors)}</span>`:''}.</span>`;
   if (typeof edImportNotice === 'function') edImportNotice(res, sysIds);
 }

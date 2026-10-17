@@ -141,4 +141,11 @@ if (!defined('IN_SETTINGS')) exit;
   </form>
   <?php endif; ?>
 </section>
+<?php else: ?>
+<!-- IGDB not connected: a reminder where the Covers setting would be -->
+<section class="cp-card" id="covers">
+  <h2><?= t('igdb.covers_title') ?></h2>
+  <p class="ga-desc" style="margin:0"><?= t('igdb.covers_not_connected') ?>
+    <a href="<?= BASE_URL ?>/settings.php?s=igdb"><?= t('igdb.setup_title') ?> ›</a></p>
+</section>
 <?php endif; ?>

@@ -21,7 +21,6 @@ $ins = db()->prepare("INSERT INTO games (system_id, title, sort_title, sort_orde
 
 $imported = 0;
 $skipped  = 0;
-$newIds   = [];   // IGDB: matched below, as far as time allows
 
 foreach ($titles as $title) {
     $title = trim($title);
@@ -32,7 +31,6 @@ foreach ($titles as $title) {
     $sortTitle = trim(preg_replace('/\s+/', ' ', preg_replace('/[^a-z0-9 ]/i', ' ', $sortTitle)));
 
     $ins->execute([$systemId, $title, $sortTitle]);
-    $newIds[] = (int)db()->lastInsertId();
     $existing[strtolower($title)] = true;
     $imported++;
 }
@@ -55,6 +53,5 @@ if ($imported) {
         'changes' => [activityChange('new_games', null, (string)$imported), activityChange('skipped', null, (string)$skipped)]]);
 }
 
-igdbMatchNew($newIds);
-
+// New games are not looked up on IGDB here: Settings › IGDB (and the dashboard) shows they're waiting for Match
 jsonOut(['ok'=>true, 'imported'=>$imported, 'skipped'=>$skipped]);

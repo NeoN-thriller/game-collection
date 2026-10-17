@@ -355,6 +355,7 @@ $playTitle = fn(string $k) => t('dashboard.' . $k . '_title' . (($user['played_p
   <div class="dash-title"><?= t('common.nav.dashboard') ?></div>
   <div class="dash-sub"><?= t('dashboard.subtitle', ['user' => $user['username']]) ?></div>
   <?= updateNoticeHtml($user) ?>
+  <?= igdbNoticeHtml($user) ?>
 
   <!-- OVERALL STATS -->
   <div class="overall-grid">

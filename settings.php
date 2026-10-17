@@ -16,6 +16,8 @@ if (!isset($sections[$s])) $s = 'account';
 if ($sections[$s]['admin'] && !isAdmin()) { header('Location: '.BASE_URL.'/settings.php'); exit; }
 // Updates: a badge while a newer release or a database update is waiting (cached check, no request to GitHub)
 if (isAdmin() && (updateAvailable(updateCache()) || pendingMigrations())) $sections['updates']['badge'] = 'updates.badge';
+// IGDB: a badge while imported games are waiting to be matched
+if (isAdmin() && igdbPendingCount()) $sections['igdb']['badge'] = 'igdb.badge_pending';
 $sec       = $sections[$s];
 $showAdmin = $sec['admin'] === true;
 $navKey    = fn(string $slug) => 'settings.nav.'.str_replace('-', '_', $slug);

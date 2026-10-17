@@ -357,6 +357,28 @@ function igdbMatchNew(array $gameIds, float $budget = 8.0): void {
     }
 }
 
+/** Games never looked up, in active systems that have an IGDB platform (imports leave them for Settings › IGDB › Match). */
+function igdbPendingCount(): int {
+    static $n = null;
+    if ($n !== null) return $n;
+    if (!igdbConfigured()) return $n = 0;
+    try {
+        $n = (int)db()->query("SELECT COUNT(*) FROM games g JOIN systems s ON s.id = g.system_id
+                               LEFT JOIN game_igdb i ON i.game_id = g.id
+                               WHERE s.active = 1 AND s.igdb_platform_id > 0 AND i.game_id IS NULL")->fetchColumn();
+    } catch (Throwable $e) {
+        $n = 0;   // e.g. the IGDB tables aren't there yet
+    }
+    return $n;
+}
+
+/** For admins: a notice linking to Settings › IGDB while games are waiting to be matched (dashboard). */
+function igdbNoticeHtml(array $user): string {
+    if ($user['role'] !== 'admin' || !($n = igdbPendingCount())) return '';
+    return '<a class="cp-msg" href="'.BASE_URL.'/settings.php?s=igdb" style="display:block;margin-bottom:18px;text-decoration:none">'
+         . tn('igdb.dash_notice', $n).'</a>';
+}
+
 /** A renamed game: an automatic match or open review is looked up again under the new title. */
 function igdbTitleChanged(int $gameId): void {
     try {

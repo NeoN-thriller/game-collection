@@ -3,12 +3,23 @@ require_once __DIR__ . '/../boot.php';
 $admin = requireAdmin();
 
 $body = json_decode(file_get_contents('php://input'), true);
+// One import is sent in batches; they share this id so the activity log shows it as one line
+$run = substr(preg_replace('/[^a-z0-9]/i', '', (string)($body['run'] ?? '')), 0, 40);
+
+// The end of a deferred run (see $defer below): the value graph point, once for the whole import.
+// New games are not looked up on IGDB here: Settings › IGDB (and the dashboard) shows they're waiting for Match.
+if (!empty($body['finish'])) {
+    $priceSys = array_map('intval', (array)($body['price_system_ids'] ?? []));
+    if ($priceSys) valueSnapshot(null, $priceSys, 'import', $run !== '' ? $run : 'x'.bin2hex(random_bytes(6)));
+    jsonOut(['ok'=>true]);
+}
+
 $rows = $body['rows'] ?? [];
 if (empty($rows)) jsonOut(['ok'=>false,'error'=>tRaw('api.no_rows')], 400);
 $updateOnly  = !empty($body['update_only']);                        // matched games only, nothing added
 $newInactive = !$updateOnly && !empty($body['new_inactive']);       // new games start hidden (games.active = 0)
-// One import is sent in batches; they share this id so the activity log shows it as one line
-$run = substr(preg_replace('/[^a-z0-9]/i', '', (string)($body['run'] ?? '')), 0, 40);
+// The page sends a finish call after the last batch: the batches then skip the value snapshot
+$defer = !empty($body['defer']);
 
 $imported  = 0;
 $updated   = 0;
@@ -16,8 +27,8 @@ $skippedArt= 0;
 $skippedNew= 0;
 $errors    = 0;
 $newSystems = [];
-$newIds = [];         // new games: IGDB info looked up below, as far as time allows
 $priceSystems = [];   // systems with changed prices (value graphs: valueSnapshot below)
+$resort = [];         // systems with new games: sort orders recalculated once, after the rows
 
 foreach ($rows as $row) {
     $externalId = trim((string)($row['external_id'] ?? ''));
@@ -69,18 +80,13 @@ foreach ($rows as $row) {
                 ->execute([$sys['id'],$name,$sortTitle,$so,$externalId !== '' ? $externalId : null,$link !== '' ? $link : null,$cib,$loose,$newP,$newInactive ? 0 : 1]);
         } catch (PDOException $e) { $errors++; continue; }   // one bad row (e.g. a price out of range) doesn't stop the batch
         $newId = db()->lastInsertId();
-        $newIds[] = (int)$newId;
 
         if ($artB64 && str_contains($artB64,'base64,')) {
             $fn = saveArt($artB64,$newId);
             if ($fn) db()->prepare("UPDATE games SET default_image=? WHERE id=?")->execute([$fn,$newId]);
         }
 
-        // Recalculate sort orders
-        $allG = db()->prepare("SELECT id,sort_title FROM games WHERE system_id=? ORDER BY sort_title ASC");
-        $allG->execute([$sys['id']]);
-        $upd = db()->prepare("UPDATE games SET sort_order=? WHERE id=?");
-        foreach ($allG->fetchAll() as $idx => $r) $upd->execute([$idx+1,$r['id']]);
+        $resort[(int)$sys['id']] = true;
         $imported++;
         $newSystems[(int)$sys['id']] = true;   // for the "possible edition groups" notice
         continue;
@@ -127,10 +133,22 @@ foreach ($rows as $row) {
     }
 }
 
-igdbMatchNew($newIds);
+// Recalculate sort orders: once per system for the whole batch, in one transaction, only the rows that moved
+if ($resort) {
+    $allG = db()->prepare("SELECT id,sort_title,sort_order FROM games WHERE system_id=? ORDER BY sort_title ASC");
+    $upd  = db()->prepare("UPDATE games SET sort_order=? WHERE id=?");
+    db()->beginTransaction();
+    try {
+        foreach (array_keys($resort) as $sysId) {
+            $allG->execute([$sysId]);
+            foreach ($allG->fetchAll() as $idx => $r) if ((int)$r['sort_order'] !== $idx+1) $upd->execute([$idx+1,$r['id']]);
+        }
+        db()->commit();
+    } catch (Exception $e) { db()->rollBack(); error_log('price import: sort order: '.$e->getMessage()); }
+}
 
 // Collection value over time: every batch of one import shares the run, so the import ends as one point
-if ($priceSystems) valueSnapshot(null, array_keys($priceSystems), 'import', $run !== '' ? $run : 'x'.bin2hex(random_bytes(6)));
+if (!$defer && $priceSystems) valueSnapshot(null, array_keys($priceSystems), 'import', $run !== '' ? $run : 'x'.bin2hex(random_bytes(6)));
 
 $changes = [activityChange('rows', null, (string)count($rows)), activityChange('prices_updated', null, (string)$updated),
             activityChange('new_games', null, (string)$imported), activityChange('errors', null, (string)$errors)];
@@ -142,7 +160,8 @@ logEvent('catalogue', 'prices.import', ['admin' => true, 'actor' => $admin,
     'changes' => $changes,
     'merge'   => $run !== '' ? ['key' => 'prices'.$run, 'window' => 3600, 'sum' => true] : null]);
 
-jsonOut(['ok'=>true,'imported'=>$imported,'updated'=>$updated,'skipped_art'=>$skippedArt,'skipped_new'=>$skippedNew,'errors'=>$errors,'system_ids'=>array_keys($newSystems)]);
+jsonOut(['ok'=>true,'imported'=>$imported,'updated'=>$updated,'skipped_art'=>$skippedArt,'skipped_new'=>$skippedNew,'errors'=>$errors,'system_ids'=>array_keys($newSystems),
+         'price_system_ids'=>array_keys($priceSystems)]);
 
 function saveArt(string $b64, int $gameId): ?string {
     try {
