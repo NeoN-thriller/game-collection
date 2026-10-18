@@ -8,7 +8,6 @@ if (!defined('DB_HOST')) { http_response_code(403); exit; }
 const IGDB_API      = 'https://api.igdb.com/v4/';
 const IGDB_GAP      = 0.27;   // seconds between requests: IGDB allows 4 per second
 const IGDB_PAGE     = 500;    // most results IGDB returns per request
-const IGDB_MULTI    = 10;     // most queries in one multiquery request (counts as one request for the rate limit)
 const IGDB_FIELDS   = 'name,slug,version_parent,rating,rating_count,aggregated_rating,aggregated_rating_count,'
                     . 'alternative_names.name,game_localizations.name,game_localizations.region,game_localizations.cover.image_id,'
                     . 'cover.image_id,genres.name,'
@@ -67,26 +66,6 @@ function igdbQuery(string $endpoint, string $query): array {
         throw new RuntimeException(tRaw('igdb.err_api', ['code' => $code]));
     }
     throw new RuntimeException(tRaw('igdb.err_api', ['code' => 429]));
-}
-
-/**
- * Several queries in as few requests as possible: IGDB's multiquery runs up to IGDB_MULTI of them in one request.
- * $queries: [label => [endpoint, query]]. Returns [label => results], every label present.
- */
-function igdbMulti(array $queries): array {
-    $out = [];
-    foreach (array_chunk($queries, IGDB_MULTI, true) as $chunk) {
-        if (count($chunk) === 1) {
-            $label = array_key_first($chunk);
-            $out[$label] = igdbQuery($chunk[$label][0], $chunk[$label][1]);
-            continue;
-        }
-        $body = '';
-        foreach ($chunk as $label => [$ep, $q]) $body .= 'query ' . $ep . ' ' . igdbStr((string)$label) . ' { ' . $q . " };\n";
-        foreach (igdbQuery('multiquery', $body) as $r) $out[(string)($r['name'] ?? '')] = $r['result'] ?? [];
-    }
-    foreach ($queries as $label => $_) $out[$label] ??= [];
-    return $out;
 }
 
 /** A string literal for an Apicalypse query. */
@@ -195,46 +174,18 @@ function igdbByOtherName(string $title, int $platId, string $fields = IGDB_FIELD
     return [];
 }
 
-/**
- * igdbByOtherName() for several titles on one platform at once ([key => title] → [key => games]): every title's exact
- * and containing names in multiqueries, then the games behind them in one more. Per title the exact names still win.
- */
-function igdbByOtherNames(array $titles, int $platId): array {
-    if (!$titles) return [];
-    $passes = ['x' => fn($t) => '~ ' . igdbStr($t), 'c' => fn($t) => '~ *' . igdbStr($t) . '*'];   // exact, containing
-    $q = [];
-    foreach ($titles as $k => $t)
-        foreach ($passes as $p => $cmp)
-            foreach (['a' => 'alternative_names', 'l' => 'game_localizations'] as $e => $ep)
-                $q[$p . $e . $k] = [$ep, 'fields game; where name ' . $cmp((string)$t) . '; limit 50;'];
-    $res = igdbMulti($q);
-
-    $ids = [];   // [key][pass] => IGDB game ids
-    $all = [];   // all of them
-    foreach ($titles as $k => $t)
-        foreach ($passes as $p => $_) {
-            $l = array_map(fn($r) => (int)($r['game'] ?? 0), array_merge($res[$p.'a'.$k], $res[$p.'l'.$k]));
-            $ids[$k][$p] = array_values(array_unique(array_filter($l)));
-            array_push($all, ...$ids[$k][$p]);
-        }
-
-    // The games behind all those names that are on the platform
-    $all = array_values(array_unique($all));
-    $q = [];
-    foreach (array_chunk($all, IGDB_PAGE) as $n => $chunk)
-        $q['g' . $n] = ['games', 'fields ' . IGDB_FIELDS . '; where id = (' . implode(',', $chunk) . ') & platforms = (' . $platId . '); limit ' . IGDB_PAGE . ';'];
-    $games = [];
-    foreach (igdbMulti($q) as $list) foreach ($list as $g) $games[(int)$g['id']] = $g;
-
-    $out = [];
-    foreach ($ids as $k => $byPass) {
-        $out[$k] = [];
-        foreach ($byPass as $pIds) {
-            $found = array_values(array_intersect_key($games, array_flip($pIds)));
-            if ($found) { $out[$k] = array_slice($found, 0, 50); break; }
-        }
+/** Search one title on one platform: ['pick' => game|null, 'cands' => list]. Also tries other titles of a game (PAL names). */
+function igdbSearch(string $title, int $platId): array {
+    $key  = igdbTitleKey($title);
+    $hits = igdbQuery('games', 'search ' . igdbStr($title) . '; fields ' . IGDB_FIELDS . '; where platforms = (' . $platId . '); limit 10;');
+    $pick = igdbPick($hits, $key);
+    if (!$pick) {
+        $alt = igdbByOtherName($title, $platId);
+        $pick = igdbPick($alt, $key);   // only when one of its titles really is this title; else it's a candidate
+        $known = array_column($hits, 'id');
+        foreach ($alt as $a) if (!in_array($a['id'], $known)) array_unshift($hits, $a);   // best guesses first
     }
-    return $out;
+    return ['pick' => $pick, 'cands' => igdbCandidates($hits)];
 }
 
 /** Games by IGDB id (any platform), id → game. */
@@ -354,44 +305,16 @@ function igdbSystem(int $sysId): ?array {
     return $s && (int)$s['igdb_platform_id'] > 0 ? $s : null;
 }
 
-/**
- * Looks up a few games (at most IGDB_MULTI) of one system and saves each result: auto (a sure match) or review.
- * In a handful of requests: all title searches in one multiquery, then other titles (PAL names) for the games
- * without a sure match, then the main games of editions. Returns ['auto' => n, 'review' => n].
- */
-function igdbMatchBatch(array $games, array $sys, array $regions): array {
+/** Looks up one game and saves the result: auto (a sure match) or review. */
+function igdbMatchOne(array $game, array $sys, array $regions): string {
     $plat = (int)$sys['igdb_platform_id'];
-    $games = array_values($games);
-    $q = [];
-    foreach ($games as $i => $g)
-        $q['s' . $i] = ['games', 'search ' . igdbStr((string)$g['title']) . '; fields ' . IGDB_FIELDS . '; where platforms = (' . $plat . '); limit 10;'];
-    $res = igdbMulti($q);
-
-    $keys = $hits = $picks = $other = [];
-    foreach ($games as $i => $g) {
-        $keys[$i]  = igdbTitleKey((string)$g['title']);
-        $hits[$i]  = $res['s' . $i];
-        $picks[$i] = igdbPick($hits[$i], $keys[$i]);
-        if (!$picks[$i]) $other[$i] = (string)$g['title'];
+    $r = igdbSearch((string)$game['title'], $plat);
+    if ($r['pick']) {
+        igdbSave((int)$game['id'], 'auto', igdbRow(igdbFillEditions([$r['pick']])[0], $plat, (string)$sys['region'], $regions));
+        return 'auto';
     }
-    foreach (igdbByOtherNames($other, $plat) as $i => $alt) {
-        $picks[$i] = igdbPick($alt, $keys[$i]);   // only when one of its titles really is this title; else it's a candidate
-        $known = array_column($hits[$i], 'id');
-        foreach ($alt as $a) if (!in_array($a['id'], $known)) array_unshift($hits[$i], $a);   // best guesses first
-    }
-
-    $sure = igdbFillEditions(array_filter($picks));   // keeps the keys
-    $out = ['auto' => 0, 'review' => 0];
-    foreach ($games as $i => $g) {
-        if (isset($sure[$i])) {
-            igdbSave((int)$g['id'], 'auto', igdbRow($sure[$i], $plat, (string)$sys['region'], $regions));
-            $out['auto']++;
-        } else {
-            igdbSave((int)$g['id'], 'review', [], igdbCandidates($hits[$i]));
-            $out['review']++;
-        }
-    }
-    return $out;
+    igdbSave((int)$game['id'], 'review', [], $r['cands']);
+    return 'review';
 }
 
 /**
@@ -416,9 +339,9 @@ function igdbMatchPending(int $sysId, float $budget, ?array $gameIds = null): ar
     $todo  = $st->fetchAll();
     $start = microtime(true);
     $regions = igdbRegions();
-    foreach (array_chunk($todo, IGDB_MULTI) as $n => $batch) {
-        if (microtime(true) - $start > $budget) { $out['left'] = count($todo) - $n * IGDB_MULTI; break; }
-        foreach (igdbMatchBatch($batch, $sys, $regions) as $k => $v) $out[$k] += $v;
+    foreach ($todo as $i => $g) {
+        if (microtime(true) - $start > $budget) { $out['left'] = count($todo) - $i; break; }
+        $out[igdbMatchOne($g, $sys, $regions)]++;
     }
     return $out;
 }
