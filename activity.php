@@ -27,7 +27,7 @@ const LOG_ACTIONS = [
     'system.add' => 'catalogue', 'system.icon' => 'catalogue', 'system.region' => 'catalogue',
     'barcode.add' => 'catalogue', 'barcode.flag' => 'catalogue', 'barcode.remove' => 'catalogue', 'barcode.keep' => 'catalogue',
     'barcode.edit' => 'catalogue', 'barcode.import' => 'catalogue',
-    'igdb.link' => 'catalogue', 'igdb.platform' => 'catalogue', 'igdb.refresh' => 'catalogue', 'igdb.cover' => 'catalogue',
+    'igdb.link' => 'catalogue', 'igdb.platform' => 'catalogue', 'igdb.skip' => 'catalogue', 'igdb.refresh' => 'catalogue', 'igdb.cover' => 'catalogue',
     'igdb.cover_default' => 'catalogue',
 
     'share.create' => 'sharing', 'share.update' => 'sharing', 'share.regenerate' => 'sharing', 'share.revoke' => 'sharing',

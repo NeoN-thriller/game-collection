@@ -1566,6 +1566,8 @@ tbody tr.ed-fulfilled td { opacity:.55; }
 @keyframes igSpin { to { transform:rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .ig-spin { animation-duration:2.4s; } }
 .ig-sys-table tr.ig-running td { background:color-mix(in srgb, var(--accent2) 10%, transparent); }
+.ig-sys-table tr.ig-skipped td:not(:first-child):not(:last-child) { opacity:.45; }   /* "Don't match": its numbers don't matter */
+.ig-all { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 12px; }   /* Match all · Refresh all */
 .ig-sys-table .btn-icon .ig-spin { width:11px; height:11px; }
 .ig-tab-head { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
 .ig-tab-head .btn-ghost[hidden] { display:none; }

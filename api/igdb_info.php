@@ -15,7 +15,7 @@ $manage = $cover = null;
 if (isAdmin()) {
     $st = db()->prepare("SELECT id, system_id, title, default_image FROM games WHERE id = ?");
     $st->execute([$gameId]);
-    if ($g = $st->fetch()) {
+    if (($g = $st->fetch()) && !in_array((int)$g['system_id'], igdbSkipped(), true)) {   // "Don't match" systems: no IGDB tools
         $manage = BASE_URL . '/settings.php?' . http_build_query(['s' => 'igdb', 'sys' => (int)$g['system_id'], 'q' => $g['title'], 'tab' => 'all']);
         // The cover switch (admins): both covers, this game's choice and the site default
         $c = withCovers([$g])[0];

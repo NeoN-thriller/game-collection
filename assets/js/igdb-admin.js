@@ -1,6 +1,7 @@
 /* ═══════════════════════════════════════════
    SETTINGS › IGDB (settings/s_igdb.php) over api/igdb.php.
    Systems table: IGDB platform, Match (games never looked up, in rounds of ~20 s) and Refresh (matched games again).
+   Match all / Refresh all run those for every system that has something to do, one after another.
    Games list per state with paging; the pick dialog searches IGDB and links a game (confirmed).
    URL: ?s=igdb&sys=<id>&q=<title>&tab=all opens that system's list on that search (the drawer's "Change match").
    ═══════════════════════════════════════════ */
@@ -9,7 +10,7 @@
   const $ = id => document.getElementById(id);
   const e = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const url = new URLSearchParams(location.search);
-  const st = { systems: [], configured: false, sys: 0, tab: 'review', q: '', offset: 0, rows: [], total: 0, seq: 0,
+  const st = { systems: [], configured: false, all: null, sys: 0, tab: 'review', q: '', offset: 0, rows: [], total: 0, seq: 0,
                busy: false, stop: false, run: null, pickRow: null, platSys: null };
   const HELP = { review: 'igdb.help_review', matched: 'igdb.help_matched', none: 'igdb.help_none', pending: 'igdb.help_pending', all: 'igdb.help_all' };
 
@@ -42,29 +43,45 @@
 
   /** ' disabled title="…"' (why Match / Refresh can't run now) or ''. */
   function why(s, n, emptyKey) {
-    const key = !st.configured ? 'igdb.why_not_configured' : st.busy ? 'igdb.why_busy' : !s.platform_id ? 'igdb.why_no_platform' : !n ? emptyKey : '';
+    const key = !st.configured ? 'igdb.why_not_configured' : st.busy ? 'igdb.why_busy' : s.skip ? 'igdb.why_skipped'
+              : !s.platform_id ? 'igdb.why_no_platform' : !n ? emptyKey : '';
     return key ? ` disabled title="${t(key)}"` : '';
+  }
+
+  /** Systems Match all / Refresh all go through: not set to Don't match, with a platform and something to do. */
+  const allTodo = kind => st.systems.filter(s => !s.skip && s.platform_id && (kind === 'match' ? s.counts.pending : s.counts.matched) > 0);
+
+  /** The Match all / Refresh all button, with how many systems it covers (or why it can't run). */
+  function allBtn(kind) {
+    const n = allTodo(kind).length;
+    const key = !st.configured ? 'igdb.why_not_configured' : st.busy ? 'igdb.why_busy' : !n ? `igdb.why_all_none_${kind}` : '';
+    return `<button type="button" class="btn-ghost btn-sm" data-a="${kind}-all" title="${t(key || `igdb.${kind}_all_help`)}"${key ? ' disabled' : ''}>
+      ${t(`igdb.${kind}_all`)}${n ? ` <span class="sb-sub">${tn('igdb.n_systems', n)}</span>` : ''}</button>`;
   }
 
   function renderSystems() {
     if (!st.systems.length) { $('ig-systems').innerHTML = `<p class="ga-desc">${t('igdb.no_systems')}</p>`; return; }
     const spin = `<span class="ig-spin" aria-hidden="true"></span> `;
-    $('ig-systems').innerHTML = `<table class="admin-table bc-table ig-sys-table"><thead><tr>
+    $('ig-systems').innerHTML = `<div class="ig-all">${allBtn('match')}${allBtn('refresh')}</div>
+      <table class="admin-table bc-table ig-sys-table"><thead><tr>
         <th>${t('common.col.system')}</th><th>${t('igdb.col_platform')}</th><th>${t('igdb.col_matched')}</th>
         <th>${t('igdb.tab_review')}</th><th>${t('igdb.tab_none')}</th><th>${t('igdb.tab_pending')}</th><th></th></tr></thead><tbody>
       ${st.systems.map(s => {
         const c = s.counts, off = !st.configured || st.busy, run = st.run && st.run.sys === s.id ? st.run.kind : '';
-        return `<tr${run ? ' class="ig-running"' : ''}>
-          <td>${e(s.name)} <span class="sb-sub">${e(s.region)}</span></td>
+        const cls = [run && 'ig-running', s.skip && 'ig-skipped'].filter(Boolean).join(' ');
+        return `<tr${cls ? ` class="${cls}"` : ''}>
+          <td>${e(s.name)} <span class="sb-sub">${e(s.region)}</span>${s.skip ? ` <span class="chip">${t('igdb.skipped')}</span>` : ''}</td>
           <td>${s.platform_id ? `${e(s.platform_name || '#' + s.platform_id)} <span class="sb-sub">${s.platform_id}</span>` : `<span class="sb-sub">—</span>`}
               ${btn('plat', s.platform_id ? t('common.edit') : t('igdb.set_platform'), `data-sys="${s.id}"${off ? ' disabled' : ''}`)}</td>
           <td>${fmtNum(c.matched)} <span class="sb-sub">/ ${fmtNum(c.total)}</span></td>
           <td>${c.review ? `<button type="button" class="ed-other-name" data-a="show" data-sys="${s.id}" data-tab="review">${fmtNum(c.review)}</button>` : '0'}</td>
           <td>${fmtNum(c.none)}</td>
-          <td>${fmtNum(c.pending)}</td>
+          <td>${s.skip ? '<span class="sb-sub">—</span>' : fmtNum(c.pending)}</td>
           <td class="bc-row-actions">
             ${btn('match', run === 'match' ? spin + t('igdb.matching_short') : t('igdb.match'), `data-sys="${s.id}"${why(s, c.pending, 'igdb.why_none_pending')}`)}
             ${btn('refresh', run === 'refresh' ? spin + t('igdb.refreshing_short') : t('igdb.refresh'), `data-sys="${s.id}"${why(s, c.matched, 'igdb.why_none_matched')}`)}
+            ${btn('skip', s.skip ? t('igdb.skip_off') : t('igdb.skip_on'),
+                  `data-sys="${s.id}" data-skip="${s.skip ? 0 : 1}" title="${t(s.skip ? 'igdb.skip_off_help' : 'igdb.skip_on_help')}"${off ? ' disabled' : ''}`)}
           </td></tr>`;
       }).join('')}</tbody></table>`;
   }
@@ -75,8 +92,8 @@
 
   function runStart(sysId, kind, title) {
     st.busy = true; st.stop = false;
-    st.run = { sys: sysId, kind, t0: Date.now() };
-    $('ig-run-title').textContent = title;
+    st.run = { sys: sysId, kind, t0: st.all?.t0 ?? Date.now() };
+    $('ig-run-title').textContent = (st.all ? tRaw('igdb.all_step', { i: st.all.i, n: st.all.n }) + ' · ' : '') + title;
     $('ig-run-text').textContent = '';
     $('ig-run-fill').style.width = '0';
     $('ig-run-spin').hidden = false;
@@ -114,41 +131,58 @@
 
   async function runMatch(sysId) {
     const s = sysById(sysId);
-    if (!s?.platform_id || st.busy) return;
+    if (!s?.platform_id || s.skip || st.busy) return 'skipped';
     const total = s.counts.pending;
     let auto = 0, review = 0;
     runStart(sysId, 'match', tRaw('igdb.matching', { system: s.name }));
     runStep(0, total, tRaw('igdb.match_starting', { n: fmtNum(total) }));
     for (;;) {
       const res = await api('match', { system_id: sysId });
-      if (!res.ok) return runEnd(sysId, tRaw('igdb.match_failed', { system: s.name }), res.error, true);
+      if (!res.ok) return runEnd(sysId, tRaw('igdb.match_failed', { system: s.name }), res.error, true).then(() => 'failed');
       auto += res.auto; review += res.review;
       // The table follows along
       s.counts.matched += res.auto; s.counts.review += res.review; s.counts.pending = res.left;
       const text = tRaw('igdb.match_progress', { auto: fmtNum(auto), review: fmtNum(review), left: fmtNum(res.left) });
-      if (!res.left) return runEnd(sysId, tRaw('igdb.match_done', { system: s.name }), text);
-      if (st.stop)   return runEnd(sysId, tRaw('igdb.match_stopped', { system: s.name }), text);
+      if (!res.left) return runEnd(sysId, tRaw('igdb.match_done', { system: s.name }), text).then(() => 'done');
+      if (st.stop)   return runEnd(sysId, tRaw('igdb.match_stopped', { system: s.name }), text).then(() => 'stopped');
       runStep(auto + review, total, text);
     }
   }
 
   async function runRefresh(sysId) {
     const s = sysById(sysId);
-    if (!s?.platform_id || st.busy) return;
+    if (!s?.platform_id || s.skip || st.busy) return 'skipped';
     const total = s.counts.matched;
     let offset = 0, done = 0;
     runStart(sysId, 'refresh', tRaw('igdb.refreshing', { system: s.name }));
     runStep(0, total, tRaw('igdb.refresh_progress', { n: fmtNum(0), total: fmtNum(total) }));
     for (;;) {
       const res = await api('refresh', { system_id: sysId, offset, log: 1, total: done });
-      if (!res.ok) return runEnd(sysId, tRaw('igdb.refresh_failed', { system: s.name }), res.error, true);
+      if (!res.ok) return runEnd(sysId, tRaw('igdb.refresh_failed', { system: s.name }), res.error, true).then(() => 'failed');
       done += res.updated;
       const text = tRaw('igdb.refresh_progress', { n: fmtNum(done), total: fmtNum(total) });
-      if (res.next === null) return runEnd(sysId, tRaw('igdb.refresh_done', { system: s.name }), text);
-      if (st.stop)           return runEnd(sysId, tRaw('igdb.refresh_stopped', { system: s.name }), text);
+      if (res.next === null) return runEnd(sysId, tRaw('igdb.refresh_done', { system: s.name }), text).then(() => 'done');
+      if (st.stop)           return runEnd(sysId, tRaw('igdb.refresh_stopped', { system: s.name }), text).then(() => 'stopped');
       offset = res.next;
       runStep(done, total, text);
     }
+  }
+
+  /** Match all / Refresh all: each system that has something to do, one after another, until done, stopped or failed. */
+  async function runAll(kind) {
+    if (st.busy) return;
+    const ids = allTodo(kind).map(s => s.id);
+    if (!ids.length) return;
+    st.all = { i: 0, n: ids.length, t0: Date.now() };
+    let last = 'done';
+    for (const id of ids) {
+      st.all.i++;
+      last = await (kind === 'match' ? runMatch(id) : runRefresh(id));
+      if (last === 'stopped' || last === 'failed') break;
+    }
+    const n = st.all.n;
+    st.all = null;
+    if (last !== 'stopped' && last !== 'failed') $('ig-run-title').textContent = tnRaw(`igdb.${kind}_all_done`, n);
   }
 
   // ── Games list ──
@@ -277,6 +311,9 @@
     if (a === 'stop')    { st.stop = true; b.disabled = true; $('ig-run-text').textContent = tRaw('igdb.stopping'); }
     if (a === 'match')   runMatch(+b.dataset.sys);
     if (a === 'refresh') runRefresh(+b.dataset.sys);
+    if (a === 'match-all')   runAll('match');
+    if (a === 'refresh-all') runAll('refresh');
+    if (a === 'skip')    { b.disabled = true; after(await api('set_skip', { system_id: +b.dataset.sys, skip: b.dataset.skip === '1' })); }
     if (a === 'show')    { $('ig-sys').value = b.dataset.sys; st.sys = +b.dataset.sys; setTab(b.dataset.tab); $('ig-list').scrollIntoView({ behavior: 'smooth' }); }
     if (a === 'plat') {
       st.platSys = sysById(+b.dataset.sys);

@@ -3,6 +3,7 @@
 //   systems                       → every system with its IGDB platform and match counts, plus whether IGDB is set up
 //   platforms {q}                 → IGDB platforms found by name
 //   set_platform {system_id, platform_id, platform_name} → 0 clears; open matches of that system are looked up again
+//   set_skip {system_id, skip}    → "Don't match" this system (hardware etc.) or match it again
 //   reset_review {system_id}      → that system's open reviews back to not looked up (then Match)
 //   match {system_id}             → looks up games never looked up, for about 6 s (the page repeats it) → {auto, review, left}
 //   refresh {system_id, offset}   → fetches matched games again → {updated, next}
@@ -34,11 +35,13 @@ try {
                               FROM games g LEFT JOIN game_igdb i ON i.game_id = g.id GROUP BY g.system_id")->fetchAll() as $r)
             $counts[(int)$r['system_id']] = array_map('intval', array_diff_key($r, ['system_id' => 1]));
         $names = json_decode(setting('igdb_platform_names'), true) ?: [];
+        $skip  = igdbSkipped();
         $out = [];
         foreach (db()->query("SELECT id, name, short_name, region, igdb_platform_id FROM systems WHERE active = 1 ORDER BY sort_order, id")->fetchAll() as $s) {
             $pid = (int)$s['igdb_platform_id'];
             $out[] = ['id' => (int)$s['id'], 'name' => $s['name'], 'short_name' => $s['short_name'], 'region' => $s['region'],
                       'platform_id' => $pid ?: null, 'platform_name' => $pid ? ($names[$pid] ?? null) : null,
+                      'skip' => in_array((int)$s['id'], $skip, true),
                       'counts' => $counts[(int)$s['id']] ?? ['total' => 0, 'matched' => 0, 'review' => 0, 'none' => 0, 'pending' => 0]];
         }
         jsonOut(['ok' => true, 'configured' => igdbConfigured(), 'systems' => $out]);
@@ -72,6 +75,21 @@ try {
             $sn->execute([$sysId]);
             $logA('igdb.platform', ['params' => ['system' => (string)$sn->fetchColumn()],
                 'changes' => [activityChange('igdb_platform', $old ? (string)$old : null, $pid ? ($pname !== '' ? "$pname ($pid)" : (string)$pid) : null)]]);
+        }
+        jsonOut(['ok' => true]);
+    }
+
+    if ($action === 'set_skip') {   // "Don't match" a system (e.g. hardware), or match it again. Its games and their rows stay.
+        $sn = db()->prepare("SELECT short_name FROM systems WHERE id = ?");
+        $sn->execute([$sysId]);
+        $short = $sn->fetchColumn();
+        if ($short === false) jsonOut(['ok' => false, 'error' => tRaw('api.system_not_found')], 404);
+        $on = !empty($body['skip']);
+        if (in_array($sysId, igdbSkipped(), true) !== $on) {
+            $skip = array_values(array_diff(igdbSkipped(), [$sysId]));
+            if ($on) $skip[] = $sysId;
+            setSetting('igdb_skip_systems', json_encode($skip));
+            $logA('igdb.skip', ['params' => ['system' => (string)$short, 'v' => $on ? 'on' : 'off']]);
         }
         jsonOut(['ok' => true]);
     }
