@@ -29,6 +29,9 @@
 
   const sysById = id => st.systems.find(s => s.id == id);
   const link = (href, text) => `<a href="${e(href)}" target="_blank" rel="noopener">${e(text)} ↗</a>`;
+  /** The game's title, linked to its price history page when the import gave one. */
+  const titleHtml = r => r.price_link
+    ? `<a href="${e(r.price_link)}" target="_blank" rel="noopener" class="ed-price-link" title="${t('ed.view_prices')}">${e(r.title)}</a>` : e(r.title);
   const btn = (act, label, data = '', cls = 'btn-icon') => `<button type="button" class="${cls}" data-a="${act}" ${data}>${label}</button>`;
 
   // ── Systems ──
@@ -236,7 +239,7 @@
     } else {
       list.innerHTML = `<table class="admin-table bc-table"><thead><tr><th>${t('igdb.col_game')}</th><th>IGDB</th><th></th></tr></thead><tbody>
         ${st.rows.map((r, i) => `<tr>
-          <td>${e(r.title)}${r.active ? '' : ` <span class="chip">${t('igdb.game_hidden')}</span>`}</td>
+          <td>${titleHtml(r)}${r.active ? '' : ` <span class="chip">${t('igdb.game_hidden')}</span>`}</td>
           <td>${igdbCell(r)}</td>
           <td class="bc-row-actions">${actions(r, i)}</td></tr>`).join('')}</tbody></table>`;
     }
@@ -329,7 +332,7 @@
     if (a === 'pick-use') useGame(st.pickRow.game_id, +b.dataset.id, true);
     if (a === 'pick') {
       st.pickRow = row;
-      $('ig-pick-game').textContent = row.title;
+      $('ig-pick-game').innerHTML = titleHtml(row);
       $('ig-pick-q').value = row.title.replace(/\s*\[[^\]]*\]\s*/g, ' ').trim();
       $('ig-pick-any').checked = false;
       $('ig-pick-none').style.display = row.status === 'none' ? 'none' : '';

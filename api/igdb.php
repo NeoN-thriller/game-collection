@@ -153,13 +153,14 @@ try {
         $st = db()->prepare("SELECT COUNT(*) FROM games g LEFT JOIN game_igdb i ON i.game_id = g.id WHERE $w");
         $st->execute($args);
         $total = (int)$st->fetchColumn();
-        $st = db()->prepare("SELECT g.id, g.title, g.edition_label, g.active, i.status, i.igdb_id, i.slug, i.name, i.candidates,
+        $st = db()->prepare("SELECT g.id, g.title, g.edition_label, g.active, g.price_link, i.status, i.igdb_id, i.slug, i.name, i.candidates,
                                     i.developers, i.release_date, i.release_prec
                              FROM games g LEFT JOIN game_igdb i ON i.game_id = g.id
                              WHERE $w ORDER BY g.sort_title, g.id LIMIT $per OFFSET $off");
         $st->execute($args);
         $rows = array_map(fn($r) => [
             'game_id' => (int)$r['id'], 'title' => $r['title'], 'edition' => (string)$r['edition_label'], 'active' => (bool)$r['active'],
+            'price_link' => priceLinkSafe($r['price_link']) ?: null,
             'status' => $r['status'], 'igdb_id' => $r['igdb_id'] ? (int)$r['igdb_id'] : null, 'name' => $r['name'],
             'url' => $r['slug'] ? 'https://www.igdb.com/games/' . rawurlencode($r['slug']) : null,
             'developers' => $r['developers'], 'year' => $r['release_date'] ? (int)substr($r['release_date'], 0, 4) : null,

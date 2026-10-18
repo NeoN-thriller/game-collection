@@ -85,14 +85,14 @@ $gameRow = function (array $g, bool $member = false, bool $isMain = false) use (
       <td>
         <?php if ($g['cover_uploaded'] && $g['cover_igdb']): ?>
           <!-- Both an uploaded and an IGDB cover: which one this game shows (Auto = the site default, Settings › General › Covers) -->
-          <form method="POST" class="ig-cover-sw" data-no-reload data-pick role="group" aria-label="<?= t('igdb.cover_label') ?>">
+          <form method="POST" class="ig-cover-sw ig-cover-row" data-no-reload data-pick role="group" aria-label="<?= t('igdb.cover_label') ?>">
             <input type="hidden" name="csrf"    value="<?= csrf() ?>">
             <input type="hidden" name="action"  value="set_cover_source">
             <input type="hidden" name="game_id" value="<?= $g['id'] ?>">
             <?php foreach (['' => null, 'uploaded' => $g['cover_uploaded'], 'igdb' => $g['cover_igdb']] as $src => $url):
                 $label = $src === '' ? tRaw('igdb.cover_site', ['source' => tRaw('igdb.cover_src_'.coverDefaultSource())]) : tRaw('igdb.cover_src_'.$src); ?>
             <button type="submit" name="cover_source" value="<?= $src ?>" class="ig-cover-opt ig-cover-sm"
-                    aria-pressed="<?= ($g['cover_source'] ?? '') === $src ? 'true' : 'false' ?>" title="<?= htmlspecialchars($label) ?>" aria-label="<?= htmlspecialchars($label) ?>">
+                    aria-pressed="<?= ($g['cover_source'] ?? '') === $src ? 'true' : 'false' ?>" data-tip="<?= htmlspecialchars($label) ?>" aria-label="<?= htmlspecialchars($label) ?>">
               <?php if ($url): ?><img src="<?= htmlspecialchars($url) ?>" alt="" loading="lazy"><?php else: ?><span class="ig-cover-auto"><?= t('igdb.cover_auto_short') ?></span><?php endif; ?>
             </button>
             <?php endforeach; ?>

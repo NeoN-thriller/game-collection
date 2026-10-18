@@ -1587,4 +1587,11 @@ td.ig-cell { max-width:150px; overflow:hidden; text-overflow:ellipsis; white-spa
 .ig-cover-sw .ig-cover-sm { min-width:0; padding:2px; }
 .ig-cover-sm img, .ig-cover-sm .ig-cover-auto, .ig-cover-one img { width:32px; height:45px; object-fit:cover; display:block; }
 .ig-cover-sm .ig-cover-auto { font-size:.62rem; }
+/* Catalogue game list: the three choices on one line, with a tooltip naming each one */
+.ig-cover-sw.ig-cover-row { flex-wrap:nowrap; gap:4px; }
+.ig-cover-row .ig-cover-sm { position:relative; }
+.ig-cover-row .ig-cover-sm[data-tip]:hover::after, .ig-cover-row .ig-cover-sm[data-tip]:focus-visible::after {
+  content:attr(data-tip); position:absolute; bottom:calc(100% + 4px); left:50%; transform:translateX(-50%); z-index:5;
+  padding:3px 7px; white-space:nowrap; font-size:.66rem; color:var(--text); background:var(--surface); border:1px solid var(--border2); border-radius:4px;
+  box-shadow:0 2px 6px rgba(0,0,0,.25); pointer-events:none; }
 .ig-cover-one { display:inline-block; }
