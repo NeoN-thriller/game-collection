@@ -3,7 +3,8 @@ require_once __DIR__ . '/boot.php';
 if (auth()) { header('Location: '.BASE_URL.'/dashboard.php'); exit; }
 
 $error = '';
-$mode  = $_GET['mode'] ?? 'login';  // login | register
+// An invite link (index.php?invite=…, Settings › Users) opens the register form with the code filled in
+$mode  = $_GET['mode'] ?? (isset($_GET['invite']) ? 'register' : 'login');  // login | register
 
 // ── HANDLE POST ──────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -109,6 +110,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
+// After a failed sign-up the code they sent stays in the field
+$inviteCode = trim((string)($_POST['invite_code'] ?? $_GET['invite'] ?? ''));
 ?>
 <!DOCTYPE html>
 <html lang="<?= currentLang() ?>">
@@ -163,7 +166,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <form id="form-register" method="POST" style="display:<?= $mode==='register'?'block':'none' ?>">
     <input type="hidden" name="csrf" value="<?= csrf() ?>">
     <input type="hidden" name="mode" value="register">
-    <div class="field"><label><?= t('auth.invite_code') ?></label><input type="text" name="invite_code" required placeholder="<?= t('auth.invite_placeholder') ?>"></div>
+    <div class="field"><label><?= t('auth.invite_code') ?></label><input type="text" name="invite_code" required value="<?= htmlspecialchars($inviteCode) ?>" placeholder="<?= t('auth.invite_placeholder') ?>"></div>
     <div class="field" style="margin-top:14px"><label><?= t('auth.username') ?></label><input type="text" name="username" required autocomplete="username"></div>
     <div class="field" style="margin-top:14px"><label><?= t('auth.password') ?></label><input type="password" name="password" required autocomplete="new-password"></div>
     <div class="field" style="margin-top:14px"><label><?= t('auth.confirm_password') ?></label><input type="password" name="confirm" required autocomplete="new-password"></div>

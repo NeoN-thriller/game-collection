@@ -814,6 +814,7 @@
   "admin.inv.created": "Created",
   "admin.inv.used_by": "Used By",
   "admin.inv.used_at": "Used At",
+  "admin.inv.copy_link": "Copy link",
   "admin.prices.desc": "Paste your price CSV export to update CIB prices, links and cover art. Match priority: 1) by <code>external_id</code> &nbsp;2) by console + title &nbsp;3) import as new game.",
   "admin.prices.full_page": "Full Import Page",
   "admin.prices.previewing": "Previewing...",

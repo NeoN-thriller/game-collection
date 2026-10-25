@@ -124,6 +124,15 @@ function copyLink() {
     .catch(()=>{ /* fallback */ const r=document.createRange(); r.selectNode(code); window.getSelection().removeAllRanges(); window.getSelection().addRange(r); try{document.execCommand('copy');toast(tRaw('settings.link_copied'));}catch(e){toast(tRaw('settings.copy_failed'),true);} });
 }
 
+/** Settings › Users: copy an unused code's invite link (the button's data-url); it opens sign-up with the code filled in. */
+function copyInviteLink(btn) {
+  const byHand = () => window.prompt(tRaw('settings.copy_failed'), btn.dataset.url);   // no clipboard (http): copy it by hand
+  if (!navigator.clipboard) { byHand(); return; }
+  navigator.clipboard.writeText(btn.dataset.url)
+    .then(()=>toast(tRaw('settings.link_copied')))
+    .catch(byHand);
+}
+
 async function saveWishlistPublic(checked) {
   const res = await fetch(`${BASE}/api/settings.php`,{
     method:'POST',headers:{'Content-Type':'application/json'},

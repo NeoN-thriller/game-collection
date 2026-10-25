@@ -72,7 +72,9 @@ $lockouts = db()->query("SELECT *, locked_until > NOW() AS is_locked FROM login_
       <td style="font-size:.7rem;color:var(--muted)"><?= fmtDate($inv['created_at'], true) ?></td>
       <td><?= $inv['used_by_name'] ? htmlspecialchars($inv['used_by_name']) : '<span style="color:var(--muted)">—</span>' ?></td>
       <td style="font-size:.7rem;color:var(--muted)"><?= $inv['used_at'] ? fmtDate($inv['used_at'], true) : '—' ?></td>
-      <td><?php if (!$inv['used_by']): ?>
+      <td style="display:flex;gap:6px;flex-wrap:wrap"><?php if (!$inv['used_by']): ?>
+        <button class="btn-icon" type="button" onclick="copyInviteLink(this)"
+                data-url="<?= htmlspecialchars(BASE_URL.'/index.php?invite='.rawurlencode($inv['code'])) ?>"><?= t('admin.inv.copy_link') ?></button>
         <form method="POST" style="display:inline">
           <input type="hidden" name="csrf"      value="<?= csrf() ?>">
           <input type="hidden" name="action"    value="delete_invite">

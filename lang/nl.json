@@ -814,6 +814,7 @@
   "admin.inv.created": "Gemaakt",
   "admin.inv.used_by": "Gebruikt door",
   "admin.inv.used_at": "Gebruikt op",
+  "admin.inv.copy_link": "Link kopiëren",
   "admin.prices.desc": "Plak je CSV-export met prijzen om CIB-prijzen, links en hoezen bij te werken. Volgorde van koppelen: 1) op <code>external_id</code> &nbsp;2) op console + titel &nbsp;3) importeren als nieuwe game.",
   "admin.prices.full_page": "Volledige importpagina",
   "admin.prices.previewing": "Voorbeeld maken...",
