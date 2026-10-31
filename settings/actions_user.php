@@ -10,29 +10,6 @@ if ($action === 'save_display_prefs') {
     $msg = tRaw('settings.msg_display_saved');
 }
 
-if ($action === 'save_wishlist_public') {
-    $public = !empty($_POST['wishlist_public']) ? 1 : 0;
-    // Generate token if enabling and none exists
-    $token = $user['wishlist_token'] ?? '';
-    if ($public && !$token) {
-        $token = bin2hex(random_bytes(12)); // 24-char hex token
-        db()->prepare("UPDATE users SET wishlist_public=?, wishlist_token=? WHERE id=?")->execute([$public, $token, $user['id']]);
-    } else {
-        db()->prepare("UPDATE users SET wishlist_public=? WHERE id=?")->execute([$public, $user['id']]);
-    }
-    if ($public !== (int)$user['wishlist_public']) logEvent('sharing', 'wishlist.public', ['actor' => $user, 'params' => ['v' => $public ? 'on' : 'off']]);
-    $st = db()->prepare("SELECT * FROM users WHERE id=?"); $st->execute([$user['id']]); $user = $st->fetch();
-    $msg = tRaw($public ? 'settings.sharing_on' : 'settings.sharing_off');
-}
-
-if ($action === 'regenerate_token') {
-    $token = bin2hex(random_bytes(12));
-    db()->prepare("UPDATE users SET wishlist_token=? WHERE id=?")->execute([$token, $user['id']]);
-    logEvent('sharing', 'wishlist.token', ['actor' => $user]);
-    $st = db()->prepare("SELECT * FROM users WHERE id=?"); $st->execute([$user['id']]); $user = $st->fetch();
-    $msg = tRaw('settings.link_new');
-}
-
 if ($action === 'save_completeness') {
     $labels = array_values(array_filter(array_map('trim', $_POST['labels'] ?? [])));
     db()->prepare("DELETE FROM user_completeness_options WHERE user_id=?")->execute([$user['id']]);

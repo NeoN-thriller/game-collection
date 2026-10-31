@@ -1,7 +1,7 @@
-/* Theme:  Sega
+/* Theme:  Zenga
    Scheme: dark
-   Fonts:  fonts/sega.css
-   About:  16-bit Mega Drive: black casing, Sega blue, red stripe and CRT scanlines. */
+   Fonts:  fonts/zenga.css
+   About:  16-bit console: black casing, bright blue, red stripe and CRT scanlines. */
 
 :root {
   --bg:       #07080b;

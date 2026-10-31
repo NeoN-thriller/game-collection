@@ -77,15 +77,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $error = tRaw('auth.err_username_taken');
                 } else {
                     $hash   = password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
-                    $wToken = bin2hex(random_bytes(12));
                     $pdo  = db();
                     $pdo->beginTransaction();
                     try {
                         // New users start with the site's default grading method and language
                         $gMode = in_array(setting('default_grading'), ['simple','points','both'], true) ? setting('default_grading') : 'simple';
                         $gDef  = $gMode === 'both' ? 'simple' : $gMode;
-                        $pdo->prepare("INSERT INTO users (username, password, role, status, wishlist_token, grading_mode, grading_default) VALUES (?,?,'user','active',?,?,?)")
-                            ->execute([$username, $hash, $wToken, $gMode, $gDef]);
+                        $pdo->prepare("INSERT INTO users (username, password, role, status, grading_mode, grading_default) VALUES (?,?,'user','active',?,?)")
+                            ->execute([$username, $hash, $gMode, $gDef]);
                         $uid = $pdo->lastInsertId();
                         // Claim the code only if it is still unused: two sign-ups at the same moment can't share one
                         $claim = $pdo->prepare("UPDATE invite_codes SET used_by=?, used_at=NOW() WHERE id=? AND used_by IS NULL");

@@ -471,9 +471,9 @@ function runInstall(): array {
 
         // Admin account + starting options
         $gDef = $w['default_grading'] === 'both' ? 'simple' : $w['default_grading'];
-        $pdo->prepare("INSERT INTO users (username, password, role, status, wishlist_token, grading_mode, grading_default, language)
-                       VALUES (?,?,'admin','active',?,?,?,?)")
-            ->execute([$w['admin_user'], $w['admin_hash'], bin2hex(random_bytes(12)), $w['default_grading'], $gDef,
+        $pdo->prepare("INSERT INTO users (username, password, role, status, grading_mode, grading_default, language)
+                       VALUES (?,?,'admin','active',?,?,?)")
+            ->execute([$w['admin_user'], $w['admin_hash'], $w['default_grading'], $gDef,
                        $w['admin_lang'] === $w['default_language'] ? null : $w['admin_lang']]);
         $uid = (int)$pdo->lastInsertId();
         foreach (['user_completeness_options' => 'defaults_completeness', 'user_played_options' => 'defaults_played'] as $table => $k) {

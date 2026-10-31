@@ -5,6 +5,15 @@ $user = requireAuth();
 $body   = json_decode(file_get_contents('php://input'), true) ?? [];
 $action = $body['action'] ?? '';
 
+/** One of the user's own wishlist share links, or an error. */
+function ownWishlistShare(int $id, int $uid): array {
+    $st = db()->prepare("SELECT * FROM wishlist_shares WHERE id=? AND user_id=?");
+    $st->execute([$id, $uid]);
+    $share = $st->fetch();
+    if (!$share) jsonOut(['ok'=>false, 'error'=>tRaw('settings.share_not_found')], 404);
+    return $share;
+}
+
 switch ($action) {
 
     case 'save_completeness':
@@ -97,27 +106,39 @@ switch ($action) {
         jsonOut(['ok'=>true]);
         break;
 
-    case 'save_wishlist_public':
-        $public = !empty($body['wishlist_public']) ? 1 : 0;
-        $token  = $user['wishlist_token'] ?? '';
-        if ($public && !$token) {
-            $token = bin2hex(random_bytes(12));
-            db()->prepare("UPDATE users SET wishlist_public=?,wishlist_token=? WHERE id=?")->execute([$public,$token,$user['id']]);
-        } else {
-            db()->prepare("UPDATE users SET wishlist_public=? WHERE id=?")->execute([$public,$user['id']]);
-        }
-        if ($public !== (int)$user['wishlist_public']) logEvent('sharing', 'wishlist.public', ['actor' => $user, 'params' => ['v' => $public ? 'on' : 'off']]);
-        $newToken = db()->prepare("SELECT wishlist_token FROM users WHERE id=?");
-        $newToken->execute([$user['id']]);
-        $tok = $newToken->fetchColumn();
-        jsonOut(['ok'=>true,'token'=>$tok,'base_url'=>BASE_URL]);
+    // ── Wishlist share links (Settings › Wishlist sharing) ──
+    case 'wishlist_share_create':
+        $token = bin2hex(random_bytes(16));
+        db()->prepare("INSERT INTO wishlist_shares (user_id, token, name, `columns`, listed) VALUES (?,?,'',?,0)")
+            ->execute([$user['id'], $token, json_encode(WISHLIST_SHARE_COLS)]);
+        logEvent('sharing', 'wishlist.share_create', ['actor' => $user]);
+        jsonOut(['ok'=>true]);
         break;
 
-    case 'regenerate_token':
-        $token = bin2hex(random_bytes(12));
-        db()->prepare("UPDATE users SET wishlist_token=? WHERE id=?")->execute([$token,$user['id']]);
-        logEvent('sharing', 'wishlist.token', ['actor' => $user]);
-        jsonOut(['ok'=>true,'token'=>$token,'base_url'=>BASE_URL]);
+    case 'wishlist_share_save':
+        $share = ownWishlistShare((int)($body['id'] ?? 0), (int)$user['id']);
+        $name  = mb_substr(trim((string)($body['name'] ?? '')), 0, 100);
+        $cols  = wishlistShareCols((array)($body['columns'] ?? []));
+        db()->prepare("UPDATE wishlist_shares SET name=?, `columns`=?, listed=? WHERE id=?")
+            ->execute([$name, json_encode($cols), !empty($body['listed']) ? 1 : 0, $share['id']]);
+        logEvent('sharing', 'wishlist.share_edit', ['actor' => $user, 'params' => ['name' => $name !== '' ? $name : tRaw('settings.share_unnamed')]]);
+        jsonOut(['ok'=>true, 'columns'=>$cols]);
+        break;
+
+    // New link: a new token, the old link stops working
+    case 'wishlist_share_token':
+        $share = ownWishlistShare((int)($body['id'] ?? 0), (int)$user['id']);
+        $token = bin2hex(random_bytes(16));
+        db()->prepare("UPDATE wishlist_shares SET token=? WHERE id=?")->execute([$token, $share['id']]);
+        logEvent('sharing', 'wishlist.share_token', ['actor' => $user, 'params' => ['name' => $share['name'] !== '' ? $share['name'] : tRaw('settings.share_unnamed')]]);
+        jsonOut(['ok'=>true, 'url'=>wishlistShareUrl($token)]);
+        break;
+
+    case 'wishlist_share_delete':
+        $share = ownWishlistShare((int)($body['id'] ?? 0), (int)$user['id']);
+        db()->prepare("DELETE FROM wishlist_shares WHERE id=?")->execute([$share['id']]);
+        logEvent('sharing', 'wishlist.share_delete', ['actor' => $user, 'params' => ['name' => $share['name'] !== '' ? $share['name'] : tRaw('settings.share_unnamed')]]);
+        jsonOut(['ok'=>true]);
         break;
 
     case 'change_password':

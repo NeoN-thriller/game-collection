@@ -32,6 +32,7 @@ const LOG_ACTIONS = [
 
     'share.create' => 'sharing', 'share.update' => 'sharing', 'share.regenerate' => 'sharing', 'share.revoke' => 'sharing',
     'share.mode' => 'sharing', 'share.for_sale' => 'sharing', 'wishlist.public' => 'sharing', 'wishlist.token' => 'sharing',
+    'wishlist.share_create' => 'sharing', 'wishlist.share_edit' => 'sharing', 'wishlist.share_token' => 'sharing', 'wishlist.share_delete' => 'sharing',
     'labeltpl.share' => 'sharing',
 
     'login.success' => 'accounts', 'login.lockout' => 'accounts', 'password.lockout' => 'accounts', 'register.invite' => 'accounts',
@@ -498,7 +499,7 @@ function activityLink(array $r, array $data, bool $own, bool $copyAlive): ?array
         return $own && !empty($data['p']['sid']) ? ['url' => BASE_URL.'/collection.php?s='.(int)$data['p']['sid'], 'label' => tRaw('log.open_collection')] : null;
     }
     return match (true) {
-        in_array($a, ['wishlist.public', 'wishlist.token'], true) => $own ? $s('sharing', 'sharing') : null,
+        in_array($a, ['wishlist.public', 'wishlist.token'], true) || str_starts_with($a, 'wishlist.share_') => $own ? $s('sharing', 'sharing') : null,
         $a === 'labeltpl.share'                     => $own ? $s('labels', 'labels') : null,
         in_array($a, ['data.import', 'backup.generate', 'backup.delete'], true) => $own ? $s('backup', 'backup') : null,
         str_starts_with($a, 'barcode.')             => $s('barcodes', 'barcodes'),

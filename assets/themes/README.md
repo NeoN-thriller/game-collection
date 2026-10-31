@@ -19,7 +19,7 @@ Settings (per user) and on the Admin page (site default). No code changes needed
   this site). Put the `.woff2` files in `assets/fonts/<family>/` with the font's
   licence (Google Fonts are SIL Open Font License: keep `OFL.txt` next to them),
   and an `assets/fonts/<theme>.css` with the `@font-face` rules pointing at them
-  (paths relative to that CSS file). See `assets/fonts/nintendo.css`.
+  (paths relative to that CSS file). See `assets/fonts/nintechduo.css`.
 - **Body:** override the `:root` variables from `assets/css/main.css`. Anything
   you leave out keeps the Arcade Gold value. The swatches in the pickers are read
   from `--bg --surface --accent --accent2 --wiiu --text`, so give those as hex.

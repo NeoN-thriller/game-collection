@@ -1054,6 +1054,12 @@ tbody tr.ed-fulfilled td { opacity:.55; }
 .lbl-field.joined .lbl-join { color:var(--accent); }
 .lbl-check { display:flex; align-items:center; gap:8px; font-size:.76rem; color:var(--text2); cursor:pointer; }
 .lbl-check[hidden] { display:none; }
+
+/* Settings › Wishlist sharing: one card per share link */
+.wshare { margin-top:14px; padding:12px 14px; background:var(--surface2); border:1px solid var(--border2); }
+.wshare-url { flex:1; min-width:0; font-size:.75rem; color:var(--wiiu); background:color-mix(in srgb,var(--wiiu) 7%,transparent); padding:6px 10px; border:1px solid color-mix(in srgb,var(--wiiu) 20%,transparent); word-break:break-all; }
+.wshare-cols { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:6px 14px; }
+.wshare-actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:12px; }
 .lbl-scale, .lbl-move { display:flex; align-items:center; gap:4px; }
 .lbl-sq { width:36px; height:36px; border-radius:var(--radius); border:1px solid var(--border2); background:var(--surface2); color:var(--text); font:inherit; cursor:pointer; }
 .lbl-sq:disabled { opacity:.35; cursor:default; }

@@ -115,13 +115,54 @@ async function pickTheme(slug) {
   toast(res.error || tRaw('settings.theme_failed'), true);
 }
 
-// ── WISHLIST SHARING ──
-function copyLink() {
-  const code = document.getElementById('wishlist-link-code');
-  if (!code) { toast(tRaw('settings.no_link'), true); return; }
-  navigator.clipboard.writeText(code.textContent.trim())
-    .then(()=>toast(tRaw('settings.link_copied')))
-    .catch(()=>{ /* fallback */ const r=document.createRange(); r.selectNode(code); window.getSelection().removeAllRanges(); window.getSelection().addRange(r); try{document.execCommand('copy');toast(tRaw('settings.link_copied'));}catch(e){toast(tRaw('settings.copy_failed'),true);} });
+// ── WISHLIST SHARING ── (settings/s_sharing.php: one .wshare card per link)
+async function wishlistShareCall(body) {
+  return fetch(`${BASE}/api/settings.php`, {
+    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+  }).then(r => r.json()).catch(() => ({ok:false}));
+}
+const wshareCard = btn => btn.closest('.wshare');
+
+function copyWishlistShare(btn) {
+  const url = wshareCard(btn).querySelector('.wshare-url').textContent.trim();
+  const byHand = () => window.prompt(tRaw('settings.copy_failed'), url);   // no clipboard (http): copy it by hand
+  if (!navigator.clipboard) { byHand(); return; }
+  navigator.clipboard.writeText(url).then(() => toast(tRaw('settings.link_copied'))).catch(byHand);
+}
+
+async function createWishlistShare() {
+  const res = await wishlistShareCall({action:'wishlist_share_create'});
+  if (res.ok) location.reload(); else toast(res.error || tRaw('common.error'), true);
+}
+
+async function saveWishlistShare(btn) {
+  const card = wshareCard(btn);
+  const res = await wishlistShareCall({
+    action:  'wishlist_share_save',
+    id:      Number(card.dataset.shareId),
+    name:    card.querySelector('.wshare-name').value,
+    columns: [...card.querySelectorAll('.wshare-cols input:checked')].map(i => i.value),
+    listed:  card.querySelector('.wshare-listed').checked,
+  });
+  if (res.ok) toast(tRaw('settings.share_saved')); else toast(res.error || tRaw('common.err_saving'), true);
+}
+
+async function newWishlistShareToken(btn) {
+  if (!confirm(tRaw('settings.confirm_new_link'))) return;
+  const card = wshareCard(btn);
+  const res = await wishlistShareCall({action:'wishlist_share_token', id:Number(card.dataset.shareId)});
+  if (res.ok) {
+    card.querySelector('.wshare-url').textContent = res.url;
+    card.querySelector('.wshare-open').href = res.url;
+    toast(tRaw('settings.link_new'));
+  } else { toast(res.error || tRaw('common.error'), true); }
+}
+
+async function deleteWishlistShare(btn) {
+  if (!confirm(tRaw('settings.share_confirm_delete'))) return;
+  const card = wshareCard(btn);
+  const res = await wishlistShareCall({action:'wishlist_share_delete', id:Number(card.dataset.shareId)});
+  if (res.ok) { card.remove(); toast(tRaw('settings.share_deleted')); } else toast(res.error || tRaw('common.error'), true);
 }
 
 /** Settings › Users: copy an unused code's invite link (the button's data-url); it opens sign-up with the code filled in. */
@@ -131,35 +172,6 @@ function copyInviteLink(btn) {
   navigator.clipboard.writeText(btn.dataset.url)
     .then(()=>toast(tRaw('settings.link_copied')))
     .catch(byHand);
-}
-
-async function saveWishlistPublic(checked) {
-  const res = await fetch(`${BASE}/api/settings.php`,{
-    method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({action:'save_wishlist_public',wishlist_public:checked})
-  }).then(r=>r.json());
-  if (res.ok) {
-    toast(tRaw(checked ? 'settings.sharing_on' : 'settings.sharing_off'));
-    // Show or hide the link without a page reload (turning sharing on may have created the token)
-    if (res.token) document.getElementById('wishlist-link-code').textContent = res.base_url+'/wishlist.php?token='+res.token;
-    document.getElementById('wishlist-link-wrap').style.display = checked && res.token ? '' : 'none';
-  } else {
-    document.getElementById('wishlist_public').checked = !checked;   // put the toggle back
-    toast(tRaw('common.err_saving'), true);
-  }
-}
-
-async function regenerateToken() {
-  if (!confirm(tRaw('settings.confirm_new_link'))) return;
-  const res = await fetch(`${BASE}/api/settings.php`,{
-    method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({action:'regenerate_token'})
-  }).then(r=>r.json());
-  if (res.ok) {
-    const code = document.getElementById('wishlist-link-code');
-    if (code) code.textContent = res.base_url+'/wishlist.php?token='+res.token;
-    toast(tRaw('settings.link_new'));
-  } else { toast(tRaw('common.error'), true); }
 }
 
 // ── CONDITION GRADING ── (CP.gradingDefault comes from settings/s_grading.php)

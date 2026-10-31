@@ -426,8 +426,6 @@ CREATE TABLE `users` (
   `status` enum('active','inactive','banned') NOT NULL DEFAULT 'active',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `last_login` timestamp NULL DEFAULT NULL,
-  `wishlist_public` tinyint(1) NOT NULL DEFAULT 0,
-  `wishlist_token` varchar(32) DEFAULT NULL,
   `column_prefs_collection` text DEFAULT NULL,
   `column_prefs_wishlist` text DEFAULT NULL,
   `show_system_icons` tinyint(1) NOT NULL DEFAULT 1,
@@ -657,6 +655,23 @@ CREATE TABLE `copy_shares` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 
+-- Wishlist share links (Settings › Wishlist sharing): each with its own token and visible columns
+DROP TABLE IF EXISTS `wishlist_shares`;
+CREATE TABLE `wishlist_shares` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` int(10) unsigned NOT NULL,
+  `token` varchar(32) NOT NULL,
+  `name` varchar(100) NOT NULL DEFAULT '',
+  `columns` text NOT NULL,                                        -- JSON list of the visible column ids
+  `listed` tinyint(1) NOT NULL DEFAULT 0,                         -- shown to other users under "Other public wishlists"
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_token` (`token`),
+  KEY `user_id` (`user_id`),
+  CONSTRAINT `wishlist_shares_user_fk` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
 -- Sticker sizes. user_id NULL = site-wide (added by the admin); otherwise a user's own size.
 DROP TABLE IF EXISTS `label_sizes`;
 CREATE TABLE `label_sizes` (
@@ -750,4 +765,5 @@ INSERT INTO `schema_migrations` (`filename`) VALUES
   ('009_release_0.9.5.sql'),
   ('010_release_0.9.6.sql'),
   ('011_release_0.9.7.sql'),
-  ('012_release_0.9.8.sql');
+  ('012_release_0.9.8.sql'),
+  ('013_release_0.9.10.sql');

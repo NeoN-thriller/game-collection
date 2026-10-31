@@ -1,12 +1,13 @@
 <?php
 require_once __DIR__ . '/boot.php';
 
-// Support public wishlist viewing via ?token= (random token)
-$shareToken   = $_GET['token'] ?? '';
+// Public wishlist viewing via ?token= (one of the owner's share links, Settings › Wishlist sharing)
+$shareToken   = (string)($_GET['token'] ?? '');
 $isPublicView = false;
+$shareCols    = WISHLIST_SHARE_COLS;   // the columns visitors of this link see
 
-if ($shareToken) {
-    $stUser = db()->prepare("SELECT * FROM users WHERE wishlist_token=? AND wishlist_public=1 AND status='active'");
+if ($shareToken !== '') {
+    $stUser = db()->prepare("SELECT u.*, ws.`columns` AS share_columns FROM wishlist_shares ws JOIN users u ON u.id = ws.user_id WHERE ws.token=? AND u.status='active'");
     $stUser->execute([$shareToken]);
     $viewUser = $stUser->fetch();
     if (!$viewUser) {
@@ -15,6 +16,8 @@ if ($shareToken) {
         die('<p style="font:1rem monospace;color:#c94f3a;padding:40px">'.t('wish.not_public').'</p>');
     }
     $isPublicView = true;
+    $shareCols    = wishlistShareCols($viewUser['share_columns']);
+    unset($viewUser['share_columns']);
     $user     = $viewUser;
     $loggedIn = auth();
 } else {
@@ -24,6 +27,7 @@ if ($shareToken) {
 
 // Editing is only allowed when viewing your own wishlist
 $canEdit = !$isPublicView;
+$showCol = fn(string $col): bool => in_array($col, $shareCols, true);
 
 // Load all wishlisted entries across all systems (defines row order)
 $st = db()->prepare("
@@ -70,6 +74,12 @@ foreach ($entries as $e) {
 }
 // cover_url: the uploaded or the IGDB cover (Settings › IGDB › Covers)
 foreach (withCovers(array_values($games)) as $cg) $games[$cg['id']] = $cg;
+// A share link leaves out the prices of the columns it doesn't show
+foreach (['loose' => 'loose_price', 'cib' => 'cib_price', 'new' => 'new_price'] as $pt => $col) {
+    if ($showCol($col)) continue;
+    foreach ($games as &$g) { $g[$pt.'_price'] = null; $g[$pt.'_price_updated_at'] = null; }
+    unset($g);
+}
 
 // Editions: the groups of the wishlisted games, with the owner's status per edition.
 // A group needs at least two active editions; otherwise the game is shown as a normal game.
@@ -94,7 +104,7 @@ if ($groupIds) {
         if (!isset($editionGroups[(int)$m['group_id']])) continue;
         $editionGroups[(int)$m['group_id']]['members'][] = [
             'id' => (int)$m['id'], 'title' => $m['title'], 'edition_label' => $m['edition_label'],
-            'cib_price' => $m['cib_price'], 'owned' => (bool)$m['owned'], 'wished' => (bool)$m['wished'],
+            'cib_price' => $showCol('cib_price') ? $m['cib_price'] : null, 'owned' => (bool)$m['owned'], 'wished' => (bool)$m['wished'],
         ];
     }
     $editionGroups = array_filter($editionGroups, fn($gr) => count($gr['members']) >= 2);
@@ -136,14 +146,21 @@ if ($games) {
         $c['wishlist_any'] = (bool)($c['wishlist_any'] ?? false);
         $c['photos']   = $c['photos_raw'] ? explode('||', $c['photos_raw']) : [];
         unset($c['photos_raw'], $c['user_id']);
-        if ($isPublicView) unset($c['price_paid']);   // visitors of a shared wishlist never see what the owner paid
+        if ($isPublicView) {
+            unset($c['price_paid']);   // visitors of a shared wishlist never see what the owner paid
+            // …nor the fields of the columns their link doesn't show
+            $hideFields = ['upgrade_reason' => ['upgrade_reason'], 'completeness' => ['completeness'], 'buy_range' => ['price_min', 'price_max'],
+                           'cib_price' => ['chart_price'], 'tag' => ['tag'], 'notes' => ['notes'],
+                           'quality' => ['grade_method', 'grade_label_id', 'grade_profile_id', 'grade_score']];
+            foreach ($hideFields as $col => $fields) if (!$showCol($col)) foreach ($fields as $f) $c[$f] = $col === 'completeness' ? '' : null;
+        }
         $games[$gid]['copies'][] = $c;
     }
     // Point-grading parts per copy
     $allCopyIds = [];
     foreach ($games as $g) foreach ($g['copies'] as $c) $allCopyIds[] = (int)$c['id'];
     $gradingMap = loadEntryGrading($allCopyIds);
-    foreach ($games as &$g) foreach ($g['copies'] as &$c) $c['grading'] = $gradingMap[(int)$c['id']] ?? null;
+    foreach ($games as &$g) foreach ($g['copies'] as &$c) $c['grading'] = $showCol('quality') ? ($gradingMap[(int)$c['id']] ?? null) : null;
     unset($g, $c);
 }
 
@@ -151,7 +168,7 @@ $rowList = array_map(fn($e) => ['entry_id' => (int)$e['id'], 'game_id' => (int)$
 
 // Option lists (the wishlist owner's)
 $tagOptsSt = db()->prepare("SELECT label FROM user_tag_options WHERE user_id=? ORDER BY sort_order");
-$tagOptsSt->execute([$user['id']]); $tagOpts = $tagOptsSt->fetchAll(PDO::FETCH_COLUMN);
+$tagOptsSt->execute([$user['id']]); $tagOpts = $showCol('tag') ? $tagOptsSt->fetchAll(PDO::FETCH_COLUMN) : [];
 
 $compOptsSt = db()->prepare("SELECT label FROM user_completeness_options WHERE user_id=? ORDER BY sort_order");
 $compOptsSt->execute([$user['id']]); $compOpts = $compOptsSt->fetchAll(PDO::FETCH_COLUMN);
@@ -198,7 +215,9 @@ foreach ($entries as $e) {
   .d-cover { width:100%; max-height:220px; object-fit:contain; border:1px solid var(--border2); background:var(--surface2); cursor:pointer; }
   .d-empty { font-size:.7rem; color:var(--muted); font-style:italic; }
 <?php if ($isPublicView): ?>  [data-col="price_paid"] { display:none !important; }   /* never shown to visitors of a shared wishlist */
-<?php endif; ?></style>
+<?php foreach (array_diff(WISHLIST_SHARE_COLS, $shareCols) as $col): ?>  [data-share-col="<?= $col ?>"] { display:none !important; }   /* not shown by this share link */
+<?php endforeach; if (!$showCol('quality')): ?>  #d-grading > :not(.gr-top), #d-grading .gr-left { display:none !important; }   /* the grading editor keeps only Completeness */
+<?php endif; endif; ?></style>
 <?= csrfScript() ?>
 <?= appScript(['coll', 'drawer', 'grading', 'wish', 'ed', 'cr', 'comp', 'di', 'crop', 'igdb']) ?>
 </head>
@@ -232,14 +251,15 @@ foreach ($entries as $e) {
   <?php else: ?>
   <input type="hidden" id="tb-tag" value="">
   <?php endif; ?>
-  <div class="filter-btn-group">
+  <div class="filter-btn-group" data-share-col="owned">
     <button class="filter-btn" id="fbtn-own-all" onclick="setWLOwned('')"><?= t('coll.f_all') ?></button>
     <button class="filter-btn" id="fbtn-own-yes" onclick="setWLOwned('1')">✓ <?= t('dashboard.owned') ?></button>
     <button class="filter-btn" id="fbtn-own-no"  onclick="setWLOwned('0')">✗ <?= t('dashboard.owned') ?></button>
   </div>
-  <div class="filter-btn-group">
+  <div class="filter-btn-group" data-share-col="upgrade">
     <button class="filter-btn" id="fbtn-upg-all" onclick="setWLUpgrade('')">↑ <?= t('coll.f_all') ?></button>
     <button class="filter-btn" id="fbtn-upg-yes" onclick="setWLUpgrade('1')">↑ <?= t('coll.f_yes') ?></button>
+    <button class="filter-btn" id="fbtn-upg-no"  onclick="setWLUpgrade('0')">↑ <?= t('coll.f_no') ?></button>
   </div>
   <input type="hidden" id="tb-owned" value="">
   <input type="hidden" id="tb-upgrade" value="">
@@ -322,7 +342,7 @@ foreach ($entries as $e) {
       <div class="drawer-section" id="d-ed-edition" hidden></div>
       <div class="drawer-section" id="d-ed-variant" hidden></div>
 
-      <div class="drawer-section">
+      <div class="drawer-section" data-share-col="owned">
         <div class="section-label"><?= t('drawer.ownership') ?></div>
         <div class="toggle-row">
           <label class="toggle"><input type="checkbox" id="d-owned"><span class="toggle-slider"></span></label>
@@ -333,7 +353,7 @@ foreach ($entries as $e) {
       <div class="drawer-section">
         <!-- Condition grading (assets/js/grading.js) — takes the Completeness field into its top row -->
         <div id="d-grading"></div>
-        <div class="field" id="d-completeness-field"><label><?= t('common.col.completeness') ?></label>
+        <div class="field" id="d-completeness-field" data-share-col="completeness"><label><?= t('common.col.completeness') ?></label>
           <select id="d-completeness">
             <option value="">— <?= t('drawer.na') ?> —</option>
             <?php foreach ($compOpts as $c): ?><option><?= htmlspecialchars($c) ?></option><?php endforeach; ?>
@@ -353,9 +373,9 @@ foreach ($entries as $e) {
         <div class="section-label"><?= t('drawer.pricing') ?></div>
         <div id="d-prices-row" style="display:none;margin-bottom:8px">
           <table style="font-size:.75rem;width:100%;border-collapse:collapse">
-            <tr id="d-loose-row" style="display:none"><td style="color:var(--muted);padding:2px 0;width:60px"><?= t('common.price.loose') ?></td><td><span id="d-loose-price-val" style="color:var(--wiiu);font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case);font-size:1rem"></span></td></tr>
-            <tr id="d-cib-row"   style="display:none"><td style="color:var(--muted);padding:2px 0"><?= t('common.price.cib') ?></td>  <td><span id="d-cib-price-val"   style="color:var(--wiiu);font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case);font-size:1rem"></span></td></tr>
-            <tr id="d-new-row"   style="display:none"><td style="color:var(--muted);padding:2px 0"><?= t('common.price.new') ?></td>  <td><span id="d-new-price-val"   style="color:var(--wiiu);font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case);font-size:1rem"></span></td></tr>
+            <tr id="d-loose-row" data-share-col="loose_price" style="display:none"><td style="color:var(--muted);padding:2px 0;width:60px"><?= t('common.price.loose') ?></td><td><span id="d-loose-price-val" style="color:var(--wiiu);font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case);font-size:1rem"></span></td></tr>
+            <tr id="d-cib-row"   data-share-col="cib_price" style="display:none"><td style="color:var(--muted);padding:2px 0"><?= t('common.price.cib') ?></td>  <td><span id="d-cib-price-val"   style="color:var(--wiiu);font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case);font-size:1rem"></span></td></tr>
+            <tr id="d-new-row"   data-share-col="new_price" style="display:none"><td style="color:var(--muted);padding:2px 0"><?= t('common.price.new') ?></td>  <td><span id="d-new-price-val"   style="color:var(--wiiu);font-family:var(--font-display);font-weight:var(--display-weight);text-transform:var(--display-case);font-size:1rem"></span></td></tr>
           </table>
           <a id="d-price-link" href="#" target="_blank" style="color:var(--wiiu);font-size:.68rem;display:none"><?= t('drawer.view_prices') ?> ↗</a>
         </div>
@@ -368,9 +388,9 @@ foreach ($entries as $e) {
         </div>
         <div class="field-row">
           <div class="field"<?= $isPublicView ? ' hidden' : '' ?>><label><?= t('drawer.paid', ['sym' => setting('currency_symbol')]) ?></label><input type="number" id="d-price" step="0.01" min="0" placeholder="0.00"></div>
-          <div class="field"><label><?= t('drawer.personal_price', ['sym' => setting('currency_symbol')]) ?></label><input type="number" id="d-chart" step="0.01" min="0" placeholder="0.00"></div>
+          <div class="field" data-share-col="cib_price"><label><?= t('drawer.personal_price', ['sym' => setting('currency_symbol')]) ?></label><input type="number" id="d-chart" step="0.01" min="0" placeholder="0.00"></div>
         </div>
-        <div class="field-row">
+        <div class="field-row" data-share-col="buy_range">
           <div class="field"><label><?= t('drawer.buy_min', ['sym' => setting('currency_symbol')]) ?></label><input type="number" id="d-min" step="0.01" min="0" placeholder="0.00"></div>
           <div class="field"><label><?= t('drawer.buy_max', ['sym' => setting('currency_symbol')]) ?></label><input type="number" id="d-max" step="0.01" min="0" placeholder="0.00"></div>
         </div>
@@ -386,7 +406,7 @@ foreach ($entries as $e) {
       </div>
 
       <!-- TAG -->
-      <div class="drawer-section">
+      <div class="drawer-section" data-share-col="tag">
         <div class="section-label"><?= t('common.col.tag') ?></div>
         <select id="d-tag" style="width:100%;padding:8px 10px;font-size:.78rem">
           <option value="">— <?= t('drawer.no_tag') ?> —</option>
@@ -396,13 +416,13 @@ foreach ($entries as $e) {
         </select>
       </div>
 
-      <div class="drawer-section">
+      <div class="drawer-section"<?= $showCol('upgrade') || $showCol('upgrade_reason') ? '' : ' hidden' ?>>
         <div class="section-label"><?= t('common.col.upgrade') ?></div>
-        <div class="toggle-row">
+        <div class="toggle-row" data-share-col="upgrade">
           <label class="toggle"><input type="checkbox" id="d-upgrade"><span class="toggle-slider"></span></label>
           <span class="toggle-label" id="lbl-upgrade"><?= t('drawer.no_upgrade') ?></span>
         </div>
-        <div class="field"><label><?= t('common.col.upgrade_reason') ?></label><textarea id="d-upgrade-reason" placeholder="<?= t('drawer.upgrade_ph') ?>"></textarea></div>
+        <div class="field" data-share-col="upgrade_reason"><label><?= t('common.col.upgrade_reason') ?></label><textarea id="d-upgrade-reason" placeholder="<?= t('drawer.upgrade_ph') ?>"></textarea></div>
       </div>
 
       <div class="drawer-section">
@@ -419,7 +439,7 @@ foreach ($entries as $e) {
       <!-- Compilations: what this game contains / which compilations it's in (assets/js/compilations-drawer.js) -->
       <div class="drawer-section" id="d-comp" hidden></div>
 
-      <div class="drawer-section">
+      <div class="drawer-section" data-share-col="notes">
         <div class="section-label"><?= t('common.col.notes') ?></div>
         <div class="field"><textarea id="d-notes" placeholder="<?= t('drawer.notes_ph') ?>"></textarea></div>
       </div>
@@ -477,6 +497,7 @@ foreach ($entries as $e) {
 <script>
 const BASE     = <?= json_encode(BASE_URL) ?>;
 const CAN_EDIT = <?= json_encode($canEdit) ?>;
+const SHARE_COLS = <?= json_encode($shareCols) ?>;   // a share link's visible columns (all of them on your own wishlist)
 const GAMES    = <?= json_encode((object)$games, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
 const ROWS     = <?= json_encode($rowList) ?>;
 const AUCTION_SITES = <?= json_encode($auctionSites, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
@@ -693,7 +714,7 @@ function updateCounts() {
 
 // ── WISHLIST COLUMN PREFS ──
 const WISH_COL_DEFAULTS = ['img','owned','upgrade','system','title','upgrade_reason','quality','completeness','price_paid','buy_range','loose_price','cib_price','new_price','tag','notes'];
-let wishActiveCols = new Set(WISH_COL_DEFAULTS);
+let wishActiveCols = new Set(CAN_EDIT ? WISH_COL_DEFAULTS : SHARE_COLS);
 let wishColOrder   = [...WISH_COL_DEFAULTS];
 
 async function initWishCols() {
@@ -767,6 +788,7 @@ function setWLUpgrade(val) {
   document.getElementById('tb-upgrade').value = val;
   document.getElementById('fbtn-upg-all').className = 'filter-btn' + (val===''  ? ' active-upgrade' : '');
   document.getElementById('fbtn-upg-yes').className = 'filter-btn' + (val==='1' ? ' active-upgrade' : '');
+  document.getElementById('fbtn-upg-no').className  = 'filter-btn' + (val==='0' ? ' active-upgrade' : '');
   filterTable();
 }
 

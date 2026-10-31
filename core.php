@@ -292,9 +292,9 @@ function sanitizeFilename(string $name): string {
 // ── Themes ──────────────────────────────
 // A theme is one file in assets/themes/<slug>.css that overrides the :root
 // variables of main.css. Its header comment holds the metadata:
-//   /* Theme:  Nintendo
+//   /* Theme:  Nintechduo
 //      Scheme: light
-//      Fonts:  fonts/nintendo.css    (optional: @font-face rules in assets/fonts/, files hosted on this site)
+//      Fonts:  fonts/nintechduo.css   (optional: @font-face rules in assets/fonts/, files hosted on this site)
 //      About:  one line for the picker                         (optional) */
 const THEME_DIR     = __DIR__ . '/assets/themes/';
 const DEFAULT_THEME = 'arcade-gold';
@@ -457,6 +457,21 @@ require_once __DIR__ . '/data_export.php';
 require_once __DIR__ . '/igdb.php';
 
 applyTimezone();
+
+/** Wishlist columns a share link can show (wishlist.php order). Price paid is never shared; the title always shows. */
+const WISHLIST_SHARE_COLS = ['img', 'owned', 'upgrade', 'system', 'title', 'upgrade_reason', 'quality', 'completeness',
+                             'buy_range', 'loose_price', 'cib_price', 'new_price', 'tag', 'notes'];
+
+/** A share's visible columns: only known ones, in wishlist order, always with the title. */
+function wishlistShareCols(mixed $cols): array {
+    if (is_string($cols)) $cols = json_decode($cols, true);
+    $cols = array_merge(is_array($cols) ? array_map('strval', $cols) : [], ['title']);
+    return array_values(array_intersect(WISHLIST_SHARE_COLS, $cols));
+}
+
+function wishlistShareUrl(string $token): string {
+    return BASE_URL.'/wishlist.php?token='.rawurlencode($token);
+}
 
 // No database connection, or a database without the site's tables: a short explanation instead of PHP errors
 databaseGate();

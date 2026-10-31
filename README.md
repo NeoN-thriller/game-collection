@@ -74,7 +74,7 @@ Built with plain PHP, MySQL and vanilla JavaScript. No frameworks, no build step
 ### Wishlist
 - A dedicated wishlist view with your target buy prices.
 - **Auction / search sites** — define your own search-link templates (e.g. eBay, Marktplaats) using `{system}`, `{title}` and `{region}` placeholders to get one-click searches per game.
-- **Public sharing** — optionally share a read-only wishlist link (`wishlist.php?token=…`). The link can be regenerated at any time, which kills the old one.
+- **Public sharing** — share read-only wishlist links (`wishlist.php?token=…`), as many as you like, each with a name and its own choice of visible columns (what you paid is never shown; hidden columns' data isn't sent either). A link can be listed for the site's other users, renewed (which kills the old address) or deleted.
 
 ### Backup & restore
 - **Your own data** (Settings → Backup): export your collection (entries, condition grades and option lists) as JSON and import it again later (merges with existing data). Photos are backed up separately as per-system zips (kept for 24 hours).
@@ -250,7 +250,7 @@ The `console` value must match a system's **short name** (case-insensitive). Row
 
 | Table | Purpose |
 |---|---|
-| `users` | Accounts, roles, wishlist sharing, and per-user preferences (language, theme, grading, columns, auction sites…) |
+| `users` | Accounts, roles, and per-user preferences (language, theme, grading, columns, auction sites…) |
 | `invite_codes` | Invite codes and who created or used them |
 | `remember_tokens` | Hashed "remember me" tokens |
 | `login_attempts` | Failed-login counters and lockouts |
@@ -264,6 +264,7 @@ The `console` value must match a system's **short name** (case-insensitive). Row
 | `copy_photos` | Photos attached to a copy |
 | `copy_photo_tags`, `copy_photo_tag_defects` | Which part unit and which of its defects a photo shows (for the condition report) |
 | `copy_shares` | Shared condition report links (live or snapshot) |
+| `wishlist_shares` | Wishlist share links: token, name, visible columns, listed for other users |
 | `label_sizes`, `label_templates` | Sticker sizes and label templates for printing condition reports |
 | `user_system_prefs` | Per-user system visibility, order, and whether a system counts toward totals |
 | `user_completeness_options`, `user_played_options`, `user_tag_options`, `user_variant_options` | Each user's own option lists |
