@@ -295,4 +295,6 @@ Users and games are never deleted by the app (users are deactivated, games hidde
 
 ## License
 
-No license has been chosen yet. Until one is added, all rights are reserved by the author.
+Released under the [MIT License](LICENSE).
+
+Bundled third-party files keep their own licences, which sit next to them: ZXing (Apache-2.0), Cropper.js and the QR code library (MIT) in `assets/js/vendor/`, and the fonts (SIL Open Font License) in `assets/fonts/`.
